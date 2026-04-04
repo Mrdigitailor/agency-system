@@ -1,0 +1,236 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== משתמשים / עובדים ====================
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String   @default("")
+  role      String   @default("campaignManager") // admin | manager | campaignManager | client
+  phone              String   @default("")
+  assignedClientIds  String   @default("[]") // JSON array of client IDs
+  isActive           Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  managedClients Client[]   @relation("ClientManager")
+  assignedTasks  Task[]     @relation("TaskAssignee")
+  createdTasks   Task[]     @relation("TaskCreator")
+  taskNotes      TaskNote[]
+  leadCalls      LeadCall[]
+
+  @@map("users")
+}
+
+// ==================== לקוחות ====================
+
+model Client {
+  id                String   @id @default(cuid())
+  name              String
+  manager           String   @default("") // legacy
+  campaignManager   String   @default("") // שם מנהל קמפיינים
+  campaignManagerId String?
+  accountManager    String   @default("") // שם מנהל תיקים/סמנכ״ל
+  accountManagerId  String?
+  platforms         String   @default("[]") // JSON array
+  monthlyBudget Float    @default(0)
+  clientType    String   @default("לידים")
+  status        String   @default("active") // active | at_risk | upsell
+  contactEmail  String   @default("")
+  contactPhone  String   @default("")
+  notes         String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  // נכסים דיגיטליים
+  metaAdAccount   String @default("")
+  googleAdAccount String @default("")
+  tiktokAdAccount String @default("")
+  facebookPage    String @default("")
+  instagram       String @default("")
+  linkedin        String @default("")
+  website         String @default("")
+
+  // ביצועים
+  budgetUsed            Float @default(0)
+  avgCostPerConversion  Float @default(0)
+  targetCostPerConversion Float @default(0)
+  conversionsThisMonth  Int   @default(0)
+  targetConversions     Int   @default(0)
+  lastOptimization      String @default("")
+
+  // קשרים
+  managerId     String?
+  managerUser   User?          @relation("ClientManager", fields: [managerId], references: [id])
+  tasks         Task[]
+  optimizations Optimization[]
+  leads         Lead[]
+  reports       Report[]
+  alerts        Alert[]
+
+  @@map("clients")
+}
+
+model Optimization {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id])
+  date        String
+  description String
+  createdAt   DateTime @default(now())
+
+  @@map("optimizations")
+}
+
+// ==================== משימות ====================
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  description String    @default("")
+  clientId    String?
+  client      Client?   @relation(fields: [clientId], references: [id])
+  assignee    String    @default("")
+  assigneeId  String?
+  assigneeUser User?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creatorId   String?
+  creator     User?     @relation("TaskCreator", fields: [creatorId], references: [id])
+  priority    String    @default("medium") // low | medium | high | urgent
+  dueDate     String    @default("")
+  status      String    @default("pending") // pending | in_progress | done
+  taskType    String    @default("other") // advertising | other
+  platform    String    @default("")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  notes TaskNote[]
+
+  @@map("tasks")
+}
+
+model TaskNote {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id])
+  authorName String  @default("")
+  content   String
+  createdAt DateTime @default(now())
+
+  @@map("task_notes")
+}
+
+// ==================== CRM לידים ====================
+
+model Lead {
+  id                 String   @id @default(cuid())
+  name               String
+  email              String   @default("")
+  phone              String   @default("")
+  company            String   @default("")
+  website            String   @default("")
+  digitalAssets      String   @default("") // legacy
+  leadFacebookPage   String   @default("")
+  leadInstagram      String   @default("")
+  leadLinkedin       String   @default("")
+  leadTiktok         String   @default("")
+  leadGoogleAds      String   @default("")
+  leadMetaAds        String   @default("")
+  estimatedBudget    String   @default("")
+  salesPerson        String   @default("")
+  interestedServices String   @default("[]") // JSON array
+  source             String   @default("other")
+  status             String   @default("new")
+  value              Float    @default(0)
+  notes              String   @default("")
+  nextFollowUp       String   @default("")
+  hasProposal        Boolean  @default(false)
+  proposalDate       String   @default("")
+  proposalFileName   String   @default("")
+  internalNotes      String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id])
+  calls    LeadCall[]
+
+  @@map("leads")
+}
+
+model LeadCall {
+  id       String   @id @default(cuid())
+  leadId   String
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  date     String
+  summary  String
+  callerId String?
+  caller   User?    @relation(fields: [callerId], references: [id])
+  callerName String @default("")
+  createdAt DateTime @default(now())
+
+  @@map("lead_calls")
+}
+
+// ==================== התראות ====================
+
+model Alert {
+  id        String   @id @default(cuid())
+  type      String   // overdue_task | budget_overrun | performance_drop | upsell_ready
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@map("alerts")
+}
+
+// ==================== דוחות ====================
+
+model Report {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id])
+  type        String   // weekly | monthly
+  status      String   @default("draft") // draft | generated | sent | failed
+  periodStart String
+  periodEnd   String
+  sentAt      String?
+  pdfUrl      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("reports")
+}
+
+// ==================== הגדרות סוכנות ====================
+
+model AgencySettings {
+  id                String @id @default("default")
+  agencyName        String @default("DigiTailors")
+  googleMyBusiness  String @default("")
+  facebookPage      String @default("")
+  instagram         String @default("")
+  linkedin          String @default("")
+  metaAdAccount     String @default("")
+  googleAdAccount   String @default("")
+  tiktokAdAccount   String @default("")
+  googleAnalytics   String @default("")
+  updatedAt         DateTime @updatedAt
+
+  @@map("agency_settings")
+}

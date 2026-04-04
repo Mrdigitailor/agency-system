@@ -1,0 +1,26 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db/prisma";
+
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const client = await prisma.client.findUnique({
+    where: { id },
+    include: { optimizations: { orderBy: { createdAt: "desc" } } },
+  });
+  if (!client || client.deletedAt) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json({ ...client, platforms: JSON.parse(client.platforms) });
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const body = await req.json();
+  if (body.platforms) body.platforms = JSON.stringify(body.platforms);
+  const client = await prisma.client.update({ where: { id }, data: body });
+  return NextResponse.json({ ...client, platforms: JSON.parse(client.platforms) });
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  await prisma.client.update({ where: { id }, data: { deletedAt: new Date() } });
+  return NextResponse.json({ ok: true });
+}
