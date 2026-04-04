@@ -17,17 +17,33 @@ export const authOptions: NextAuthOptions = {
         password: { label: "סיסמה", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        console.log("[Auth] authorize called with email:", credentials?.email);
+
+        if (!credentials?.email || !credentials?.password) {
+          console.log("[Auth] Missing email or password");
+          return null;
+        }
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
         });
 
-        if (!user || !user.isActive || !user.password) return null;
+        console.log("[Auth] User found:", !!user, user ? { id: user.id, name: user.name, role: user.role, isActive: user.isActive, hasPassword: !!user.password } : "null");
+
+        if (!user || !user.isActive || !user.password) {
+          console.log("[Auth] Rejected: user missing, inactive, or no password");
+          return null;
+        }
 
         const isValid = await bcrypt.compare(credentials.password, user.password);
-        if (!isValid) return null;
+        console.log("[Auth] Password valid:", isValid);
 
+        if (!isValid) {
+          console.log("[Auth] Rejected: wrong password");
+          return null;
+        }
+
+        console.log("[Auth] Success! Returning user:", user.id, user.name, user.role);
         return {
           id: user.id,
           email: user.email,
