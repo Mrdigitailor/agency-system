@@ -1,10 +1,15 @@
 import { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
 
 export const authOptions: NextAuthOptions = {
   providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+    }),
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -33,12 +38,39 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
+    async signIn({ user, account }) {
+      // Google OAuth — בדיקה שהמשתמש קיים ב-DB
+      if (account?.provider === "google") {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: user.email! },
+        });
+        // אם לא קיים — דוחה התחברות
+        if (!dbUser || !dbUser.isActive) return false;
+        return true;
+      }
+      return true;
+    },
+    async jwt({ token, user, account }) {
+      // התחברות ראשונה עם credentials
+      if (user && !account?.provider) {
         token.id = user.id;
         token.role = (user as { role: string }).role;
       }
-      // אם ה-token לא מכיל role (session ישן) — שלוף מה-DB
+
+      // התחברות עם Google — שלוף פרטים מה-DB
+      if (account?.provider === "google" && user?.email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: user.email },
+          select: { id: true, role: true, name: true },
+        });
+        if (dbUser) {
+          token.id = dbUser.id;
+          token.role = dbUser.role;
+          token.name = dbUser.name;
+        }
+      }
+
+      // אם ה-token לא מכיל role — שלוף מה-DB
       if (!token.role && token.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
@@ -46,6 +78,19 @@ export const authOptions: NextAuthOptions = {
         });
         if (dbUser) token.role = dbUser.role;
       }
+
+      // fallback: שלוף לפי email
+      if (!token.role && token.email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: token.email },
+          select: { id: true, role: true },
+        });
+        if (dbUser) {
+          token.id = dbUser.id;
+          token.role = dbUser.role;
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
