@@ -184,9 +184,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       api<Record<string, unknown>[]>("/api/employees").then((data) => setEmployees(data.map(mapEmployee))),
       api<Record<string, unknown>[]>("/api/alerts").then((data) => setAlerts(data as unknown as Alert[])),
       api<Record<string, unknown>>("/api/settings").then((data) => {
-        if (data.agencyName) {
-          setSettings((prev) => ({ ...prev, agencyName: data.agencyName as string }));
-        }
+        setSettings((prev) => ({
+          ...prev,
+          agencyName: (data.agencyName as string) ?? prev.agencyName,
+          agencyAssets: {
+            googleMyBusiness: (data.googleMyBusiness as string) ?? "",
+            facebookPage: (data.facebookPage as string) ?? "",
+            instagram: (data.instagram as string) ?? "",
+            linkedin: (data.linkedin as string) ?? "",
+            metaAdAccount: (data.metaAdAccount as string) ?? "",
+            googleAdAccount: (data.googleAdAccount as string) ?? "",
+            tiktokAdAccount: (data.tiktokAdAccount as string) ?? "",
+            googleAnalytics: (data.googleAnalytics as string) ?? "",
+          },
+        }));
       }),
     ]).finally(() => setIsLoading(false));
   }, []);

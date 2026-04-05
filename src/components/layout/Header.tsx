@@ -2,9 +2,13 @@
 
 import { Bell, Search, ChevronDown } from "lucide-react";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 
 export default function Header() {
   const [showNotifications, setShowNotifications] = useState(false);
+  const { data: session } = useSession();
+  const userName = session?.user?.name ?? "";
+  const userInitial = userName.charAt(0) || "?";
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-brand-border bg-brand-light px-6">
@@ -59,9 +63,9 @@ export default function Header() {
         {/* פרופיל */}
         <button className="flex items-center gap-2 rounded-lg p-2 text-brand-dark transition-colors duration-200 hover:bg-brand-bg">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-gold text-sm font-semibold text-brand-dark">
-            ש
+            {userInitial}
           </div>
-          <span className="text-sm font-medium">שחר</span>
+          <span className="text-sm font-medium">{userName || "טוען..."}</span>
           <ChevronDown className="h-4 w-4 text-brand-muted" />
         </button>
       </div>

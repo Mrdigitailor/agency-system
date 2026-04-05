@@ -66,7 +66,12 @@ export const authOptions: NextAuthOptions = {
       }
       return true;
     },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger, session }) {
+      // עדכון session — קריאה מפורשת מ-updateSession
+      if (trigger === "update" && session) {
+        if (session.name) token.name = session.name;
+      }
+
       // התחברות ראשונה עם credentials
       if (user && !account?.provider) {
         token.id = user.id;

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Plus, Pencil, Trash2, Globe, KeyRound, Copy, Check } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { useApp } from "@/lib/data/context";
@@ -24,33 +25,56 @@ export default function SettingsPage() {
     employees, addEmployee, updateEmployee, deleteEmployee,
     clients, refreshEmployees,
   } = useApp();
+  const { data: session, update: updateSession } = useSession();
+
+  // המשתמש המחובר מ-DB
+  const currentUser = employees.find((e) => e.email === session?.user?.email);
 
   // פרופיל
   const [profileForm, setProfileForm] = useState({
-    userName: settings.userName,
-    userEmail: settings.userEmail,
-    userRole: settings.userRole,
+    name: "",
+    email: "",
+    phone: "",
   });
   const [savedProfile, setSavedProfile] = useState(false);
 
+  // סנכרון טופס פרופיל עם המשתמש המחובר
+  useEffect(() => {
+    if (currentUser) {
+      setProfileForm({
+        name: currentUser.name,
+        email: currentUser.email,
+        phone: currentUser.phone,
+      });
+    }
+  }, [currentUser]);
+
   // סוכנות
-  const [agencyForm, setAgencyForm] = useState({ agencyName: settings.agencyName });
+  const [agencyForm, setAgencyForm] = useState({ agencyName: "" });
   const [savedAgency, setSavedAgency] = useState(false);
 
+  // סנכרון טופס סוכנות
+  useEffect(() => {
+    setAgencyForm({ agencyName: settings.agencyName });
+  }, [settings.agencyName]);
+
   // נכסים דיגיטליים
-  const [assetsForm, setAssetsForm] = useState<AgencyDigitalAssets>(
-    settings.agencyAssets ?? {
-      googleMyBusiness: "",
-      facebookPage: "",
-      instagram: "",
-      linkedin: "",
-      metaAdAccount: "",
-      googleAdAccount: "",
-      tiktokAdAccount: "",
-      googleAnalytics: "",
-    }
-  );
+  const [assetsForm, setAssetsForm] = useState<AgencyDigitalAssets>({
+    googleMyBusiness: "",
+    facebookPage: "",
+    instagram: "",
+    linkedin: "",
+    metaAdAccount: "",
+    googleAdAccount: "",
+    tiktokAdAccount: "",
+    googleAnalytics: "",
+  });
   const [savedAssets, setSavedAssets] = useState(false);
+
+  // סנכרון טופס נכסים
+  useEffect(() => {
+    if (settings.agencyAssets) setAssetsForm(settings.agencyAssets);
+  }, [settings.agencyAssets]);
 
   // עובדים
   const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
@@ -91,10 +115,24 @@ export default function SettingsPage() {
   const [changePasswordSuccess, setChangePasswordSuccess] = useState(false);
   const [changePasswordError, setChangePasswordError] = useState("");
 
-  const handleSaveProfile = () => {
-    updateSettings(profileForm);
-    setSavedProfile(true);
-    setTimeout(() => setSavedProfile(false), 2000);
+  const handleSaveProfile = async () => {
+    if (!currentUser) return;
+    const res = await fetch(`/api/employees/${currentUser.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: profileForm.name,
+        email: profileForm.email,
+        phone: profileForm.phone,
+      }),
+    });
+    if (res.ok) {
+      await refreshEmployees();
+      // עדכון session עם השם החדש
+      await updateSession({ name: profileForm.name });
+      setSavedProfile(true);
+      setTimeout(() => setSavedProfile(false), 2000);
+    }
   };
 
   const handleSaveAgency = () => {
@@ -286,17 +324,15 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-brand-dark">שם</label>
-              <input type="text" value={profileForm.userName} onChange={(e) => setProfileForm((p) => ({ ...p, userName: e.target.value }))} className={inputClass} />
+              <input type="text" value={profileForm.name} onChange={(e) => setProfileForm((p) => ({ ...p, name: e.target.value }))} className={inputClass} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-brand-dark">אימייל</label>
-              <input type="email" value={profileForm.userEmail} onChange={(e) => setProfileForm((p) => ({ ...p, userEmail: e.target.value }))} className={inputClass} />
+              <input type="email" value={profileForm.email} onChange={(e) => setProfileForm((p) => ({ ...p, email: e.target.value }))} className={inputClass} />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">תפקיד</label>
-              <select value={profileForm.userRole} onChange={(e) => setProfileForm((p) => ({ ...p, userRole: e.target.value }))} className={inputClass}>
-                {roleOptions.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
+              <label className="mb-1 block text-sm font-medium text-brand-dark">טלפון</label>
+              <input type="tel" value={profileForm.phone} onChange={(e) => setProfileForm((p) => ({ ...p, phone: e.target.value }))} className={inputClass} placeholder="050-0000000" />
             </div>
             <button onClick={handleSaveProfile} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80">
               {savedProfile ? "נשמר!" : "שמור פרופיל"}
