@@ -49,6 +49,9 @@ export async function fetchAdInsights(
     level,
     fields: INSIGHT_FIELDS,
     time_range: JSON.stringify({ since, until }),
+    // Attribution window שתואם ל-Meta Ads Manager (ברירת מחדל)
+    action_attribution_windows: JSON.stringify(["7d_click", "1d_view"]),
+    use_unified_attribution_setting: "true",
     limit: "500",
   };
   if (dailyBreakdown) params.time_increment = "1";

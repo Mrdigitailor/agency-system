@@ -38,6 +38,7 @@ import MetaDataTab from "@/components/ui/MetaDataTab";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
+import { CURRENCIES, getCurrencySymbol } from "@/lib/utils/currency";
 
 /* ==================== עזרים ==================== */
 
@@ -147,6 +148,13 @@ export default function ClientDetailPage() {
   const { getClient, tasks, addTask, addTaskNote, clients, employees, settings, updateClient } = useApp();
   const client = getClient(params.id as string);
 
+  // נתוני ביצועים מ-Meta (החודש הנוכחי)
+  const [metaPerf, setMetaPerf] = useState<{ totalSpend: number; totalConversions: number; avgCostPerConv: number; hasMetaData: boolean } | null>(null);
+  useEffect(() => {
+    if (!client?.id) return;
+    fetch(`/api/clients/${client.id}/performance`).then((r) => r.json()).then(setMetaPerf).catch(() => {});
+  }, [client?.id]);
+
   const [activeTab, setActiveTab] = useState<TabId>("overview");
 
   /* קמפיינים — מצב מקומי */
@@ -183,6 +191,7 @@ export default function ClientDetailPage() {
     clientType: "",
     status: "active" as "active" | "at_risk" | "upsell",
     monthlyBudget: "" as string | number,
+    currency: "ILS",
     contactEmail: "",
     contactPhone: "",
     notes: "",
@@ -208,6 +217,7 @@ export default function ClientDetailPage() {
         clientType: c.clientType,
         status: c.status,
         monthlyBudget: c.monthlyBudget,
+        currency: c.currency ?? "ILS",
         contactEmail: c.contactEmail,
         contactPhone: c.contactPhone,
         notes: c.notes,
@@ -366,6 +376,7 @@ export default function ClientDetailPage() {
       clientType: editForm.clientType,
       status: editForm.status,
       monthlyBudget: Number(editForm.monthlyBudget) || 0,
+      currency: editForm.currency,
       contactEmail: editForm.contactEmail,
       contactPhone: editForm.contactPhone,
       notes: editForm.notes,
@@ -499,7 +510,7 @@ export default function ClientDetailPage() {
                 <div className="border-t border-brand-border pt-3">
                   <p className="mb-1 text-xs font-medium text-brand-muted">תקציב חודשי</p>
                   <p className="text-2xl font-semibold text-brand-dark">
-                    ₪ {client.monthlyBudget.toLocaleString()}
+                    {getCurrencySymbol(client.currency)} {client.monthlyBudget.toLocaleString()}
                   </p>
                 </div>
                 <div className="border-t border-brand-border pt-3">
@@ -607,21 +618,21 @@ export default function ClientDetailPage() {
               <div className="rounded-lg bg-brand-bg p-4">
                 <p className="text-xs font-medium text-brand-muted">תקציב שנוצל</p>
                 <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  ₪ {perf.budgetUsed.toLocaleString()}
+                  {getCurrencySymbol(client.currency)} {(metaPerf?.totalSpend ?? perf.budgetUsed).toLocaleString()}
                 </p>
-                <p className="text-xs text-brand-muted">מתוך ₪ {client.monthlyBudget.toLocaleString()}</p>
+                <p className="text-xs text-brand-muted">מתוך {getCurrencySymbol(client.currency)} {client.monthlyBudget.toLocaleString()}</p>
               </div>
               <div className="rounded-lg bg-brand-bg p-4">
                 <p className="text-xs font-medium text-brand-muted">עלות להמרה</p>
                 <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  ₪ {perf.avgCostPerConversion}
+                  {getCurrencySymbol(client.currency)} {Math.round(metaPerf?.avgCostPerConv ?? perf.avgCostPerConversion)}
                 </p>
-                <p className="text-xs text-brand-muted">יעד: ₪ {perf.targetCostPerConversion}</p>
+                <p className="text-xs text-brand-muted">יעד: {getCurrencySymbol(client.currency)} {perf.targetCostPerConversion}</p>
               </div>
               <div className="rounded-lg bg-brand-bg p-4">
                 <p className="text-xs font-medium text-brand-muted">המרות החודש</p>
                 <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {perf.conversionsThisMonth.toLocaleString()}
+                  {(metaPerf?.totalConversions ?? perf.conversionsThisMonth).toLocaleString()}
                 </p>
                 <p className="text-xs text-brand-muted">יעד: {perf.targetConversions.toLocaleString()}</p>
                 <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-brand-border">
@@ -1380,6 +1391,12 @@ export default function ClientDetailPage() {
                   value={editForm.monthlyBudget}
                   onChange={(e) => setEditForm((p) => ({ ...p, monthlyBudget: e.target.value }))}
                 />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">מטבע</label>
+                <select value={editForm.currency} onChange={(e) => setEditForm((p) => ({ ...p, currency: e.target.value }))} className={inputClass}>
+                  {CURRENCIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-brand-dark">אימייל</label>

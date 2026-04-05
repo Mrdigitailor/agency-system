@@ -46,6 +46,7 @@ model Client {
   accountManagerId  String?
   platforms         String   @default("[]") // JSON array
   monthlyBudget Float    @default(0)
+  currency      String   @default("ILS") // ILS | USD
   clientType    String   @default("לידים")
   status        String   @default("active") // active | at_risk | upsell
   contactEmail  String   @default("")
@@ -223,6 +224,16 @@ model Report {
   updatedAt   DateTime @updatedAt
 
   @@map("reports")
+}
+
+// Tracker — one row per client with last sent dates (for reports page status tracking)
+model ReportTracker {
+  clientId        String   @id
+  weeklyLastSent  String   @default("") // YYYY-MM-DD
+  monthlyLastSent String   @default("") // YYYY-MM-DD
+  updatedAt       DateTime @updatedAt
+
+  @@map("report_trackers")
 }
 
 // ==================== הגדרות סוכנות ====================

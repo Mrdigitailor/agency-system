@@ -39,6 +39,7 @@ export interface Client {
   accountManager: string;
   platforms: string[];
   monthlyBudget: number;
+  currency: string;
   clientType: string;
   status: "active" | "at_risk" | "upsell";
   contactEmail: string;

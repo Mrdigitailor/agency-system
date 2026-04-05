@@ -56,6 +56,7 @@ export async function POST(req: Request) {
       platforms: JSON.stringify(body.platforms ?? []),
       customAssets: JSON.stringify(body.customAssets ?? []),
       monthlyBudget: body.monthlyBudget ?? 0,
+      currency: body.currency ?? "ILS",
       clientType: body.clientType ?? "לידים",
       status: body.status ?? "active",
       contactEmail: body.contactEmail ?? "",

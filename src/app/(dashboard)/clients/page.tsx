@@ -8,6 +8,7 @@ import ProgressBar from "@/components/ui/ProgressBar";
 import { useApp } from "@/lib/data/context";
 import { PLATFORMS, CLIENT_TYPES, CLIENT_STATUSES, type Client } from "@/lib/data/types";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
+import { CURRENCIES } from "@/lib/utils/currency";
 
 function getStatusInfo(status: string) {
   return CLIENT_STATUSES.find((s) => s.value === status) ?? CLIENT_STATUSES[0];
@@ -62,7 +63,7 @@ export default function ClientsPage() {
   };
   const [form, setForm] = useState({
     name: "", manager: "", campaignManager: "", accountManager: "", platforms: [] as string[],
-    monthlyBudget: "", clientType: CLIENT_TYPES[0] as string, status: "active" as Client["status"],
+    monthlyBudget: "", currency: "ILS", clientType: CLIENT_TYPES[0] as string, status: "active" as Client["status"],
     contactEmail: "", contactPhone: "", notes: "",
     metaAdAccount: "", googleAdAccount: "", tiktokAdAccount: "",
     facebookPage: "", instagram: "", linkedin: "", website: "",
@@ -74,7 +75,7 @@ export default function ClientsPage() {
   };
 
   const resetForm = () => {
-    setForm({ name: "", manager: "", campaignManager: "", accountManager: "", platforms: [], monthlyBudget: "", clientType: CLIENT_TYPES[0] as string, status: "active", contactEmail: "", contactPhone: "", notes: "", metaAdAccount: "", googleAdAccount: "", tiktokAdAccount: "", facebookPage: "", instagram: "", linkedin: "", website: "", targetCostPerConversion: "", targetConversions: "" });
+    setForm({ name: "", manager: "", campaignManager: "", accountManager: "", platforms: [], monthlyBudget: "", currency: "ILS", clientType: CLIENT_TYPES[0] as string, status: "active", contactEmail: "", contactPhone: "", notes: "", metaAdAccount: "", googleAdAccount: "", tiktokAdAccount: "", facebookPage: "", instagram: "", linkedin: "", website: "", targetCostPerConversion: "", targetConversions: "" });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -82,7 +83,7 @@ export default function ClientsPage() {
     if (!form.name.trim()) return;
     addClient({
       name: form.name, manager: form.campaignManager || form.accountManager, campaignManager: form.campaignManager, accountManager: form.accountManager, platforms: form.platforms,
-      monthlyBudget: Number(form.monthlyBudget) || 0, clientType: form.clientType,
+      monthlyBudget: Number(form.monthlyBudget) || 0, currency: form.currency, clientType: form.clientType,
       status: form.status, contactEmail: form.contactEmail, contactPhone: form.contactPhone, notes: form.notes,
       digitalAssets: { metaAdAccount: form.metaAdAccount, googleAdAccount: form.googleAdAccount, tiktokAdAccount: form.tiktokAdAccount, facebookPage: form.facebookPage, instagram: form.instagram, linkedin: form.linkedin, website: form.website },
       performance: { budgetUsed: 0, avgCostPerConversion: 0, targetCostPerConversion: Number(form.targetCostPerConversion) || 0, conversionsThisMonth: 0, targetConversions: Number(form.targetConversions) || 0, lastOptimization: "" },
@@ -249,6 +250,12 @@ export default function ClientsPage() {
                 </div>
               </div>
               <div><label className="mb-1 block text-sm font-medium text-brand-dark">תקציב חודשי (₪)</label><input type="number" value={form.monthlyBudget} onChange={(e) => setForm((p) => ({ ...p, monthlyBudget: e.target.value }))} className={inputClass} placeholder="0" /></div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">מטבע</label>
+                <select value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))} className={inputClass}>
+                  {CURRENCIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
               <div><label className="mb-1 block text-sm font-medium text-brand-dark">סטטוס</label><select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as Client["status"] }))} className={inputClass}>{CLIENT_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
               <div><label className="mb-1 block text-sm font-medium text-brand-dark">אימייל</label><input type="email" value={form.contactEmail} onChange={(e) => setForm((p) => ({ ...p, contactEmail: e.target.value }))} className={inputClass} placeholder="email@example.com" /></div>
               <div><label className="mb-1 block text-sm font-medium text-brand-dark">טלפון</label><input type="tel" value={form.contactPhone} onChange={(e) => setForm((p) => ({ ...p, contactPhone: e.target.value }))} className={inputClass} placeholder="03-0000000" /></div>

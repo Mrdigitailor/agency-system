@@ -70,17 +70,17 @@ export default function ReportsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "sent" | "not_sent">("all");
   const [managerFilter, setManagerFilter] = useState("all");
 
-  // אתחול טראקרים מהלקוחות
+  // טעינת trackers מה-DB
   useEffect(() => {
-    if (clients.length === 0) return;
-    setTrackers((prev) => {
-      if (prev.length > 0) return prev;
-      return clients.map((c, i) => ({
-        clientId: c.id,
-        weeklyLastSent: i === 0 ? "2026-04-01" : i === 1 ? "2026-03-28" : "",
-        monthlyLastSent: i === 0 ? "2026-03-15" : "",
-      }));
-    });
+    fetch("/api/reports/trackers")
+      .then((r) => r.json())
+      .then((data: ReportTracker[]) => {
+        // וודא שיש tracker לכל לקוח (אם אין — ברירת מחדל ריקה)
+        const map = new Map(data.map((t) => [t.clientId, t]));
+        const all = clients.map((c) => map.get(c.id) ?? { clientId: c.id, weeklyLastSent: "", monthlyLastSent: "" });
+        setTrackers(all);
+      })
+      .catch(() => {});
   }, [clients]);
 
   // מנהלי קמפיינים
@@ -152,19 +152,29 @@ export default function ReportsPage() {
       });
   }, [roleFilteredTrackers, clients, statusFilter, managerFilter]);
 
-  // סימון כנשלח
-  function markWeeklySent(clientId: string) {
+  // סימון כנשלח (שומר ב-DB)
+  async function markWeeklySent(clientId: string) {
     const today = new Date().toISOString().split("T")[0];
     setTrackers((prev) =>
       prev.map((t) => (t.clientId === clientId ? { ...t, weeklyLastSent: today } : t)),
     );
+    await fetch("/api/reports/trackers", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId, type: "weekly", date: today }),
+    });
   }
 
-  function markMonthlySent(clientId: string) {
+  async function markMonthlySent(clientId: string) {
     const today = new Date().toISOString().split("T")[0];
     setTrackers((prev) =>
       prev.map((t) => (t.clientId === clientId ? { ...t, monthlyLastSent: today } : t)),
     );
+    await fetch("/api/reports/trackers", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId, type: "monthly", date: today }),
+    });
   }
 
   // בדיקת אזהרה

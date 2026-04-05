@@ -60,6 +60,7 @@ function mapClient(c: Record<string, unknown>): Client {
     accountManager: (c.accountManager as string) ?? "",
     platforms: (c.platforms as string[]) ?? [],
     monthlyBudget: c.monthlyBudget as number,
+    currency: (c.currency as string) ?? "ILS",
     clientType: c.clientType as string,
     status: c.status as Client["status"],
     contactEmail: c.contactEmail as string,
@@ -238,7 +239,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       name: data.name, manager: data.manager,
       campaignManager: data.campaignManager, accountManager: data.accountManager,
       platforms: data.platforms,
-      monthlyBudget: data.monthlyBudget, clientType: data.clientType, status: data.status,
+      monthlyBudget: data.monthlyBudget, currency: data.currency, clientType: data.clientType, status: data.status,
       contactEmail: data.contactEmail, contactPhone: data.contactPhone, notes: data.notes,
       ...data.digitalAssets, ...data.performance,
     };
