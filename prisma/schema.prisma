@@ -82,6 +82,7 @@ model Client {
   reports       Report[]
   alerts        Alert[]
   chatRoom      ChatRoom?
+  platformConnections PlatformConnection[]
 
   @@map("clients")
 }
@@ -294,4 +295,44 @@ model ChatMessageRead {
 
   @@unique([messageId, userId])
   @@map("chat_message_reads")
+}
+
+// ==================== חיבורי פלטפורמות פרסום ====================
+
+// חיבור OAuth ללקוח לפלטפורמה (Meta / Google Ads / TikTok / GA4)
+model PlatformConnection {
+  id           String   @id @default(cuid())
+  clientId     String
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  platform     String   // "meta" | "google_ads" | "tiktok" | "ga4"
+  accessToken  String
+  refreshToken String   @default("")
+  tokenExpiry  DateTime?
+  accountName  String   @default("") // שם המשתמש/חשבון שהתחבר
+  accountEmail String   @default("")
+  isActive     Boolean  @default(true)
+  connectedAt  DateTime @default(now())
+  lastSyncAt   DateTime?
+
+  assets PlatformAsset[]
+
+  @@unique([clientId, platform])
+  @@map("platform_connections")
+}
+
+// נכס ספציפי של חיבור (חשבון מודעות, דף פייסבוק, אינסטגרם וכו')
+model PlatformAsset {
+  id               String   @id @default(cuid())
+  connectionId     String
+  connection       PlatformConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  assetType        String   // "ad_account" | "facebook_page" | "instagram" | "google_ads_account" | "ga4_property" | "tiktok_account"
+  externalId       String   // ה-ID של הנכס בפלטפורמה החיצונית
+  name             String
+  isSelected       Boolean  @default(false) // האם הלקוח בחר להשתמש בנכס הזה
+  extraData        String   @default("{}") // JSON עם שדות נוספים ספציפיים לפלטפורמה
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([connectionId, assetType, externalId])
+  @@map("platform_assets")
 }

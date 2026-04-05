@@ -33,6 +33,7 @@ import {
 } from "recharts";
 import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
+import PlatformConnections from "@/components/ui/PlatformConnections";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
@@ -584,6 +585,12 @@ export default function ClientDetailPage() {
                 {adAccounts.length === 0 && assetLinks.length === 0 && (!client.customAssets || client.customAssets.length === 0) && (
                   <p className="text-sm text-brand-muted">לא הוגדרו נכסים דיגיטליים</p>
                 )}
+
+                {/* חיבורי פלטפורמות פרסום */}
+                <div className="border-t border-brand-border pt-4">
+                  <p className="mb-3 text-xs font-semibold text-brand-muted">חיבורי פלטפורמות פרסום</p>
+                  <PlatformConnections clientId={client.id} />
+                </div>
               </div>
             </div>
           </div>
