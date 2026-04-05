@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, MoreHorizontal } from "lucide-react";
+import { Plus, MoreHorizontal, Trash2, PauseCircle, AlertTriangle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
 import { useApp } from "@/lib/data/context";
@@ -24,10 +24,42 @@ function daysLeftInMonth() {
 
 export default function ClientsPage() {
   const router = useRouter();
-  const { clients, addClient, employees } = useApp();
+  const { clients, addClient, employees, refreshClients } = useApp();
   const campaigners = employees.filter((e) => e.role === "campaignManager" || e.role === "admin");
   const managers = employees.filter((e) => e.role === "manager" || e.role === "admin");
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // תפריט 3 נקודות
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // מודל אישור מחיקה
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // סגירת תפריט בלחיצה בחוץ
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpenMenuId(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleDeactivate = async (id: string) => {
+    await fetch(`/api/clients/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "paused" }) });
+    await refreshClients();
+    setOpenMenuId(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    await fetch(`/api/clients/${deleteTarget.id}`, { method: "DELETE" });
+    await refreshClients();
+    setDeleting(false);
+    setDeleteTarget(null);
+  };
   const [form, setForm] = useState({
     name: "", manager: "", campaignManager: "", accountManager: "", platforms: [] as string[],
     monthlyBudget: "", clientType: CLIENT_TYPES[0] as string, status: "active" as Client["status"],
@@ -145,9 +177,29 @@ export default function ClientsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <button onClick={(e) => e.stopPropagation()} className="rounded-lg p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </button>
+                      <div className="relative" ref={openMenuId === client.id ? menuRef : null}>
+                        <button onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === client.id ? null : client.id); }} className="rounded-lg p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                        {openMenuId === client.id && (
+                          <div className="absolute left-0 top-full z-50 mt-1 w-44 rounded-lg border border-brand-border bg-brand-light py-1 shadow-lg">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeactivate(client.id); }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
+                            >
+                              <PauseCircle className="h-4 w-4" />
+                              סמן כלא פעיל
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: client.id, name: client.name }); setOpenMenuId(null); }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-brand-danger hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              מחק לקוח
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -226,6 +278,29 @@ export default function ClientsPage() {
             <button type="submit" className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">שמור לקוח</button>
           </div>
         </form>
+      </Modal>
+
+      {/* מודל אישור מחיקה */}
+      <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="מחיקת לקוח" size="sm">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-lg bg-red-50 p-4">
+            <AlertTriangle className="h-6 w-6 shrink-0 text-brand-danger" />
+            <div>
+              <p className="text-sm font-medium text-brand-danger">האם אתה בטוח?</p>
+              <p className="mt-1 text-sm text-brand-muted">
+                הלקוח <strong className="text-brand-dark">{deleteTarget?.name}</strong> יימחק מהמערכת. פעולה זו לא ניתנת לביטול.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setDeleteTarget(null)} className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg">
+              ביטול
+            </button>
+            <button onClick={handleDelete} disabled={deleting} className="rounded-lg bg-brand-danger px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50">
+              {deleting ? "מוחק..." : "אשר מחיקה"}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

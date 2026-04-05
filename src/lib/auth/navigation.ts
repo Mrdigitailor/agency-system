@@ -33,6 +33,12 @@ export const navigationItems: NavItem[] = [
     roles: ["admin", "manager", "campaignManager"],
   },
   {
+    label: "צ׳אט",
+    href: "/chat",
+    icon: "MessageCircle",
+    roles: ["admin", "manager", "campaignManager"],
+  },
+  {
     label: "CRM",
     href: "/crm",
     icon: "Target",

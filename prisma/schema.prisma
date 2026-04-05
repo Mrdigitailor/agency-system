@@ -22,11 +22,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  managedClients Client[]   @relation("ClientManager")
-  assignedTasks  Task[]     @relation("TaskAssignee")
-  createdTasks   Task[]     @relation("TaskCreator")
-  taskNotes      TaskNote[]
-  leadCalls      LeadCall[]
+  managedClients  Client[]          @relation("ClientManager")
+  assignedTasks   Task[]            @relation("TaskAssignee")
+  createdTasks    Task[]            @relation("TaskCreator")
+  taskNotes       TaskNote[]
+  leadCalls       LeadCall[]
+  chatMessages    ChatMessage[]
+  chatReads       ChatMessageRead[]
 
   @@map("users")
 }
@@ -77,6 +79,7 @@ model Client {
   leads         Lead[]
   reports       Report[]
   alerts        Alert[]
+  chatRoom      ChatRoom?
 
   @@map("clients")
 }
@@ -233,4 +236,45 @@ model AgencySettings {
   updatedAt         DateTime @updatedAt
 
   @@map("agency_settings")
+}
+
+// ==================== צ׳אט פנימי ====================
+
+model ChatRoom {
+  id        String   @id @default(cuid())
+  name      String   @default("") // שם הצ׳אט (אם לא קשור ללקוח)
+  clientId  String?  @unique // צ׳אט ללקוח ספציפי (1:1)
+  client    Client?  @relation(fields: [clientId], references: [id])
+  createdAt DateTime @default(now())
+
+  messages ChatMessage[]
+
+  @@map("chat_rooms")
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  roomId     String
+  room       ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User?    @relation(fields: [authorId], references: [id])
+  authorName String   @default("")
+  content    String
+  createdAt  DateTime @default(now())
+
+  readBy     ChatMessageRead[]
+
+  @@map("chat_messages")
+}
+
+model ChatMessageRead {
+  id        String      @id @default(cuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  readAt    DateTime    @default(now())
+
+  @@unique([messageId, userId])
+  @@map("chat_message_reads")
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -13,6 +14,7 @@ import {
   Settings,
   Calendar,
   UserCircle,
+  MessageCircle,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
@@ -28,14 +30,34 @@ const iconMap: Record<string, LucideIcon> = {
   Settings,
   Calendar,
   UserCircle,
+  MessageCircle,
 };
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
+  const [unreadChat, setUnreadChat] = useState(0);
 
   const userRole = session?.user?.role ?? "";
   const userName = session?.user?.name ?? "";
+
+  // שליפת הודעות לא נקראו
+  const fetchUnread = useCallback(async () => {
+    if (status !== "authenticated") return;
+    try {
+      const res = await fetch("/api/chat/unread");
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadChat(data.unread ?? 0);
+      }
+    } catch {}
+  }, [status]);
+
+  useEffect(() => {
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 15000);
+    return () => clearInterval(interval);
+  }, [fetchUnread]);
 
   // מחכים לטעינת session לפני הצגת טאבים
   const visibleItems = status === "loading"
@@ -80,7 +102,12 @@ export default function Sidebar() {
                   )}
                 />
               )}
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {item.href === "/chat" && unreadChat > 0 && (
+                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-gold text-[10px] font-bold text-brand-dark">
+                  {unreadChat > 99 ? "99+" : unreadChat}
+                </span>
+              )}
             </Link>
           );
         })}
