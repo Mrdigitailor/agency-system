@@ -79,6 +79,9 @@ function mapClient(c: Record<string, unknown>): Client {
     },
     customAssets: (c.customAssets as unknown as { id: string; label: string; value: string }[]) ?? [],
     currentMonthSpend: (c.currentMonthSpend as number) ?? 0,
+    currentMonthConversions: (c.currentMonthConversions as number) ?? 0,
+    currentMonthCostPerConv: (c.currentMonthCostPerConv as number) ?? 0,
+    hasMetaData: (c.hasMetaData as boolean) ?? false,
     performance: {
       budgetUsed: c.budgetUsed as number,
       avgCostPerConversion: c.avgCostPerConversion as number,

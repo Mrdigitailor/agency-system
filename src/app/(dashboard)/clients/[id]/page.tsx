@@ -34,8 +34,9 @@ import {
 import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
 import PlatformConnections from "@/components/ui/PlatformConnections";
-import MetaDataTab from "@/components/ui/MetaDataTab";
 import ConversionEventSelector from "@/components/ui/ConversionEventSelector";
+import MetaCampaignsTab from "@/components/ui/MetaCampaignsTab";
+import MetaPerformanceTab from "@/components/ui/MetaPerformanceTab";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
@@ -66,7 +67,6 @@ function formatDate(dateStr: string) {
 const tabs = [
   { id: "overview", label: "סקירה כללית", icon: Target },
   { id: "campaigns", label: "קמפיינים", icon: Monitor },
-  { id: "meta", label: "נתוני Meta", icon: BarChart3 },
   { id: "performance", label: "ביצועים", icon: TrendingUp },
   { id: "optimizations", label: "אופטימיזציות", icon: Zap },
   { id: "reports", label: "דוחות", icon: FileText },
@@ -677,229 +677,13 @@ export default function ClientDetailPage() {
 
       {/* ===== טאב 2 — קמפיינים ===== */}
       {activeTab === "campaigns" && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-brand-dark">קמפיינים</h2>
-            <button onClick={() => setShowCampaignModal(true)} className={`inline-flex items-center gap-2 ${btnPrimary}`}>
-              <Plus className="h-4 w-4" />
-              הוסף קמפיין
-            </button>
-          </div>
-
-          <div className={cardClass}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-brand-border text-right">
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">שם קמפיין</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">פלטפורמה</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">סטטוס</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">תקציב יומי</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">הוצאה</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">המרות</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">עלות להמרה</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">ROAS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {campaigns.map((c) => (
-                    <tr key={c.id} className="border-b border-brand-border/50 transition-colors duration-200 hover:bg-brand-bg/30">
-                      <td className="px-4 py-3 font-medium text-brand-dark">{c.name}</td>
-                      <td className="px-4 py-3 text-brand-dark">{c.platform}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                            c.status === "active"
-                              ? "bg-green-50 text-brand-success"
-                              : "bg-gray-100 text-brand-muted"
-                          }`}
-                        >
-                          {c.status === "active" ? "פעיל" : "מושהה"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-brand-dark">₪ {c.dailyBudget.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-brand-dark">₪ {c.spent.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-brand-dark">{c.conversions.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-brand-dark">₪ {c.costPerConversion}</td>
-                      <td className="px-4 py-3 font-medium text-brand-dark">{c.roas}x</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* מודל הוספת קמפיין */}
-          <Modal isOpen={showCampaignModal} onClose={() => setShowCampaignModal(false)} title="הוסף קמפיין">
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brand-dark">שם קמפיין</label>
-                <input
-                  className={inputClass}
-                  value={newCampaign.name}
-                  onChange={(e) => setNewCampaign((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="שם הקמפיין"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brand-dark">פלטפורמה</label>
-                <select
-                  className={inputClass}
-                  value={newCampaign.platform}
-                  onChange={(e) => setNewCampaign((p) => ({ ...p, platform: e.target.value }))}
-                >
-                  <option value="Meta">Meta</option>
-                  <option value="Google Ads">Google Ads</option>
-                  <option value="TikTok">TikTok</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brand-dark">תקציב יומי (₪)</label>
-                <input
-                  type="number"
-                  className={inputClass}
-                  value={newCampaign.dailyBudget}
-                  onChange={(e) => setNewCampaign((p) => ({ ...p, dailyBudget: e.target.value }))}
-                  placeholder="0"
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  onClick={() => setShowCampaignModal(false)}
-                  className="rounded-lg px-4 py-2 text-sm text-brand-muted transition-colors duration-200 hover:bg-brand-bg"
-                >
-                  ביטול
-                </button>
-                <button onClick={handleAddCampaign} className={btnPrimary}>
-                  הוסף
-                </button>
-              </div>
-            </div>
-          </Modal>
-        </div>
+        <MetaCampaignsTab clientId={client.id} currency={client.currency ?? "ILS"} />
       )}
 
-      {/* ===== טאב נתוני Meta ===== */}
-      {activeTab === "meta" && <MetaDataTab clientId={client.id} />}
 
       {/* ===== טאב 3 — ביצועים ===== */}
       {activeTab === "performance" && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-brand-dark">ביצועים</h2>
-            <span className="rounded-full bg-brand-gold/20 px-3 py-1 text-xs font-medium text-brand-dark">
-              נתוני דמו
-            </span>
-          </div>
-
-          {/* גרף המרות */}
-          <div className={cardClass}>
-            <h3 className="mb-4 text-sm font-semibold text-brand-dark">המרות יומיות</h3>
-            <div className="h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={demoChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="conversions"
-                    stroke="#eed89b"
-                    strokeWidth={2}
-                    dot={false}
-                    name="המרות"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* גרף עלות להמרה */}
-          <div className={cardClass}>
-            <h3 className="mb-4 text-sm font-semibold text-brand-dark">עלות להמרה</h3>
-            <div className="h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={demoChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="costPerConversion"
-                    stroke="#ef4444"
-                    strokeWidth={2}
-                    dot={false}
-                    name="עלות להמרה"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* גרף תקציב יומי */}
-          <div className={cardClass}>
-            <h3 className="mb-4 text-sm font-semibold text-brand-dark">תקציב יומי</h3>
-            <div className="h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={demoChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="dailySpend"
-                    stroke="#eed89b"
-                    strokeWidth={2}
-                    dot={false}
-                    name="הוצאה בפועל"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="plannedSpend"
-                    stroke="#e0e0e0"
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    name="תקציב מתוכנן"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* מודעות מנצחות */}
-          <div className={cardClass}>
-            <h3 className="mb-4 text-sm font-semibold text-brand-dark">מודעות מנצחות</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-brand-border text-right">
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">שם מודעה</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">CTR</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">המרות</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">עלות להמרה</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {winningAds.map((ad) => (
-                    <tr
-                      key={ad.name}
-                      className="border-b border-brand-border/50 transition-colors duration-200 hover:bg-brand-bg/30"
-                    >
-                      <td className="px-4 py-3 font-medium text-brand-dark">{ad.name}</td>
-                      <td className="px-4 py-3 text-brand-dark">{ad.ctr}</td>
-                      <td className="px-4 py-3 text-brand-dark">{ad.conversions}</td>
-                      <td className="px-4 py-3 text-brand-dark">₪ {ad.costPerConversion}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <MetaPerformanceTab clientId={client.id} currency={client.currency ?? "ILS"} />
       )}
 
       {/* ===== טאב 4 — אופטימיזציות ===== */}

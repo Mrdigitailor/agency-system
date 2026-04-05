@@ -52,6 +52,9 @@ export interface Client {
   performance: ClientPerformance;
   optimizations: Optimization[];
   currentMonthSpend?: number;
+  currentMonthConversions?: number;
+  currentMonthCostPerConv?: number;
+  hasMetaData?: boolean;
 }
 
 // ==================== משימות ====================

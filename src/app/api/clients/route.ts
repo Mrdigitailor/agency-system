@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
 import { syncClientManagers } from "@/lib/utils/syncManagers";
+import { countConversions } from "@/lib/utils/metaMetrics";
 
 export async function GET() {
   const result = await requireAuth();
@@ -32,23 +33,37 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
 
-  // שליפת spend של החודש הנוכחי לכל לקוח מ-Meta
+  // שליפת insights של החודש הנוכחי לכל לקוח
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
   const clientIds = clients.map((c) => c.id);
-  const spendRows = clientIds.length > 0 ? await prisma.metaInsightDaily.groupBy({
-    by: ["clientId"],
+  const insights = clientIds.length > 0 ? await prisma.metaInsightDaily.findMany({
     where: { clientId: { in: clientIds }, date: { gte: monthStart } },
-    _sum: { spend: true },
+    select: { clientId: true, spend: true, conversions: true, purchases: true, leads: true, actionsJson: true },
   }) : [];
-  const spendMap = new Map(spendRows.map((r) => [r.clientId, r._sum.spend ?? 0]));
 
-  const parsed = clients.map((c) => ({
-    ...c,
-    platforms: JSON.parse(c.platforms),
-    customAssets: JSON.parse(c.customAssets ?? "[]"),
-    currentMonthSpend: spendMap.get(c.id) ?? 0,
-  }));
+  // קיבוץ לפי clientId
+  const byClient = new Map<string, typeof insights>();
+  for (const ins of insights) {
+    if (!byClient.has(ins.clientId)) byClient.set(ins.clientId, []);
+    byClient.get(ins.clientId)!.push(ins);
+  }
+
+  const parsed = clients.map((c) => {
+    const clientInsights = byClient.get(c.id) ?? [];
+    const spend = clientInsights.reduce((s, i) => s + i.spend, 0);
+    const conv = clientInsights.length > 0 ? countConversions(clientInsights, c.metaConversionEvent ?? "") : 0;
+    const costPerConv = conv > 0 ? spend / conv : 0;
+    return {
+      ...c,
+      platforms: JSON.parse(c.platforms),
+      customAssets: JSON.parse(c.customAssets ?? "[]"),
+      currentMonthSpend: spend,
+      currentMonthConversions: conv,
+      currentMonthCostPerConv: costPerConv,
+      hasMetaData: clientInsights.length > 0,
+    };
+  });
 
   return NextResponse.json(parsed);
 }

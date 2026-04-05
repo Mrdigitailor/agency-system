@@ -153,26 +153,36 @@ export default function ClientsPage() {
                         </div>
                       </div>
                     </td>
-                    {/* עלות להמרה */}
+                    {/* עלות להמרה — מ-API אם יש, אחרת "—" */}
                     <td className="px-4 py-4">
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-brand-dark font-medium">{sym}{p.avgCostPerConversion}</span>
-                          <span className="text-brand-muted">יעד: {sym}{p.targetCostPerConversion}</span>
+                      {client.hasMetaData && (client.currentMonthCostPerConv ?? 0) > 0 ? (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-brand-dark font-medium">{sym}{Math.round(client.currentMonthCostPerConv ?? 0)}</span>
+                            <span className="text-brand-muted">יעד: {sym}{p.targetCostPerConversion}</span>
+                          </div>
+                          <ProgressBar current={client.currentMonthCostPerConv ?? 0} target={p.targetCostPerConversion} inverted />
                         </div>
-                        <ProgressBar current={p.avgCostPerConversion} target={p.targetCostPerConversion} inverted />
-                      </div>
+                      ) : (
+                        <span className="text-sm text-brand-muted">—</span>
+                      )}
                     </td>
-                    {/* המרות */}
+                    {/* המרות — מ-API אם יש, אחרת "—" */}
                     <td className="px-4 py-4">
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-brand-dark font-medium">{p.conversionsThisMonth.toLocaleString()}</span>
-                          <span className="text-brand-muted">יעד: {p.targetConversions.toLocaleString()}</span>
+                      {client.hasMetaData ? (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-brand-dark font-medium">{(client.currentMonthConversions ?? 0).toLocaleString()}</span>
+                            <span className="text-brand-muted">יעד: {p.targetConversions.toLocaleString()}</span>
+                          </div>
+                          <ProgressBar current={client.currentMonthConversions ?? 0} target={p.targetConversions} />
+                          <div className="text-[10px] text-brand-muted">
+                            {p.targetConversions > 0 ? Math.round(((client.currentMonthConversions ?? 0) / p.targetConversions) * 100) : 0}%
+                          </div>
                         </div>
-                        <ProgressBar current={p.conversionsThisMonth} target={p.targetConversions} />
-                        <div className="text-[10px] text-brand-muted">{convPct}%</div>
-                      </div>
+                      ) : (
+                        <span className="text-sm text-brand-muted">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-4 text-xs text-brand-muted">{formatDate(p.lastOptimization)}</td>
                     <td className="px-4 py-4">
