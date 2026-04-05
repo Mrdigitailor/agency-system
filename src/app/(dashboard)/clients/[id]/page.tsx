@@ -35,6 +35,7 @@ import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
 import PlatformConnections from "@/components/ui/PlatformConnections";
 import MetaDataTab from "@/components/ui/MetaDataTab";
+import ConversionEventSelector from "@/components/ui/ConversionEventSelector";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
@@ -613,6 +614,11 @@ export default function ClientDetailPage() {
                 <div className="border-t border-brand-border pt-4">
                   <p className="mb-3 text-xs font-semibold text-brand-muted">חיבורי פלטפורמות פרסום</p>
                   <PlatformConnections clientId={client.id} />
+                </div>
+
+                {/* בחירת אירוע המרה */}
+                <div className="border-t border-brand-border pt-4">
+                  <ConversionEventSelector clientId={client.id} currentEvent={client.metaConversionEvent ?? ""} />
                 </div>
               </div>
             </div>
