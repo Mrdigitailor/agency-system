@@ -149,7 +149,7 @@ export default function ClientDetailPage() {
   const client = getClient(params.id as string);
 
   // נתוני ביצועים מ-Meta (החודש הנוכחי)
-  const [metaPerf, setMetaPerf] = useState<{ totalSpend: number; totalConversions: number; avgCostPerConv: number; hasMetaData: boolean } | null>(null);
+  const [metaPerf, setMetaPerf] = useState<{ totalSpend: number; totalConversions: number; avgCostPerConv: number; hasMetaData: boolean; lastOptimization: string | null } | null>(null);
   useEffect(() => {
     if (!client?.id) return;
     fetch(`/api/clients/${client.id}/performance`).then((r) => r.json()).then(setMetaPerf).catch(() => {});
@@ -513,6 +513,16 @@ export default function ClientDetailPage() {
                     {getCurrencySymbol(client.currency)} {client.monthlyBudget.toLocaleString()}
                   </p>
                 </div>
+                <div className="grid grid-cols-2 gap-3 border-t border-brand-border pt-3">
+                  <div>
+                    <p className="text-xs font-medium text-brand-muted">יעד המרות</p>
+                    <p className="mt-0.5 text-sm font-semibold text-brand-dark">{perf.targetConversions.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-brand-muted">יעד עלות להמרה</p>
+                    <p className="mt-0.5 text-sm font-semibold text-brand-dark">{getCurrencySymbol(client.currency)} {perf.targetCostPerConversion}</p>
+                  </div>
+                </div>
                 <div className="border-t border-brand-border pt-3">
                   <p className="mb-2 text-xs font-medium text-brand-muted">פלטפורמות</p>
                   <div className="flex flex-wrap gap-2">
@@ -645,7 +655,7 @@ export default function ClientDetailPage() {
               <div className="rounded-lg bg-brand-bg p-4">
                 <p className="text-xs font-medium text-brand-muted">אופטימיזציה אחרונה</p>
                 <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {formatDate(perf.lastOptimization)}
+                  {formatDate(metaPerf?.lastOptimization ?? perf.lastOptimization)}
                 </p>
               </div>
               <div className="rounded-lg bg-brand-bg p-4">

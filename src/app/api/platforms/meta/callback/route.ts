@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { decodeState, exchangeCodeForToken, exchangeForLongLivedToken, getMeInfo } from "@/lib/api/meta/oauth";
 import { fetchAdAccounts, fetchPages, fetchInstagramAccounts } from "@/lib/api/meta/assets";
+import { fetchCustomConversions, META_STANDARD_EVENTS } from "@/lib/api/meta/conversions";
 
 /**
  * OAuth callback מ-Meta
@@ -96,6 +97,50 @@ export async function GET(req: Request) {
           extraData: JSON.stringify({ currency: acc.currency, status: acc.account_status }),
         },
       });
+
+      // שמירת standard events זמינים (בלי קשר לחשבון)
+      for (const event of META_STANDARD_EVENTS) {
+        await prisma.platformAsset.upsert({
+          where: {
+            connectionId_assetType_externalId: {
+              connectionId: connection.id,
+              assetType: "conversion_event",
+              externalId: `standard_${event.actionType}`,
+            },
+          },
+          update: { name: event.label, extraData: JSON.stringify({ actionType: event.actionType, adAccountId: acc.id, isStandard: true }) },
+          create: {
+            connectionId: connection.id,
+            assetType: "conversion_event",
+            externalId: `standard_${event.actionType}`,
+            name: event.label,
+            extraData: JSON.stringify({ actionType: event.actionType, adAccountId: acc.id, isStandard: true }),
+          },
+        });
+      }
+
+      // שליפת custom conversions מחשבון המודעות
+      const customConversions = await fetchCustomConversions(acc.id, accessToken);
+      for (const cc of customConversions) {
+        const actionType = `offsite_conversion.custom.${cc.id}`;
+        await prisma.platformAsset.upsert({
+          where: {
+            connectionId_assetType_externalId: {
+              connectionId: connection.id,
+              assetType: "conversion_event",
+              externalId: `custom_${cc.id}`,
+            },
+          },
+          update: { name: `${cc.name} (Custom)`, extraData: JSON.stringify({ actionType, adAccountId: acc.id, isCustom: true, customEventType: cc.custom_event_type }) },
+          create: {
+            connectionId: connection.id,
+            assetType: "conversion_event",
+            externalId: `custom_${cc.id}`,
+            name: `${cc.name} (Custom)`,
+            extraData: JSON.stringify({ actionType, adAccountId: acc.id, isCustom: true, customEventType: cc.custom_event_type }),
+          },
+        });
+      }
     }
 
     for (const page of pages) {

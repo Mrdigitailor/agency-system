@@ -40,6 +40,7 @@ export interface Client {
   platforms: string[];
   monthlyBudget: number;
   currency: string;
+  metaConversionEvent: string;
   clientType: string;
   status: "active" | "at_risk" | "upsell";
   contactEmail: string;
@@ -50,6 +51,7 @@ export interface Client {
   customAssets: CustomAsset[];
   performance: ClientPerformance;
   optimizations: Optimization[];
+  currentMonthSpend?: number;
 }
 
 // ==================== משימות ====================

@@ -8,7 +8,7 @@ import ProgressBar from "@/components/ui/ProgressBar";
 import { useApp } from "@/lib/data/context";
 import { PLATFORMS, CLIENT_TYPES, CLIENT_STATUSES, type Client } from "@/lib/data/types";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
-import { CURRENCIES } from "@/lib/utils/currency";
+import { CURRENCIES, getCurrencySymbol } from "@/lib/utils/currency";
 
 function getStatusInfo(status: string) {
   return CLIENT_STATUSES.find((s) => s.value === status) ?? CLIENT_STATUSES[0];
@@ -83,7 +83,7 @@ export default function ClientsPage() {
     if (!form.name.trim()) return;
     addClient({
       name: form.name, manager: form.campaignManager || form.accountManager, campaignManager: form.campaignManager, accountManager: form.accountManager, platforms: form.platforms,
-      monthlyBudget: Number(form.monthlyBudget) || 0, currency: form.currency, clientType: form.clientType,
+      monthlyBudget: Number(form.monthlyBudget) || 0, currency: form.currency, metaConversionEvent: "", clientType: form.clientType,
       status: form.status, contactEmail: form.contactEmail, contactPhone: form.contactPhone, notes: form.notes,
       digitalAssets: { metaAdAccount: form.metaAdAccount, googleAdAccount: form.googleAdAccount, tiktokAdAccount: form.tiktokAdAccount, facebookPage: form.facebookPage, instagram: form.instagram, linkedin: form.linkedin, website: form.website },
       performance: { budgetUsed: 0, avgCostPerConversion: 0, targetCostPerConversion: Number(form.targetCostPerConversion) || 0, conversionsThisMonth: 0, targetConversions: Number(form.targetConversions) || 0, lastOptimization: "" },
@@ -129,8 +129,11 @@ export default function ClientsPage() {
               {clients.map((client) => {
                 const statusInfo = getStatusInfo(client.status);
                 const { performance: p } = client;
-                const budgetPct = client.monthlyBudget > 0 ? Math.round((p.budgetUsed / client.monthlyBudget) * 100) : 0;
+                // spend אמיתי מ-Meta (אם יש), אחרת הערך הידני
+                const actualSpend = client.currentMonthSpend ?? p.budgetUsed ?? 0;
+                const budgetPct = client.monthlyBudget > 0 ? Math.round((actualSpend / client.monthlyBudget) * 100) : 0;
                 const convPct = p.targetConversions > 0 ? Math.round((p.conversionsThisMonth / p.targetConversions) * 100) : 0;
+                const sym = getCurrencySymbol(client.currency);
                 return (
                   <tr key={client.id} onClick={() => router.push(`/clients/${client.id}`)} className="cursor-pointer border-b border-brand-border transition-colors duration-200 hover:bg-brand-bg/30">
                     <td className="px-4 py-4 font-medium text-brand-dark">{client.name}</td>
@@ -140,10 +143,10 @@ export default function ClientsPage() {
                     <td className="px-4 py-4">
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs">
-                          <span className="text-brand-dark font-medium">₪{p.budgetUsed.toLocaleString()}</span>
-                          <span className="text-brand-muted">/ ₪{client.monthlyBudget.toLocaleString()}</span>
+                          <span className="text-brand-dark font-medium">{sym}{Math.round(actualSpend).toLocaleString()}</span>
+                          <span className="text-brand-muted">/ {sym}{client.monthlyBudget.toLocaleString()}</span>
                         </div>
-                        <ProgressBar current={p.budgetUsed} target={client.monthlyBudget} inverted />
+                        <ProgressBar current={actualSpend} target={client.monthlyBudget} inverted />
                         <div className="flex justify-between text-[10px] text-brand-muted">
                           <span>{budgetPct}% נוצל</span>
                           <span>{remaining} ימים נותרו</span>
@@ -154,8 +157,8 @@ export default function ClientsPage() {
                     <td className="px-4 py-4">
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs">
-                          <span className="text-brand-dark font-medium">₪{p.avgCostPerConversion}</span>
-                          <span className="text-brand-muted">יעד: ₪{p.targetCostPerConversion}</span>
+                          <span className="text-brand-dark font-medium">{sym}{p.avgCostPerConversion}</span>
+                          <span className="text-brand-muted">יעד: {sym}{p.targetCostPerConversion}</span>
                         </div>
                         <ProgressBar current={p.avgCostPerConversion} target={p.targetCostPerConversion} inverted />
                       </div>

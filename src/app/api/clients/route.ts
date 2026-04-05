@@ -32,10 +32,22 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
 
+  // שליפת spend של החודש הנוכחי לכל לקוח מ-Meta
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+  const clientIds = clients.map((c) => c.id);
+  const spendRows = clientIds.length > 0 ? await prisma.metaInsightDaily.groupBy({
+    by: ["clientId"],
+    where: { clientId: { in: clientIds }, date: { gte: monthStart } },
+    _sum: { spend: true },
+  }) : [];
+  const spendMap = new Map(spendRows.map((r) => [r.clientId, r._sum.spend ?? 0]));
+
   const parsed = clients.map((c) => ({
     ...c,
     platforms: JSON.parse(c.platforms),
     customAssets: JSON.parse(c.customAssets ?? "[]"),
+    currentMonthSpend: spendMap.get(c.id) ?? 0,
   }));
 
   return NextResponse.json(parsed);
@@ -57,6 +69,7 @@ export async function POST(req: Request) {
       customAssets: JSON.stringify(body.customAssets ?? []),
       monthlyBudget: body.monthlyBudget ?? 0,
       currency: body.currency ?? "ILS",
+      metaConversionEvent: body.metaConversionEvent ?? "",
       clientType: body.clientType ?? "לידים",
       status: body.status ?? "active",
       contactEmail: body.contactEmail ?? "",

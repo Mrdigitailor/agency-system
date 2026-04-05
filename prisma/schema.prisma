@@ -47,6 +47,7 @@ model Client {
   platforms         String   @default("[]") // JSON array
   monthlyBudget Float    @default(0)
   currency      String   @default("ILS") // ILS | USD
+  metaConversionEvent String @default("") // action_type שנחשב כהמרה (לדוגמה "lead", "purchase", או "offsite_conversion.custom.123")
   clientType    String   @default("לידים")
   status        String   @default("active") // active | at_risk | upsell
   contactEmail  String   @default("")

@@ -61,6 +61,7 @@ function mapClient(c: Record<string, unknown>): Client {
     platforms: (c.platforms as string[]) ?? [],
     monthlyBudget: c.monthlyBudget as number,
     currency: (c.currency as string) ?? "ILS",
+    metaConversionEvent: (c.metaConversionEvent as string) ?? "",
     clientType: c.clientType as string,
     status: c.status as Client["status"],
     contactEmail: c.contactEmail as string,
@@ -77,6 +78,7 @@ function mapClient(c: Record<string, unknown>): Client {
       website: c.website as string,
     },
     customAssets: (c.customAssets as unknown as { id: string; label: string; value: string }[]) ?? [],
+    currentMonthSpend: (c.currentMonthSpend as number) ?? 0,
     performance: {
       budgetUsed: c.budgetUsed as number,
       avgCostPerConversion: c.avgCostPerConversion as number,
@@ -239,7 +241,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       name: data.name, manager: data.manager,
       campaignManager: data.campaignManager, accountManager: data.accountManager,
       platforms: data.platforms,
-      monthlyBudget: data.monthlyBudget, currency: data.currency, clientType: data.clientType, status: data.status,
+      monthlyBudget: data.monthlyBudget, currency: data.currency, metaConversionEvent: data.metaConversionEvent, clientType: data.clientType, status: data.status,
       contactEmail: data.contactEmail, contactPhone: data.contactPhone, notes: data.notes,
       ...data.digitalAssets, ...data.performance,
     };
