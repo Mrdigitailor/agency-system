@@ -86,6 +86,7 @@ export default function ClientsPage() {
       status: form.status, contactEmail: form.contactEmail, contactPhone: form.contactPhone, notes: form.notes,
       digitalAssets: { metaAdAccount: form.metaAdAccount, googleAdAccount: form.googleAdAccount, tiktokAdAccount: form.tiktokAdAccount, facebookPage: form.facebookPage, instagram: form.instagram, linkedin: form.linkedin, website: form.website },
       performance: { budgetUsed: 0, avgCostPerConversion: 0, targetCostPerConversion: Number(form.targetCostPerConversion) || 0, conversionsThisMonth: 0, targetConversions: Number(form.targetConversions) || 0, lastOptimization: "" },
+      customAssets: [],
     });
     resetForm();
     setIsModalOpen(false);

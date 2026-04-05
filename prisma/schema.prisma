@@ -63,6 +63,7 @@ model Client {
   instagram       String @default("")
   linkedin        String @default("")
   website         String @default("")
+  customAssets    String @default("[]") // JSON array of { id, label, value }
 
   // ביצועים
   budgetUsed            Float @default(0)

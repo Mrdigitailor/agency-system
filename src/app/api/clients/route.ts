@@ -27,6 +27,7 @@ export async function GET() {
   const parsed = clients.map((c) => ({
     ...c,
     platforms: JSON.parse(c.platforms),
+    customAssets: JSON.parse(c.customAssets ?? "[]"),
   }));
 
   return NextResponse.json(parsed);
@@ -45,6 +46,7 @@ export async function POST(req: Request) {
       campaignManager: body.campaignManager ?? "",
       accountManager: body.accountManager ?? "",
       platforms: JSON.stringify(body.platforms ?? []),
+      customAssets: JSON.stringify(body.customAssets ?? []),
       monthlyBudget: body.monthlyBudget ?? 0,
       clientType: body.clientType ?? "לידים",
       status: body.status ?? "active",

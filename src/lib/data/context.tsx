@@ -18,6 +18,7 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
 interface AppContextType {
   clients: Client[];
   addClient: (data: Omit<Client, "id" | "createdAt" | "optimizations">) => Promise<void>;
+  updateClient: (id: string, data: Partial<Client>) => Promise<void>;
   getClient: (id: string) => Client | undefined;
   refreshClients: () => Promise<void>;
 
@@ -74,6 +75,7 @@ function mapClient(c: Record<string, unknown>): Client {
       linkedin: c.linkedin as string,
       website: c.website as string,
     },
+    customAssets: (c.customAssets as unknown as { id: string; label: string; value: string }[]) ?? [],
     performance: {
       budgetUsed: c.budgetUsed as number,
       avgCostPerConversion: c.avgCostPerConversion as number,
@@ -244,6 +246,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await refreshClients();
   }, [refreshClients]);
 
+  const updateClient = useCallback(async (id: string, data: Partial<Client>) => {
+    // שטח את digitalAssets אם קיים
+    const flat: Record<string, unknown> = { ...data };
+    if (data.digitalAssets) {
+      Object.assign(flat, data.digitalAssets);
+      delete flat.digitalAssets;
+    }
+    if (data.performance) {
+      Object.assign(flat, data.performance);
+      delete flat.performance;
+    }
+    delete flat.optimizations;
+    delete flat.createdAt;
+    delete flat.id;
+    await api(`/api/clients/${id}`, { method: "PATCH", body: JSON.stringify(flat) });
+    await refreshClients();
+  }, [refreshClients]);
+
   const getClient = useCallback((id: string) => clients.find((c) => c.id === id), [clients]);
 
   // ==================== Tasks ====================
@@ -324,7 +344,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      clients, addClient, getClient, refreshClients,
+      clients, addClient, updateClient, getClient, refreshClients,
       tasks, addTask, addTaskNote, refreshTasks,
       leads, addLead, updateLead, addLeadCall, refreshLeads,
       employees, addEmployee, updateEmployee, deleteEmployee, refreshEmployees,

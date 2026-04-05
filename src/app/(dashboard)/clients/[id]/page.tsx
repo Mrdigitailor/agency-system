@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import {
   ArrowRight,
@@ -19,6 +19,8 @@ import {
   Monitor,
   Target,
   FileText,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import {
   LineChart,
@@ -33,7 +35,7 @@ import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
-import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES } from "@/lib/data/types";
+import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
 
 /* ==================== עזרים ==================== */
 
@@ -139,7 +141,7 @@ export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { data: session } = useSession();
-  const { getClient, tasks, addTask, addTaskNote, clients, employees, settings } = useApp();
+  const { getClient, tasks, addTask, addTaskNote, clients, employees, settings, updateClient } = useApp();
   const client = getClient(params.id as string);
 
   const [activeTab, setActiveTab] = useState<TabId>("overview");
@@ -168,6 +170,58 @@ export default function ClientDetailPage() {
     taskType: "advertising" as "advertising" | "other",
     platform: "",
   });
+
+  /* מודל עריכת לקוח */
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    campaignManager: "",
+    accountManager: "",
+    clientType: "",
+    status: "active" as "active" | "at_risk" | "upsell",
+    monthlyBudget: "" as string | number,
+    contactEmail: "",
+    contactPhone: "",
+    notes: "",
+    metaAdAccount: "",
+    googleAdAccount: "",
+    tiktokAdAccount: "",
+    facebookPage: "",
+    instagram: "",
+    linkedin: "",
+    website: "",
+    customAssets: [] as CustomAsset[],
+    targetConversions: "" as string | number,
+    targetCostPerConversion: "" as string | number,
+  });
+
+  useEffect(() => {
+    const c = getClient(params.id as string);
+    if (c && isEditOpen) {
+      setEditForm({
+        name: c.name,
+        campaignManager: c.campaignManager,
+        accountManager: c.accountManager,
+        clientType: c.clientType,
+        status: c.status,
+        monthlyBudget: c.monthlyBudget,
+        contactEmail: c.contactEmail,
+        contactPhone: c.contactPhone,
+        notes: c.notes,
+        metaAdAccount: c.digitalAssets.metaAdAccount,
+        googleAdAccount: c.digitalAssets.googleAdAccount,
+        tiktokAdAccount: c.digitalAssets.tiktokAdAccount,
+        facebookPage: c.digitalAssets.facebookPage,
+        instagram: c.digitalAssets.instagram,
+        linkedin: c.digitalAssets.linkedin,
+        website: c.digitalAssets.website,
+        customAssets: c.customAssets ?? [],
+        targetConversions: c.performance.targetConversions,
+        targetCostPerConversion: c.performance.targetCostPerConversion,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditOpen, params.id]);
 
   /* גרף ביצועים */
   const demoChartData = useMemo(
@@ -300,6 +354,63 @@ export default function ClientDetailPage() {
     setShowTaskModal(false);
   }
 
+  async function handleUpdateClient() {
+    if (!client) return;
+    await updateClient(client.id, {
+      name: editForm.name,
+      campaignManager: editForm.campaignManager,
+      accountManager: editForm.accountManager,
+      clientType: editForm.clientType,
+      status: editForm.status,
+      monthlyBudget: Number(editForm.monthlyBudget) || 0,
+      contactEmail: editForm.contactEmail,
+      contactPhone: editForm.contactPhone,
+      notes: editForm.notes,
+      digitalAssets: {
+        metaAdAccount: editForm.metaAdAccount,
+        googleAdAccount: editForm.googleAdAccount,
+        tiktokAdAccount: editForm.tiktokAdAccount,
+        facebookPage: editForm.facebookPage,
+        instagram: editForm.instagram,
+        linkedin: editForm.linkedin,
+        website: editForm.website,
+      },
+      customAssets: editForm.customAssets,
+      performance: {
+        ...client.performance,
+        targetConversions: Number(editForm.targetConversions) || 0,
+        targetCostPerConversion: Number(editForm.targetCostPerConversion) || 0,
+      },
+    });
+    setIsEditOpen(false);
+  }
+
+  function handleAddCustomAsset() {
+    setEditForm((prev) => ({
+      ...prev,
+      customAssets: [
+        ...prev.customAssets,
+        { id: `custom_${Date.now()}_${Math.random()}`, label: "", value: "" },
+      ],
+    }));
+  }
+
+  function handleRemoveCustomAsset(id: string) {
+    setEditForm((prev) => ({
+      ...prev,
+      customAssets: prev.customAssets.filter((a) => a.id !== id),
+    }));
+  }
+
+  function handleUpdateCustomAsset(id: string, field: "label" | "value", value: string) {
+    setEditForm((prev) => ({
+      ...prev,
+      customAssets: prev.customAssets.map((a) =>
+        a.id === id ? { ...a, [field]: value } : a,
+      ),
+    }));
+  }
+
   /* ==================== רינדור ==================== */
 
   return (
@@ -328,6 +439,13 @@ export default function ClientDetailPage() {
             )}
           </div>
         </div>
+        <button
+          onClick={() => setIsEditOpen(true)}
+          className="flex items-center gap-2 rounded-lg border border-brand-border px-3 py-1.5 text-sm text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
+        >
+          <Pencil className="h-4 w-4" />
+          עריכת לקוח
+        </button>
       </div>
 
       {/* ==================== טאבים ==================== */}
@@ -447,7 +565,23 @@ export default function ClientDetailPage() {
                     </div>
                   </div>
                 )}
-                {adAccounts.length === 0 && assetLinks.length === 0 && (
+                {client.customAssets && client.customAssets.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-brand-muted">נכסים מותאמים</p>
+                    <div className="space-y-2">
+                      {client.customAssets.map((asset) => (
+                        <div
+                          key={asset.id}
+                          className="flex items-center gap-3 rounded-lg bg-brand-bg p-3"
+                        >
+                          <span className="flex-1 text-sm font-medium text-brand-dark">{asset.label}</span>
+                          <span className="text-xs text-brand-muted">{asset.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {adAccounts.length === 0 && assetLinks.length === 0 && (!client.customAssets || client.customAssets.length === 0) && (
                   <p className="text-sm text-brand-muted">לא הוגדרו נכסים דיגיטליים</p>
                 )}
               </div>
@@ -1142,6 +1276,279 @@ export default function ClientDetailPage() {
           </Modal>
         </div>
       )}
+
+      {/* ==================== מודל עריכת לקוח ==================== */}
+      <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="עריכת לקוח" size="lg">
+        <div className="space-y-6">
+          {/* פרטים כלליים */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-brand-dark">פרטים כלליים</h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">שם הלקוח</label>
+                <input
+                  className={inputClass}
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">מנהל קמפיינים</label>
+                <select
+                  className={inputClass}
+                  value={editForm.campaignManager}
+                  onChange={(e) => setEditForm((p) => ({ ...p, campaignManager: e.target.value }))}
+                >
+                  <option value="">ללא</option>
+                  {employees
+                    .filter((emp) => emp.role === "campaignManager")
+                    .map((emp) => (
+                      <option key={emp.id} value={emp.name}>
+                        {emp.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">מנהל תיקים</label>
+                <select
+                  className={inputClass}
+                  value={editForm.accountManager}
+                  onChange={(e) => setEditForm((p) => ({ ...p, accountManager: e.target.value }))}
+                >
+                  <option value="">ללא</option>
+                  {employees
+                    .filter((emp) => emp.role === "manager")
+                    .map((emp) => (
+                      <option key={emp.id} value={emp.name}>
+                        {emp.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">סוג לקוח</label>
+                <select
+                  className={inputClass}
+                  value={editForm.clientType}
+                  onChange={(e) => setEditForm((p) => ({ ...p, clientType: e.target.value }))}
+                >
+                  <option value="">בחר</option>
+                  {CLIENT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">סטטוס</label>
+                <select
+                  className={inputClass}
+                  value={editForm.status}
+                  onChange={(e) =>
+                    setEditForm((p) => ({
+                      ...p,
+                      status: e.target.value as "active" | "at_risk" | "upsell",
+                    }))
+                  }
+                >
+                  {CLIENT_STATUSES.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">תקציב חודשי</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={editForm.monthlyBudget}
+                  onChange={(e) => setEditForm((p) => ({ ...p, monthlyBudget: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">אימייל</label>
+                <input
+                  type="email"
+                  className={inputClass}
+                  value={editForm.contactEmail}
+                  onChange={(e) => setEditForm((p) => ({ ...p, contactEmail: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">טלפון</label>
+                <input
+                  className={inputClass}
+                  value={editForm.contactPhone}
+                  onChange={(e) => setEditForm((p) => ({ ...p, contactPhone: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brand-dark">הערות</label>
+              <textarea
+                rows={3}
+                className={inputClass}
+                value={editForm.notes}
+                onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {/* נכסים דיגיטליים */}
+          <div className="space-y-4 border-t border-brand-border pt-4">
+            <h3 className="text-sm font-semibold text-brand-dark">נכסים דיגיטליים</h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">חשבון Meta Ads</label>
+                <input
+                  className={inputClass}
+                  placeholder="מזהה חשבון Meta"
+                  value={editForm.metaAdAccount}
+                  onChange={(e) => setEditForm((p) => ({ ...p, metaAdAccount: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">חשבון Google Ads</label>
+                <input
+                  className={inputClass}
+                  placeholder="מזהה חשבון Google"
+                  value={editForm.googleAdAccount}
+                  onChange={(e) => setEditForm((p) => ({ ...p, googleAdAccount: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">חשבון TikTok Ads</label>
+                <input
+                  className={inputClass}
+                  placeholder="מזהה חשבון TikTok"
+                  value={editForm.tiktokAdAccount}
+                  onChange={(e) => setEditForm((p) => ({ ...p, tiktokAdAccount: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">עמוד פייסבוק</label>
+                <input
+                  className={inputClass}
+                  placeholder="https://facebook.com/..."
+                  value={editForm.facebookPage}
+                  onChange={(e) => setEditForm((p) => ({ ...p, facebookPage: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">אינסטגרם</label>
+                <input
+                  className={inputClass}
+                  placeholder="https://instagram.com/..."
+                  value={editForm.instagram}
+                  onChange={(e) => setEditForm((p) => ({ ...p, instagram: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">לינקדאין</label>
+                <input
+                  className={inputClass}
+                  placeholder="https://linkedin.com/..."
+                  value={editForm.linkedin}
+                  onChange={(e) => setEditForm((p) => ({ ...p, linkedin: e.target.value }))}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-brand-dark">אתר</label>
+                <input
+                  className={inputClass}
+                  placeholder="https://..."
+                  value={editForm.website}
+                  onChange={(e) => setEditForm((p) => ({ ...p, website: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* נכסים דיגיטליים מותאמים */}
+          <div className="space-y-3 border-t border-brand-border pt-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-brand-dark">נכסים דיגיטליים מותאמים</h3>
+              <button
+                type="button"
+                onClick={handleAddCustomAsset}
+                className="rounded-lg border border-brand-border px-3 py-1.5 text-sm font-medium text-brand-muted hover:bg-brand-bg"
+              >
+                הוסף נכס חדש
+              </button>
+            </div>
+            <div className="space-y-2">
+              {editForm.customAssets.map((asset) => (
+                <div key={asset.id} className="flex items-center gap-2">
+                  <input
+                    className={inputClass}
+                    placeholder="שם הנכס"
+                    value={asset.label}
+                    onChange={(e) => handleUpdateCustomAsset(asset.id, "label", e.target.value)}
+                  />
+                  <input
+                    className={inputClass}
+                    placeholder="ערך / קישור"
+                    value={asset.value}
+                    onChange={(e) => handleUpdateCustomAsset(asset.id, "value", e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCustomAsset(asset.id)}
+                    className="flex-shrink-0 rounded-lg p-2 text-brand-muted transition-colors duration-200 hover:bg-brand-bg hover:text-brand-danger"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              {editForm.customAssets.length === 0 && (
+                <p className="text-sm text-brand-muted">לא הוגדרו נכסים מותאמים</p>
+              )}
+            </div>
+          </div>
+
+          {/* יעדים */}
+          <div className="space-y-4 border-t border-brand-border pt-4">
+            <h3 className="text-sm font-semibold text-brand-dark">יעדים</h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">יעד המרות</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={editForm.targetConversions}
+                  onChange={(e) => setEditForm((p) => ({ ...p, targetConversions: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">יעד עלות להמרה</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={editForm.targetCostPerConversion}
+                  onChange={(e) => setEditForm((p) => ({ ...p, targetCostPerConversion: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* כפתורי פעולה */}
+          <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
+            <button
+              onClick={() => setIsEditOpen(false)}
+              className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg"
+            >
+              ביטול
+            </button>
+            <button onClick={handleUpdateClient} className={btnPrimary}>
+              שמור שינויים
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

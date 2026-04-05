@@ -8,15 +8,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     include: { optimizations: { orderBy: { createdAt: "desc" } } },
   });
   if (!client || client.deletedAt) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ ...client, platforms: JSON.parse(client.platforms) });
+  return NextResponse.json({
+    ...client,
+    platforms: JSON.parse(client.platforms),
+    customAssets: JSON.parse(client.customAssets ?? "[]"),
+  });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
   if (body.platforms) body.platforms = JSON.stringify(body.platforms);
+  if (body.customAssets) body.customAssets = JSON.stringify(body.customAssets);
   const client = await prisma.client.update({ where: { id }, data: body });
-  return NextResponse.json({ ...client, platforms: JSON.parse(client.platforms) });
+  return NextResponse.json({
+    ...client,
+    platforms: JSON.parse(client.platforms),
+    customAssets: JSON.parse(client.customAssets ?? "[]"),
+  });
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {

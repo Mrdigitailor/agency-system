@@ -10,6 +10,12 @@ export interface ClientDigitalAssets {
   website: string;
 }
 
+export interface CustomAsset {
+  id: string;
+  label: string;
+  value: string;
+}
+
 export interface ClientPerformance {
   budgetUsed: number;
   avgCostPerConversion: number;
@@ -40,6 +46,7 @@ export interface Client {
   notes: string;
   createdAt: string;
   digitalAssets: ClientDigitalAssets;
+  customAssets: CustomAsset[];
   performance: ClientPerformance;
   optimizations: Optimization[];
 }
