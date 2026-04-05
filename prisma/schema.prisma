@@ -336,3 +336,112 @@ model PlatformAsset {
   @@unique([connectionId, assetType, externalId])
   @@map("platform_assets")
 }
+
+// ==================== נתוני Meta Ads (Insights) ====================
+
+// שורת insights יומית לכל רמה (account/campaign/adset/ad)
+model MetaInsightDaily {
+  id           String   @id @default(cuid())
+  clientId     String
+  assetId      String   // PlatformAsset.id של ה-ad_account
+  level        String   // "account" | "campaign" | "adset" | "ad"
+  externalId   String   // ה-ID של הישות ב-Meta (campaign_id / adset_id / ad_id / account_id)
+  parentId     String   @default("") // ה-ID של ההורה (adset של ad, campaign של adset וכו')
+  name         String   @default("")
+  status       String   @default("")
+  date         String   // YYYY-MM-DD
+
+  spend              Float @default(0)
+  impressions        Int   @default(0)
+  clicks             Int   @default(0)
+  reach              Int   @default(0)
+  frequency          Float @default(0)
+  ctr                Float @default(0)
+  cpc                Float @default(0)
+  cpm                Float @default(0)
+  conversions        Int   @default(0)
+  costPerConversion  Float @default(0)
+  purchaseValue      Float @default(0)
+  roas               Float @default(0)
+  actionsJson        String @default("{}") // JSON מלא של actions breakdown
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([assetId, level, externalId, date])
+  @@index([clientId, date])
+  @@index([assetId, date])
+  @@map("meta_insight_daily")
+}
+
+// פוסט אורגני בעמוד פייסבוק
+model MetaPagePost {
+  id            String   @id @default(cuid())
+  clientId      String
+  assetId       String   // PlatformAsset.id של ה-facebook_page
+  externalId    String   // post_id
+  message       String   @default("")
+  permalink     String   @default("")
+  mediaType     String   @default("") // photo | video | status | link
+  mediaUrl      String   @default("")
+  createdTime   DateTime
+  reach         Int      @default(0)
+  impressions   Int      @default(0)
+  engagement    Int      @default(0)
+  reactions     Int      @default(0)
+  comments      Int      @default(0)
+  shares        Int      @default(0)
+  clicks        Int      @default(0)
+  videoViews    Int      @default(0)
+  lastSyncAt    DateTime @default(now())
+
+  @@unique([assetId, externalId])
+  @@index([clientId, createdTime])
+  @@map("meta_page_posts")
+}
+
+// פריט מדיה באינסטגרם (פוסט/ריל/סטורי)
+model MetaInstagramMedia {
+  id            String   @id @default(cuid())
+  clientId      String
+  assetId       String   // PlatformAsset.id של ה-instagram
+  externalId    String   // media_id
+  caption       String   @default("")
+  permalink     String   @default("")
+  mediaType     String   @default("") // IMAGE | VIDEO | CAROUSEL_ALBUM | REELS
+  mediaUrl      String   @default("")
+  thumbnailUrl  String   @default("")
+  timestamp     DateTime
+  reach         Int      @default(0)
+  impressions   Int      @default(0)
+  likes         Int      @default(0)
+  comments      Int      @default(0)
+  saves         Int      @default(0)
+  shares        Int      @default(0)
+  videoViews    Int      @default(0)
+  profileVisits Int      @default(0)
+  lastSyncAt    DateTime @default(now())
+
+  @@unique([assetId, externalId])
+  @@index([clientId, timestamp])
+  @@map("meta_instagram_media")
+}
+
+// לוג סנכרון — תיעוד כל ריצה של שליפת נתונים
+model SyncLog {
+  id             String   @id @default(cuid())
+  platform       String   // "meta" | "google_ads" | "tiktok" | "ga4"
+  clientId       String   @default("")
+  connectionId   String   @default("")
+  assetId        String   @default("")
+  syncType       String   // "ad_insights" | "page_posts" | "instagram_media" | "assets_discovery"
+  status         String   // "success" | "partial" | "error"
+  errorMessage   String   @default("")
+  recordsFetched Int      @default(0)
+  durationMs     Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([platform, createdAt])
+  @@index([clientId, createdAt])
+  @@map("sync_logs")
+}

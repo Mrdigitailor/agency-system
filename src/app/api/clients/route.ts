@@ -11,10 +11,17 @@ export async function GET() {
   const where: Record<string, unknown> = { deletedAt: null };
 
   if (user.role === "campaignManager") {
-    // מנהל קמפיינים רואה רק לקוחות שמשויכים אליו
-    where.campaignManager = user.name;
+    // מנהל קמפיינים רואה רק לקוחות שמשויכים אליו ב-assignedClientIds
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { assignedClientIds: true },
+    });
+    const assignedIds: string[] = JSON.parse(dbUser?.assignedClientIds ?? "[]");
+    if (assignedIds.length === 0) {
+      return NextResponse.json([]);
+    }
+    where.id = { in: assignedIds };
   } else if (user.role === "client") {
-    // לקוח קצה — לא רואה כלום כאן
     return NextResponse.json([]);
   }
 
