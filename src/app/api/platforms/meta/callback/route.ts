@@ -32,8 +32,8 @@ export async function GET(req: Request) {
   const { clientId } = decoded;
 
   try {
-    // 1. החלפת code ל-short-lived token
-    const shortToken = await exchangeCodeForToken(code);
+    // 1. החלפת code ל-short-lived token (צריך לעבור אותו redirect_uri)
+    const shortToken = await exchangeCodeForToken(code, origin);
     if (!shortToken?.access_token) {
       throw new Error("לא התקבל access token");
     }

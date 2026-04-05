@@ -11,12 +11,15 @@ export async function GET(req: Request) {
   const result = await requireAuth();
   if (result instanceof NextResponse) return result;
 
-  const { searchParams } = new URL(req.url);
-  const clientId = searchParams.get("clientId");
+  const url = new URL(req.url);
+  const clientId = url.searchParams.get("clientId");
   if (!clientId) {
     return NextResponse.json({ error: "חסר clientId" }, { status: 400 });
   }
 
-  const authUrl = buildAuthUrl(clientId, result.id);
+  // גזור origin מה-request כדי לבנות redirect_uri תואם
+  const origin = url.origin;
+  const authUrl = buildAuthUrl(clientId, result.id, origin);
+
   return NextResponse.json({ authUrl });
 }
