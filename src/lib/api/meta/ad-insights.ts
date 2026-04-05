@@ -17,6 +17,7 @@ export interface MetaInsight {
   cpm: string;
   actions?: Array<{ action_type: string; value: string }>;
   action_values?: Array<{ action_type: string; value: string }>;
+  cost_per_action_type?: Array<{ action_type: string; value: string }>;
   campaign_id?: string;
   campaign_name?: string;
   adset_id?: string;
@@ -28,16 +29,13 @@ export interface MetaInsight {
 
 const INSIGHT_FIELDS = [
   "spend", "impressions", "clicks", "reach", "frequency", "ctr", "cpc", "cpm",
-  "actions", "action_values", "date_start", "date_stop",
+  "actions", "action_values", "cost_per_action_type",
+  "date_start", "date_stop",
   "campaign_id", "campaign_name", "adset_id", "adset_name", "ad_id", "ad_name", "account_id",
 ].join(",");
 
 /**
  * שליפת insights של חשבון מודעות ברמה מבוקשת
- * @param adAccountId - הפורמט: act_XXXXXX
- * @param level - רמת הפירוט
- * @param since/until - תאריכים YYYY-MM-DD
- * @param dailyBreakdown - חלוקה יומית (true) או סיכום (false)
  */
 export async function fetchAdInsights(
   adAccountId: string,
@@ -63,40 +61,69 @@ export async function fetchAdInsights(
 }
 
 /**
- * חישוב conversions, purchase value ו-ROAS מהשדה actions
+ * חילוץ מטריקות מכל ה-actions של Meta
  */
-export function extractConversions(insight: MetaInsight): {
+export interface ExtractedMetrics {
   conversions: number;
   purchaseValue: number;
   roas: number;
   costPerConversion: number;
-} {
-  let conversions = 0;
-  let purchaseValue = 0;
+  linkClicks: number;
+  landingPageViews: number;
+  videoViews: number;
+  videoThruplay: number;
+  engagement: number;
+  purchases: number;
+  leads: number;
+  costPerLead: number;
+}
 
-  // ספירת conversions מ-actions
-  if (insight.actions) {
-    for (const action of insight.actions) {
-      if (action.action_type === "purchase" || action.action_type === "offsite_conversion.fb_pixel_purchase" || action.action_type === "lead") {
-        conversions += parseFloat(action.value) || 0;
-      }
+function getActionValue(actions: Array<{ action_type: string; value: string }> | undefined, types: string[]): number {
+  if (!actions) return 0;
+  let sum = 0;
+  for (const a of actions) {
+    if (types.includes(a.action_type)) {
+      sum += parseFloat(a.value) || 0;
     }
   }
+  return sum;
+}
 
-  // ערך רכישה מ-action_values
-  if (insight.action_values) {
-    for (const action of insight.action_values) {
-      if (action.action_type === "purchase" || action.action_type === "offsite_conversion.fb_pixel_purchase") {
-        purchaseValue += parseFloat(action.value) || 0;
-      }
-    }
-  }
-
+export function extractMetrics(insight: MetaInsight): ExtractedMetrics {
   const spend = parseFloat(insight.spend) || 0;
-  const roas = spend > 0 ? purchaseValue / spend : 0;
-  const costPerConversion = conversions > 0 ? spend / conversions : 0;
 
-  return { conversions, purchaseValue, roas, costPerConversion };
+  // purchases — אם יש pixel purchase נעדיף אותו, אחרת offsite_conversion
+  const purchases =
+    getActionValue(insight.actions, ["offsite_conversion.fb_pixel_purchase"]) ||
+    getActionValue(insight.actions, ["purchase"]);
+
+  const purchaseValue =
+    getActionValue(insight.action_values, ["offsite_conversion.fb_pixel_purchase"]) ||
+    getActionValue(insight.action_values, ["purchase"]);
+
+  const leads =
+    getActionValue(insight.actions, ["lead"]) ||
+    getActionValue(insight.actions, ["offsite_conversion.fb_pixel_lead"]);
+
+  // conversions — כל הפעולות החשובות
+  const conversions = purchases + leads ||
+    getActionValue(insight.actions, ["offsite_conversion.fb_pixel_custom", "complete_registration", "initiate_checkout", "add_to_cart"]);
+
+  const linkClicks = getActionValue(insight.actions, ["link_click"]);
+  const landingPageViews = getActionValue(insight.actions, ["landing_page_view"]);
+  const videoViews = getActionValue(insight.actions, ["video_view"]);
+  const videoThruplay = getActionValue(insight.actions, ["video_thruplay_watched_actions"]);
+  const engagement = getActionValue(insight.actions, ["post_engagement", "page_engagement"]);
+
+  const costPerConversion = conversions > 0 ? spend / conversions : 0;
+  const costPerLead = leads > 0 ? spend / leads : 0;
+  const roas = spend > 0 ? purchaseValue / spend : 0;
+
+  return {
+    conversions, purchaseValue, roas, costPerConversion,
+    linkClicks, landingPageViews, videoViews, videoThruplay, engagement,
+    purchases, leads, costPerLead,
+  };
 }
 
 /**
@@ -110,13 +137,14 @@ export interface MetaCampaign {
   objective?: string;
   daily_budget?: string;
   lifetime_budget?: string;
+  bid_strategy?: string;
 }
 
 export async function fetchCampaigns(adAccountId: string, accessToken: string): Promise<MetaCampaign[]> {
   return metaApiGetAll<MetaCampaign>(`/${adAccountId}/campaigns`, {
     accessToken,
     params: {
-      fields: "id,name,status,effective_status,objective,daily_budget,lifetime_budget",
+      fields: "id,name,status,effective_status,objective,daily_budget,lifetime_budget,bid_strategy",
       limit: "200",
     },
   });

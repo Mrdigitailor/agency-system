@@ -363,6 +363,14 @@ model MetaInsightDaily {
   costPerConversion  Float @default(0)
   purchaseValue      Float @default(0)
   roas               Float @default(0)
+  linkClicks         Int   @default(0)
+  landingPageViews   Int   @default(0)
+  videoViews         Int   @default(0)
+  videoThruplay      Int   @default(0)
+  engagement         Int   @default(0)
+  purchases          Int   @default(0)
+  leads              Int   @default(0)
+  costPerLead        Float @default(0)
   actionsJson        String @default("{}") // JSON מלא של actions breakdown
 
   createdAt    DateTime @default(now())

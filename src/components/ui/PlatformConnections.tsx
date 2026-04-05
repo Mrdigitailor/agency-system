@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Link2, Unlink, CheckCircle2, Loader2 } from "lucide-react";
+import { Link2, Unlink, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 
 interface Asset {
@@ -48,6 +48,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+  const [syncingPlatform, setSyncingPlatform] = useState<string | null>(null);
   const [assetsModalPlatform, setAssetsModalPlatform] = useState<string | null>(null);
   const [assetSelections, setAssetSelections] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
@@ -95,8 +96,27 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
 
   const handleDisconnect = async (platform: string) => {
     if (!confirm("האם לנתק את החיבור? תצטרך להתחבר מחדש.")) return;
-    await fetch(`/api/clients/${clientId}/connections/${platform}`, { method: "DELETE" });
+    if (platform === "meta") {
+      await fetch(`/api/platforms/meta/disconnect/${clientId}`, { method: "DELETE" });
+    } else {
+      await fetch(`/api/clients/${clientId}/connections/${platform}`, { method: "DELETE" });
+    }
     await fetchConnections();
+  };
+
+  const handleSync = async (platform: string) => {
+    if (platform !== "meta") return;
+    setSyncingPlatform(platform);
+    try {
+      await fetch(`/api/platforms/meta/sync/${clientId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ daysBack: 90 }),
+      });
+      await fetchConnections();
+    } finally {
+      setSyncingPlatform(null);
+    }
   };
 
   const openAssetsModal = (platform: string) => {
@@ -154,10 +174,21 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                       </p>
                       <p className="mt-0.5 text-xs text-brand-muted">
                         {selectedCount} נכסים נבחרו מתוך {conn.assets.length}
+                        {conn.lastSyncAt && ` · סנכרון אחרון: ${formatDate(conn.lastSyncAt)}`}
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    {conn.platform === "meta" && (
+                      <button
+                        onClick={() => handleSync(conn.platform)}
+                        disabled={syncingPlatform === conn.platform}
+                        className="flex items-center gap-1 rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${syncingPlatform === conn.platform ? "animate-spin" : ""}`} />
+                        {syncingPlatform === conn.platform ? "מסנכרן..." : "סנכרן עכשיו"}
+                      </button>
+                    )}
                     <button
                       onClick={() => openAssetsModal(conn.platform)}
                       className="rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-bg"

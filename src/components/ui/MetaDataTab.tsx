@@ -1,410 +1,252 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, useCallback } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { TrendingUp, Eye, MousePointerClick, DollarSign, ExternalLink, RefreshCw } from "lucide-react";
+import { RefreshCw, TrendingUp, Eye, MousePointerClick, DollarSign, Target as TargetIcon, ShoppingBag, Users2, Play } from "lucide-react";
+import DateRangePicker, { getPresetRange, type DateRange } from "./DateRangePicker";
 
 interface MetaDataTabProps {
   clientId: string;
 }
 
 interface Kpis {
-  totalSpend: number;
-  totalConversions: number;
-  totalImpressions: number;
-  totalClicks: number;
-  avgCostPerConv: number;
-  avgCtr: number;
+  totalSpend: number; totalConversions: number; totalImpressions: number; totalClicks: number; totalReach: number;
+  totalPurchases: number; totalPurchaseValue: number; totalLeads: number; totalLinkClicks: number;
+  totalLandingPageViews: number; totalVideoViews: number;
+  avgCostPerConv: number; avgCostPerLead: number; avgCtr: number; avgCpc: number; avgCpm: number; roas: number;
 }
 
-interface DailyPoint {
-  date: string;
-  spend: number;
-  conversions: number;
-  clicks: number;
-}
+interface DailyPoint { date: string; spend: number; conversions: number; clicks: number; impressions: number; }
+interface Campaign { id: string; name: string; spend: number; conversions: number; clicks: number; impressions: number; cpc: number; cpa: number; roas: number; purchases: number; leads: number; }
+interface Post { id: string; externalId: string; message: string; permalink: string; mediaType: string; mediaUrl: string; createdTime: string; reach: number; impressions: number; engagement: number; reactions: number; comments: number; shares: number; clicks: number; videoViews: number; }
+interface Media { id: string; externalId: string; caption: string; permalink: string; mediaType: string; mediaUrl: string; thumbnailUrl: string; timestamp: string; reach: number; impressions: number; likes: number; comments: number; saves: number; videoViews: number; }
 
-interface Campaign {
-  id: string;
-  name: string;
-  spend: number;
-  conversions: number;
-  clicks: number;
-  impressions: number;
-  cpc: number;
-}
-
-interface PagePost {
-  id: string;
-  externalId: string;
-  message: string;
-  permalink: string;
-  mediaType: string;
-  mediaUrl: string;
-  createdTime: string;
-  reach: number;
-  impressions: number;
-  engagement: number;
-  reactions: number;
-  comments: number;
-  shares: number;
-  clicks: number;
-  videoViews: number;
-}
-
-interface IgMediaItem {
-  id: string;
-  externalId: string;
-  caption: string;
-  permalink: string;
-  mediaType: string;
-  mediaUrl: string;
-  thumbnailUrl: string;
-  timestamp: string;
-  reach: number;
-  impressions: number;
-  likes: number;
-  comments: number;
-  saves: number;
-  videoViews: number;
-}
-
-interface MetaData {
+interface Data {
   kpis: Kpis;
   dailyChart: DailyPoint[];
   campaigns: Campaign[];
-  pagePosts: PagePost[];
-  igMedia: IgMediaItem[];
+  pagePosts: Post[];
+  igMedia: Media[];
 }
 
-const cardClass = "rounded-lg border border-brand-border bg-brand-light p-6 shadow-sm";
-
-function truncate(text: string, max: number) {
-  if (!text) return "";
-  return text.length > max ? text.slice(0, max) + "…" : text;
+function formatNumber(n: number): string {
+  return Math.round(n).toLocaleString("he-IL");
 }
 
-function formatFullDate(iso: string) {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleDateString("he-IL", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-  } catch {
-    return iso;
-  }
+function formatCurrency(n: number): string {
+  return `₪ ${Math.round(n).toLocaleString("he-IL")}`;
+}
+
+function formatDate(d: string): string {
+  const date = new Date(d);
+  return date.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" });
 }
 
 export default function MetaDataTab({ clientId }: MetaDataTabProps) {
-  const [data, setData] = useState<MetaData | null>(null);
+  const [range, setRange] = useState<DateRange>(() => getPresetRange("this_month"));
+  const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showAllCampaigns, setShowAllCampaigns] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/platforms/meta/data/${clientId}`);
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
-      } else {
-        setData(null);
-      }
-    } catch {
-      setData(null);
+      const res = await fetch(`/api/platforms/meta/data/${clientId}?since=${range.since}&until=${range.until}`);
+      if (res.ok) setData(await res.json());
     } finally {
       setLoading(false);
     }
+  }, [clientId, range.since, range.until]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await fetch(`/api/platforms/meta/sync/${clientId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ daysBack: 90 }),
+      });
+      await fetchData();
+    } finally {
+      setSyncing(false);
+    }
   };
 
-  useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-brand-muted" dir="rtl">
-        טוען נתונים...
-      </div>
-    );
+  if (loading && !data) {
+    return <p className="text-center text-brand-muted">טוען נתונים...</p>;
   }
 
-  const isEmpty =
-    !data ||
-    ((!data.kpis || (data.kpis.totalSpend === 0 && data.kpis.totalConversions === 0 && data.kpis.totalImpressions === 0 && data.kpis.totalClicks === 0)) &&
-      (!data.dailyChart || data.dailyChart.length === 0) &&
-      (!data.campaigns || data.campaigns.length === 0) &&
-      (!data.pagePosts || data.pagePosts.length === 0) &&
-      (!data.igMedia || data.igMedia.length === 0));
-
-  if (isEmpty) {
+  if (!data || (data.kpis.totalSpend === 0 && data.campaigns.length === 0 && data.pagePosts.length === 0 && data.igMedia.length === 0)) {
     return (
-      <div dir="rtl" className="space-y-4">
-        <div className="flex items-center justify-end">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <DateRangePicker value={range} onChange={setRange} />
+        </div>
+        <div className="rounded-lg border border-brand-border bg-brand-light p-8 text-center shadow-sm">
+          <RefreshCw className="mx-auto mb-3 h-8 w-8 text-brand-muted" />
+          <p className="mb-3 text-brand-dark">עדיין אין נתונים מסונכרנים</p>
+          <p className="mb-4 text-sm text-brand-muted">הסנכרון הבא ירוץ בלילה או אפשר להפעיל ידנית</p>
           <button
-            onClick={fetchData}
-            className="inline-flex items-center gap-2 rounded-lg border border-brand-border bg-brand-light px-4 py-2 text-sm hover:bg-brand-bg"
+            onClick={handleSync}
+            disabled={syncing}
+            className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
           >
-            <RefreshCw className="h-4 w-4" />
-            רענן
+            {syncing ? "מסנכרן..." : "סנכרן עכשיו"}
           </button>
         </div>
-        <div className={`${cardClass} flex flex-col items-center justify-center gap-3 py-16 text-center`}>
-          <RefreshCw className="h-10 w-10 text-brand-muted" />
-          <p className="text-brand-muted">
-            עדיין אין נתונים מסונכרנים — הסנכרון הבא ירוץ בלילה או הפעל ידנית
-          </p>
-        </div>
       </div>
     );
   }
 
-  const kpis = data!.kpis;
-  const campaignsToShow = showAllCampaigns ? data!.campaigns : data!.campaigns.slice(0, 10);
-
-  const chartData = (data!.dailyChart || []).map((d) => ({
-    ...d,
-    dateLabel: (() => {
-      try {
-        return new Date(d.date).toLocaleDateString("he-IL", {
-          day: "2-digit",
-          month: "2-digit",
-        });
-      } catch {
-        return d.date;
-      }
-    })(),
-  }));
+  const kpiCards = [
+    { label: "הוצאה", value: formatCurrency(data.kpis.totalSpend), icon: DollarSign },
+    { label: "המרות", value: formatNumber(data.kpis.totalConversions), icon: TargetIcon },
+    { label: "רכישות", value: formatNumber(data.kpis.totalPurchases), icon: ShoppingBag },
+    { label: "לידים", value: formatNumber(data.kpis.totalLeads), icon: Users2 },
+    { label: "עלות להמרה", value: formatCurrency(data.kpis.avgCostPerConv), icon: DollarSign },
+    { label: "עלות לליד", value: formatCurrency(data.kpis.avgCostPerLead), icon: DollarSign },
+    { label: "ROAS", value: data.kpis.roas.toFixed(2), icon: TrendingUp },
+    { label: "CTR", value: `${data.kpis.avgCtr.toFixed(2)}%`, icon: MousePointerClick },
+    { label: "CPC", value: formatCurrency(data.kpis.avgCpc), icon: DollarSign },
+    { label: "CPM", value: formatCurrency(data.kpis.avgCpm), icon: Eye },
+    { label: "הופעות", value: formatNumber(data.kpis.totalImpressions), icon: Eye },
+    { label: "חשיפה", value: formatNumber(data.kpis.totalReach), icon: Eye },
+    { label: "קליקים", value: formatNumber(data.kpis.totalClicks), icon: MousePointerClick },
+    { label: "קליקי קישור", value: formatNumber(data.kpis.totalLinkClicks), icon: MousePointerClick },
+    { label: "דפי נחיתה", value: formatNumber(data.kpis.totalLandingPageViews), icon: Eye },
+    { label: "צפיות וידאו", value: formatNumber(data.kpis.totalVideoViews), icon: Play },
+  ];
 
   return (
-    <div dir="rtl" className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm text-brand-muted">30 ימים אחרונים</h2>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <DateRangePicker value={range} onChange={setRange} />
         <button
-          onClick={fetchData}
-          className="inline-flex items-center gap-2 rounded-lg border border-brand-border bg-brand-light px-4 py-2 text-sm hover:bg-brand-bg"
+          onClick={handleSync}
+          disabled={syncing}
+          className="flex items-center gap-2 rounded-lg border border-brand-border bg-brand-light px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-bg disabled:opacity-50"
         >
-          <RefreshCw className="h-4 w-4" />
-          רענן
+          <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+          {syncing ? "מסנכרן..." : "סנכרן עכשיו"}
         </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className={cardClass}>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-brand-muted">סה״כ הוצאה</p>
-            <DollarSign className="h-5 w-5 text-brand-muted" />
-          </div>
-          <p className="mt-2 text-2xl font-bold">₪ {kpis.totalSpend.toLocaleString()}</p>
-        </div>
-        <div className={cardClass}>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-brand-muted">סה״כ המרות</p>
-            <TrendingUp className="h-5 w-5 text-brand-muted" />
-          </div>
-          <p className="mt-2 text-2xl font-bold">{kpis.totalConversions}</p>
-        </div>
-        <div className={cardClass}>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-brand-muted">עלות ממוצעת להמרה</p>
-            <DollarSign className="h-5 w-5 text-brand-muted" />
-          </div>
-          <p className="mt-2 text-2xl font-bold">₪ {Math.round(kpis.avgCostPerConv)}</p>
-        </div>
-        <div className={cardClass}>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-brand-muted">CTR ממוצע</p>
-            <MousePointerClick className="h-5 w-5 text-brand-muted" />
-          </div>
-          <p className="mt-2 text-2xl font-bold">{kpis.avgCtr.toFixed(2)}%</p>
-        </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {kpiCards.map((kpi) => {
+          const Icon = kpi.icon;
+          return (
+            <div key={kpi.label} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-brand-muted">{kpi.label}</p>
+                <Icon className="h-4 w-4 text-brand-muted" />
+              </div>
+              <p className="mt-1 text-xl font-semibold text-brand-dark">{kpi.value}</p>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Daily Chart */}
-      {chartData.length > 0 && (
-        <div className={cardClass}>
-          <h3 className="mb-4 text-lg font-semibold">ביצועים יומיים</h3>
-          <div className="h-[280px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
-                <YAxis yAxisId="left" orientation="left" tick={{ fontSize: 12 }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Legend />
-                <Line
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="spend"
-                  name="הוצאה (₪)"
-                  stroke="#eed89b"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="conversions"
-                  name="המרות"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+      {data.dailyChart.length > 0 && (
+        <div className="rounded-lg border border-brand-border bg-brand-light p-6 shadow-sm">
+          <h3 className="mb-4 text-lg font-semibold text-brand-dark">ביצועים יומיים</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={data.dailyChart.map((d) => ({ ...d, dateLabel: formatDate(d.date) }))}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+              <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} reversed />
+              <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
+              <YAxis yAxisId="right" orientation="left" tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Legend />
+              <Line yAxisId="left" type="monotone" dataKey="spend" stroke="#eed89b" strokeWidth={2} name="הוצאה ₪" dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="conversions" stroke="#3b82f6" strokeWidth={2} name="המרות" dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       )}
 
-      {/* Campaigns Table */}
-      {data!.campaigns.length > 0 && (
-        <div className={cardClass}>
-          <h3 className="mb-4 text-lg font-semibold">קמפיינים</h3>
+      {data.campaigns.length > 0 && (
+        <div className="rounded-lg border border-brand-border bg-brand-light shadow-sm">
+          <h3 className="border-b border-brand-border px-6 py-4 text-lg font-semibold text-brand-dark">קמפיינים</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-brand-border text-right text-brand-muted">
-                  <th className="py-2 font-medium">שם קמפיין</th>
-                  <th className="py-2 font-medium">הוצאה</th>
-                  <th className="py-2 font-medium">קליקים</th>
-                  <th className="py-2 font-medium">המרות</th>
-                  <th className="py-2 font-medium">CPC</th>
+                <tr className="border-b border-brand-border bg-brand-bg/50">
+                  <th className="px-4 py-3 text-right font-medium text-brand-muted">שם</th>
+                  <th className="px-4 py-3 text-right font-medium text-brand-muted">הוצאה</th>
+                  <th className="px-4 py-3 text-right font-medium text-brand-muted">הופעות</th>
+                  <th className="px-4 py-3 text-right font-medium text-brand-muted">קליקים</th>
+                  <th className="px-4 py-3 text-right font-medium text-brand-muted">המרות</th>
+                  <th className="px-4 py-3 text-right font-medium text-brand-muted">רכישות</th>
+                  <th className="px-4 py-3 text-right font-medium text-brand-muted">CPA</th>
+                  <th className="px-4 py-3 text-right font-medium text-brand-muted">ROAS</th>
                 </tr>
               </thead>
               <tbody>
-                {campaignsToShow.map((c) => (
-                  <tr key={c.id} className="border-b border-brand-border/50">
-                    <td className="py-2">{c.name}</td>
-                    <td className="py-2">₪ {c.spend.toLocaleString()}</td>
-                    <td className="py-2">{c.clicks}</td>
-                    <td className="py-2">{c.conversions}</td>
-                    <td className="py-2">₪ {c.cpc.toLocaleString()}</td>
+                {data.campaigns.slice(0, 15).map((c) => (
+                  <tr key={c.id} className="border-b border-brand-border">
+                    <td className="px-4 py-3 font-medium text-brand-dark">{c.name}</td>
+                    <td className="px-4 py-3 text-brand-dark">{formatCurrency(c.spend)}</td>
+                    <td className="px-4 py-3 text-brand-muted">{formatNumber(c.impressions)}</td>
+                    <td className="px-4 py-3 text-brand-muted">{formatNumber(c.clicks)}</td>
+                    <td className="px-4 py-3 text-brand-dark">{formatNumber(c.conversions)}</td>
+                    <td className="px-4 py-3 text-brand-dark">{formatNumber(c.purchases)}</td>
+                    <td className="px-4 py-3 text-brand-dark">{formatCurrency(c.cpa)}</td>
+                    <td className="px-4 py-3 font-medium text-brand-dark">{c.roas.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {data!.campaigns.length > 10 && !showAllCampaigns && (
-            <button
-              onClick={() => setShowAllCampaigns(true)}
-              className="mt-3 text-sm text-blue-600 hover:underline"
-            >
-              הצג הכל
-            </button>
-          )}
         </div>
       )}
 
-      {/* Facebook Posts */}
-      {data!.pagePosts && data!.pagePosts.length > 0 && (
-        <div className={cardClass}>
-          <h3 className="mb-4 text-lg font-semibold">פוסטים אחרונים בפייסבוק</h3>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {data!.pagePosts.slice(0, 6).map((post) => (
-              <div
-                key={post.id}
-                className="flex flex-col gap-2 rounded-lg border border-brand-border bg-white p-3"
-              >
-                {post.mediaUrl ? (
+      {data.pagePosts.length > 0 && (
+        <div className="rounded-lg border border-brand-border bg-brand-light p-6 shadow-sm">
+          <h3 className="mb-4 text-lg font-semibold text-brand-dark">פוסטים אחרונים בפייסבוק</h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {data.pagePosts.slice(0, 6).map((p) => (
+              <a key={p.id} href={p.permalink} target="_blank" rel="noopener noreferrer" className="block rounded-lg border border-brand-border p-3 hover:bg-brand-bg/30">
+                {p.mediaUrl && p.mediaType === "photo" && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={post.mediaUrl}
-                    alt=""
-                    className="h-32 w-full rounded object-cover"
-                  />
-                ) : (
-                  <div className="flex h-32 w-full items-center justify-center rounded bg-brand-bg text-brand-muted">
-                    <Eye className="h-6 w-6" />
-                  </div>
+                  <img src={p.mediaUrl} alt="" className="mb-2 h-32 w-full rounded object-cover" />
                 )}
-                <p className="text-sm">{truncate(post.message, 80)}</p>
-                <div className="grid grid-cols-3 gap-1 text-xs text-brand-muted">
-                  <span>חשיפה: {post.reach}</span>
-                  <span>הופעות: {post.impressions}</span>
-                  <span>מעורבות: {post.engagement}</span>
-                  <span>תגובות רגשיות: {post.reactions}</span>
-                  <span>תגובות: {post.comments}</span>
-                  <span>שיתופים: {post.shares}</span>
+                <p className="line-clamp-2 text-xs text-brand-dark">{p.message || "(ללא טקסט)"}</p>
+                <p className="mt-1 text-[10px] text-brand-muted">{new Date(p.createdTime).toLocaleDateString("he-IL")}</p>
+                <div className="mt-2 grid grid-cols-2 gap-1 text-[10px] text-brand-muted">
+                  <span>חשיפה: {formatNumber(p.reach)}</span>
+                  <span>הופעות: {formatNumber(p.impressions)}</span>
+                  <span>ריאקציות: {formatNumber(p.reactions)}</span>
+                  <span>תגובות: {formatNumber(p.comments)}</span>
                 </div>
-                <div className="flex items-center justify-between pt-1 text-xs">
-                  <span className="text-brand-muted">{formatFullDate(post.createdTime)}</span>
-                  {post.permalink && (
-                    <a
-                      href={post.permalink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      פתח
-                    </a>
-                  )}
-                </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
       )}
 
-      {/* Instagram Media */}
-      {data!.igMedia && data!.igMedia.length > 0 && (
-        <div className={cardClass}>
-          <h3 className="mb-4 text-lg font-semibold">פוסטים אחרונים באינסטגרם</h3>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {data!.igMedia.slice(0, 6).map((item) => {
-              const thumb =
-                item.mediaType === "VIDEO" || item.mediaType === "REELS"
-                  ? item.thumbnailUrl || item.mediaUrl
-                  : item.mediaUrl;
+      {data.igMedia.length > 0 && (
+        <div className="rounded-lg border border-brand-border bg-brand-light p-6 shadow-sm">
+          <h3 className="mb-4 text-lg font-semibold text-brand-dark">פוסטים אחרונים באינסטגרם</h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {data.igMedia.slice(0, 6).map((m) => {
+              const thumb = m.mediaType === "VIDEO" || m.mediaType === "REELS" ? m.thumbnailUrl : m.mediaUrl;
               return (
-                <div
-                  key={item.id}
-                  className="flex flex-col gap-2 rounded-lg border border-brand-border bg-white p-3"
-                >
-                  <div className="relative">
-                    {thumb ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={thumb}
-                        alt=""
-                        className="h-32 w-full rounded object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-32 w-full items-center justify-center rounded bg-brand-bg text-brand-muted">
-                        <Eye className="h-6 w-6" />
-                      </div>
-                    )}
-                    <span className="absolute top-2 right-2 rounded bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
-                      {item.mediaType}
-                    </span>
+                <a key={m.id} href={m.permalink} target="_blank" rel="noopener noreferrer" className="block rounded-lg border border-brand-border p-3 hover:bg-brand-bg/30">
+                  {thumb && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={thumb} alt="" className="mb-2 h-32 w-full rounded object-cover" />
+                  )}
+                  <span className="inline-block rounded bg-brand-gold/20 px-1.5 py-0.5 text-[10px] font-medium text-brand-dark">{m.mediaType}</span>
+                  <p className="mt-1 line-clamp-2 text-xs text-brand-dark">{m.caption || "(ללא כיתוב)"}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-1 text-[10px] text-brand-muted">
+                    <span>לייקים: {formatNumber(m.likes)}</span>
+                    <span>תגובות: {formatNumber(m.comments)}</span>
+                    <span>שמירות: {formatNumber(m.saves)}</span>
+                    <span>חשיפה: {formatNumber(m.reach)}</span>
                   </div>
-                  <p className="text-sm">{truncate(item.caption, 80)}</p>
-                  <div className="grid grid-cols-2 gap-1 text-xs text-brand-muted">
-                    <span>לייקים: {item.likes}</span>
-                    <span>תגובות: {item.comments}</span>
-                    <span>שמירות: {item.saves}</span>
-                    <span>חשיפה: {item.reach}</span>
-                  </div>
-                  <div className="flex items-center justify-between pt-1 text-xs">
-                    <span className="text-brand-muted">{formatFullDate(item.timestamp)}</span>
-                    {item.permalink && (
-                      <a
-                        href={item.permalink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        פתח
-                      </a>
-                    )}
-                  </div>
-                </div>
+                </a>
               );
             })}
           </div>
