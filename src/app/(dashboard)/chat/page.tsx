@@ -49,7 +49,7 @@ function truncate(text: string, max: number) {
 
 export default function ChatPage() {
   const { data: session } = useSession();
-  const { clients } = useApp();
+  const { clients, employees } = useApp();
   const currentUserId = session?.user?.id ?? "";
   const currentUserName = session?.user?.name ?? "";
 
@@ -63,6 +63,8 @@ export default function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [customChatName, setCustomChatName] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -145,23 +147,39 @@ export default function ChatPage() {
   };
 
   /* ── יצירת צ׳אט חדש ── */
-  const createChat = async (payload: { clientId?: string; name?: string }) => {
+  const createChat = async () => {
+    if (selectedParticipants.length === 0 && !selectedClientId) return;
+    const hasName = selectedClientId || customChatName.trim();
+    if (!hasName) return;
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          clientId: selectedClientId || undefined,
+          name: customChatName.trim() || undefined,
+          participantIds: selectedParticipants,
+        }),
       });
       if (res.ok) {
         const newRoom: ChatRoom = await res.json();
         setShowNewChat(false);
         setCustomChatName("");
+        setSelectedClientId("");
+        setSelectedParticipants([]);
         await fetchRooms();
         setActiveRoomId(newRoom.id);
       }
     } catch {
       /* שקט */
     }
+  };
+
+  const toggleParticipant = (id: string) => {
+    setSelectedParticipants((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    );
   };
 
   /* ── סינון חדרים ── */
@@ -190,44 +208,70 @@ export default function ChatPage() {
           </button>
         </div>
 
-        {/* דרופדאון צ׳אט חדש */}
+        {/* טופס צ׳אט חדש */}
         {showNewChat && (
-          <div className="border-b border-brand-border bg-brand-bg p-3 space-y-2">
-            <p className="text-xs font-medium text-brand-muted">בחר לקוח:</p>
-            <div className="max-h-32 overflow-y-auto space-y-1">
-              {clients.map((client) => (
-                <button
-                  key={client.id}
-                  onClick={() => createChat({ clientId: client.id })}
-                  className="block w-full rounded px-2 py-1 text-right text-sm text-brand-dark hover:bg-brand-gold/10 transition-colors duration-200"
-                >
-                  {client.name}
-                </button>
-              ))}
+          <div className="max-h-[500px] overflow-y-auto border-b border-brand-border bg-brand-bg p-3 space-y-3">
+            {/* לקוח או שם */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">לקוח (אופציונלי):</label>
+              <select
+                value={selectedClientId}
+                onChange={(e) => { setSelectedClientId(e.target.value); if (e.target.value) setCustomChatName(""); }}
+                className={inputClass + " text-xs"}
+              >
+                <option value="">בחר לקוח...</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>{client.name}</option>
+                ))}
+              </select>
             </div>
-            <div className="border-t border-brand-border pt-2">
-              <p className="text-xs font-medium text-brand-muted mb-1">או שם מותאם:</p>
-              <div className="flex gap-2">
+
+            {!selectedClientId && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brand-muted">או שם צ׳אט:</label>
                 <input
                   value={customChatName}
                   onChange={(e) => setCustomChatName(e.target.value)}
                   placeholder="שם הצ׳אט..."
                   className={inputClass + " text-xs"}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && customChatName.trim()) {
-                      createChat({ name: customChatName.trim() });
-                    }
-                  }}
                 />
-                <button
-                  onClick={() => {
-                    if (customChatName.trim()) createChat({ name: customChatName.trim() });
-                  }}
-                  className="rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80 whitespace-nowrap"
-                >
-                  צור
-                </button>
               </div>
+            )}
+
+            {/* משתתפים */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">
+                משתתפים ({selectedParticipants.length}):
+              </label>
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-brand-border bg-brand-light p-2">
+                {employees.filter((e) => e.id !== currentUserId && e.role !== "client").map((emp) => (
+                  <label key={emp.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-brand-dark hover:bg-brand-bg">
+                    <input
+                      type="checkbox"
+                      checked={selectedParticipants.includes(emp.id)}
+                      onChange={() => toggleParticipant(emp.id)}
+                      className="rounded"
+                    />
+                    <span>{emp.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={createChat}
+                disabled={selectedParticipants.length === 0 || (!selectedClientId && !customChatName.trim())}
+                className="flex-1 rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80 disabled:opacity-50"
+              >
+                צור צ׳אט
+              </button>
+              <button
+                onClick={() => { setShowNewChat(false); setCustomChatName(""); setSelectedClientId(""); setSelectedParticipants([]); }}
+                className="rounded-lg border border-brand-border px-3 py-1.5 text-xs font-medium text-brand-muted hover:bg-brand-bg"
+              >
+                ביטול
+              </button>
             </div>
           </div>
         )}

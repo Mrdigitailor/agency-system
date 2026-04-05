@@ -29,6 +29,7 @@ model User {
   leadCalls       LeadCall[]
   chatMessages    ChatMessage[]
   chatReads       ChatMessageRead[]
+  chatRooms       ChatParticipant[]
 
   @@map("users")
 }
@@ -191,10 +192,12 @@ model LeadCall {
 
 model Alert {
   id        String   @id @default(cuid())
-  type      String   // overdue_task | budget_overrun | performance_drop | upsell_ready
+  type      String   // overdue_task | budget_overrun | performance_drop | upsell_ready | chat_mention | new_task
   title     String
   message   String
+  link      String   @default("") // URL לניווט בלחיצה
   isRead    Boolean  @default(false)
+  userId    String?  // אם null — לכל המשתמשים; אחרת ספציפי למשתמש
   clientId  String?
   client    Client?  @relation(fields: [clientId], references: [id])
   createdAt DateTime @default(now())
@@ -247,9 +250,22 @@ model ChatRoom {
   client    Client?  @relation(fields: [clientId], references: [id])
   createdAt DateTime @default(now())
 
-  messages ChatMessage[]
+  messages     ChatMessage[]
+  participants ChatParticipant[]
 
   @@map("chat_rooms")
+}
+
+model ChatParticipant {
+  id       String   @id @default(cuid())
+  roomId   String
+  room     ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+
+  @@unique([roomId, userId])
+  @@map("chat_participants")
 }
 
 model ChatMessage {

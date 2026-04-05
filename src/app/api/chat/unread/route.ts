@@ -7,8 +7,13 @@ export async function GET() {
   if (result instanceof NextResponse) return result;
   const user = result as AuthUser;
 
-  const totalMessages = await prisma.chatMessage.count();
-  const readMessages = await prisma.chatMessageRead.count({ where: { userId: user.id } });
+  // רק מחדרים שהמשתמש משתתף בהם
+  const totalMessages = await prisma.chatMessage.count({
+    where: { room: { participants: { some: { userId: user.id } } } },
+  });
+  const readMessages = await prisma.chatMessageRead.count({
+    where: { userId: user.id },
+  });
 
   return NextResponse.json({ unread: totalMessages - readMessages });
 }
