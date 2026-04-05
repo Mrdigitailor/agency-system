@@ -68,11 +68,20 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
   const handleConnect = async (platform: string) => {
     setConnectingPlatform(platform);
     try {
+      // Meta — משתמש ב-OAuth flow האמיתי
+      if (platform === "meta") {
+        const res = await fetch(`/api/platforms/meta/connect?clientId=${clientId}`);
+        const data = await res.json();
+        if (data.authUrl) {
+          window.location.href = data.authUrl;
+          return;
+        }
+      }
+
+      // פלטפורמות אחרות — דמו
       const res = await fetch(`/api/clients/${clientId}/connections/${platform}/connect`, { method: "POST" });
       const data = await res.json();
 
-      // במקום לנווט לאתר חיצוני (שצריך app_id אמיתי) — נקרא ישירות ל-callback עם code דמו
-      // ב-production אמיתי: window.location.href = data.authUrl;
       if (data.authUrl && !data.authUrl.includes("NOT_SET")) {
         window.location.href = data.authUrl;
       } else {

@@ -34,6 +34,7 @@ import {
 import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
 import PlatformConnections from "@/components/ui/PlatformConnections";
+import MetaDataTab from "@/components/ui/MetaDataTab";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
@@ -63,6 +64,7 @@ function formatDate(dateStr: string) {
 const tabs = [
   { id: "overview", label: "סקירה כללית", icon: Target },
   { id: "campaigns", label: "קמפיינים", icon: Monitor },
+  { id: "meta", label: "נתוני Meta", icon: BarChart3 },
   { id: "performance", label: "ביצועים", icon: TrendingUp },
   { id: "optimizations", label: "אופטימיזציות", icon: Zap },
   { id: "reports", label: "דוחות", icon: FileText },
@@ -749,6 +751,9 @@ export default function ClientDetailPage() {
           </Modal>
         </div>
       )}
+
+      {/* ===== טאב נתוני Meta ===== */}
+      {activeTab === "meta" && <MetaDataTab clientId={client.id} />}
 
       {/* ===== טאב 3 — ביצועים ===== */}
       {activeTab === "performance" && (
