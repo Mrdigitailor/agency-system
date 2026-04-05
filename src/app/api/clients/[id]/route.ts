@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { syncClientManagers } from "@/lib/utils/syncManagers";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,6 +22,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.platforms) body.platforms = JSON.stringify(body.platforms);
   if (body.customAssets) body.customAssets = JSON.stringify(body.customAssets);
   const client = await prisma.client.update({ where: { id }, data: body });
+
+  // אם שונו מנהלים — סנכרן את assignedClientIds
+  if (body.campaignManager !== undefined || body.accountManager !== undefined) {
+    await syncClientManagers(
+      id,
+      body.campaignManager ?? client.campaignManager ?? "",
+      body.accountManager ?? client.accountManager ?? ""
+    );
+  }
+
   return NextResponse.json({
     ...client,
     platforms: JSON.parse(client.platforms),

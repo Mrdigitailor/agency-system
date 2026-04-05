@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
+import { syncClientManagers } from "@/lib/utils/syncManagers";
 
 export async function GET() {
   const result = await requireAuth();
@@ -75,6 +76,9 @@ export async function POST(req: Request) {
       lastOptimization: body.lastOptimization ?? "",
     },
   });
+
+  // סנכרון assignedClientIds של העובדים הנבחרים
+  await syncClientManagers(client.id, body.campaignManager ?? "", body.accountManager ?? "");
 
   return NextResponse.json({ ...client, platforms: JSON.parse(client.platforms) }, { status: 201 });
 }
