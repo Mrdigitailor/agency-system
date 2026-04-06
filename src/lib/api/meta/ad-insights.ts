@@ -32,9 +32,8 @@ const INSIGHT_FIELDS = [
   "campaign_name", "campaign_id", "adset_name", "adset_id", "ad_name", "ad_id",
   "account_id", "account_name", "account_currency",
   // מטרה + הגדרות
-  "objective", "optimization_goal", "bid_strategy",
-  "daily_budget", "lifetime_budget", "budget_remaining",
-  "attribution_setting", "buying_type",
+  "objective", "optimization_goal",
+  "attribution_setting",
   // מדדים בסיסיים
   "spend", "social_spend", "impressions", "reach", "frequency",
   "clicks", "unique_clicks", "cpc", "cpm", "cpp", "ctr", "unique_ctr",
