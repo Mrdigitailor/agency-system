@@ -28,10 +28,38 @@ export interface MetaInsight {
 }
 
 const INSIGHT_FIELDS = [
-  "spend", "impressions", "clicks", "reach", "frequency", "ctr", "cpc", "cpm",
+  // מזהים
+  "campaign_name", "campaign_id", "adset_name", "adset_id", "ad_name", "ad_id",
+  "account_id", "account_name", "account_currency",
+  // מטרה + הגדרות
+  "objective", "optimization_goal", "bid_strategy",
+  "daily_budget", "lifetime_budget", "budget_remaining",
+  "attribution_setting", "buying_type",
+  // מדדים בסיסיים
+  "spend", "social_spend", "impressions", "reach", "frequency",
+  "clicks", "unique_clicks", "cpc", "cpm", "cpp", "ctr", "unique_ctr",
+  // קליקים מפורטים
+  "inline_link_clicks", "inline_link_click_ctr", "cost_per_inline_link_click",
+  "unique_inline_link_clicks", "unique_inline_link_click_ctr", "cost_per_unique_inline_link_click",
+  "outbound_clicks", "outbound_clicks_ctr", "cost_per_outbound_click",
+  "unique_outbound_clicks", "unique_outbound_clicks_ctr", "cost_per_unique_outbound_click",
+  "website_ctr",
+  // המרות + actions
   "actions", "action_values", "cost_per_action_type",
+  "cost_per_unique_action_type", "unique_actions",
+  // מעורבות
+  "inline_post_engagement", "cost_per_inline_post_engagement",
+  // וידאו
+  "video_play_actions", "video_30_sec_watched_actions",
+  "video_p25_watched_actions", "video_p50_watched_actions",
+  "video_p75_watched_actions", "video_p100_watched_actions",
+  "video_avg_time_watched_actions",
+  // זכירת מודעה
+  "estimated_ad_recallers", "estimated_ad_recall_rate",
+  // דירוגים
+  "quality_ranking", "engagement_rate_ranking", "conversion_rate_ranking",
+  // תאריכים
   "date_start", "date_stop",
-  "campaign_id", "campaign_name", "adset_id", "adset_name", "ad_id", "ad_name", "account_id",
 ].join(",");
 
 /**

@@ -17,7 +17,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ clientI
 
   const startTime = Date.now();
   try {
-    const stats = await syncClientMeta(clientId, daysBack);
+    const forceAll = body.forceAll ?? true; // manual sync = always force
+    const stats = await syncClientMeta(clientId, daysBack, forceAll);
     const durationMs = Date.now() - startTime;
     return NextResponse.json({ ...stats, durationMs });
   } catch (err) {

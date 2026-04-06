@@ -52,6 +52,27 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const purchaseValue = items.reduce((s, i) => s + i.purchaseValue, 0);
     const leads = items.reduce((s, i) => s + i.leads, 0);
 
+    // חלץ שדות נוספים מ-actionsJson (first row has meta fields)
+    let objective = "", bidStrategy = "", dailyBudget = 0, lifetimeBudget = 0;
+    let uniqueClicks = 0, socialSpend = 0, inlineLinkClicks = 0, outboundClicks = 0;
+    let qualityRanking = "", engagementRanking = "", conversionRanking = "";
+    for (const item of items) {
+      try {
+        const raw = JSON.parse(item.actionsJson ?? "{}");
+        if (raw.objective) objective = raw.objective;
+        if (raw.bid_strategy) bidStrategy = raw.bid_strategy;
+        if (raw.daily_budget) dailyBudget = parseFloat(raw.daily_budget) / 100 || 0;
+        if (raw.lifetime_budget) lifetimeBudget = parseFloat(raw.lifetime_budget) / 100 || 0;
+        uniqueClicks += parseInt(raw.unique_clicks) || 0;
+        socialSpend += parseFloat(raw.social_spend) || 0;
+        inlineLinkClicks += parseInt(raw.inline_link_clicks) || 0;
+        outboundClicks += parseInt(raw.outbound_clicks?.[0]?.value ?? raw.outbound_clicks) || 0;
+        if (raw.quality_ranking) qualityRanking = raw.quality_ranking;
+        if (raw.engagement_rate_ranking) engagementRanking = raw.engagement_rate_ranking;
+        if (raw.conversion_rate_ranking) conversionRanking = raw.conversion_rate_ranking;
+      } catch {}
+    }
+
     const conversions = countConversions(items, selectedEvent);
     const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
     const cpc = clicks > 0 ? spend / clicks : 0;
@@ -62,10 +83,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const roas = spend > 0 ? purchaseValue / spend : 0;
 
     return {
-      id: externalId, name,
-      spend, impressions, clicks, reach, frequency, ctr, cpc, cpm,
+      id: externalId, name, objective, bidStrategy,
+      dailyBudget, lifetimeBudget,
+      spend, socialSpend, impressions, clicks, uniqueClicks, reach, frequency, ctr, cpc, cpm,
+      inlineLinkClicks, outboundClicks,
       linkClicks, landingPageViews, videoViews, videoThruplay, engagement,
       conversions, costPerConversion, purchases, purchaseValue, leads, costPerLead, roas,
+      qualityRanking, engagementRanking, conversionRanking,
     };
   }).sort((a, b) => b.spend - a.spend);
 

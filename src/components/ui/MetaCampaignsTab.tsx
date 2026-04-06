@@ -11,11 +11,20 @@ interface Props {
 }
 
 interface Campaign {
+  [key: string]: string | number;
   id: string;
   name: string;
+  objective: string;
+  bidStrategy: string;
+  dailyBudget: number;
+  lifetimeBudget: number;
   spend: number;
+  socialSpend: number;
   impressions: number;
   clicks: number;
+  uniqueClicks: number;
+  inlineLinkClicks: number;
+  outboundClicks: number;
   reach: number;
   frequency: number;
   ctr: number;
@@ -33,6 +42,9 @@ interface Campaign {
   leads: number;
   costPerLead: number;
   roas: number;
+  qualityRanking: string;
+  engagementRanking: string;
+  conversionRanking: string;
 }
 
 interface ApiResponse {
@@ -42,27 +54,15 @@ interface ApiResponse {
 }
 
 type ColumnKey =
-  | "name"
-  | "spend"
-  | "impressions"
-  | "reach"
-  | "frequency"
-  | "clicks"
-  | "linkClicks"
-  | "ctr"
-  | "cpc"
-  | "cpm"
-  | "conversions"
-  | "costPerConversion"
-  | "roas"
-  | "purchases"
-  | "purchaseValue"
-  | "leads"
-  | "costPerLead"
-  | "landingPageViews"
-  | "videoViews"
-  | "videoThruplay"
-  | "engagement";
+  | "name" | "objective" | "bidStrategy"
+  | "spend" | "socialSpend" | "impressions" | "reach" | "frequency"
+  | "clicks" | "uniqueClicks" | "inlineLinkClicks" | "outboundClicks"
+  | "ctr" | "cpc" | "cpm"
+  | "conversions" | "costPerConversion" | "roas"
+  | "purchases" | "purchaseValue" | "leads" | "costPerLead"
+  | "linkClicks" | "landingPageViews" | "videoViews" | "videoThruplay" | "engagement"
+  | "qualityRanking" | "engagementRanking" | "conversionRanking"
+  | "dailyBudget" | "lifetimeBudget";
 
 type ColumnType = "text" | "money" | "number" | "percent" | "roas" | "frequency";
 
@@ -73,27 +73,38 @@ interface ColumnDef {
 }
 
 const COLUMNS: ColumnDef[] = [
-  { key: "name", label: "שם קמפיין", type: "text" },
-  { key: "spend", label: "הוצאה", type: "money" },
-  { key: "impressions", label: "הופעות", type: "number" },
-  { key: "reach", label: "חשיפה", type: "number" },
-  { key: "frequency", label: "תדירות", type: "frequency" },
-  { key: "clicks", label: "קליקים", type: "number" },
-  { key: "linkClicks", label: "קליקי קישור", type: "number" },
-  { key: "ctr", label: "CTR", type: "percent" },
-  { key: "cpc", label: "CPC", type: "money" },
-  { key: "cpm", label: "CPM", type: "money" },
-  { key: "conversions", label: "המרות", type: "number" },
-  { key: "costPerConversion", label: "CPA", type: "money" },
+  { key: "name", label: "שם קמפיין (campaign_name)", type: "text" },
+  { key: "objective", label: "מטרת קמפיין (objective)", type: "text" },
+  { key: "spend", label: "הוצאה (spend)", type: "money" },
+  { key: "socialSpend", label: "הוצאה חברתית (social_spend)", type: "money" },
+  { key: "impressions", label: "הופעות (impressions)", type: "number" },
+  { key: "reach", label: "חשיפה (reach)", type: "number" },
+  { key: "frequency", label: "תדירות (frequency)", type: "frequency" },
+  { key: "clicks", label: "קליקים הכל (clicks)", type: "number" },
+  { key: "uniqueClicks", label: "קליקים ייחודיים (unique_clicks)", type: "number" },
+  { key: "inlineLinkClicks", label: "קליקים על קישור (inline_link_clicks)", type: "number" },
+  { key: "outboundClicks", label: "קליקים יוצאים (outbound_clicks)", type: "number" },
+  { key: "ctr", label: "CTR הכל (ctr)", type: "percent" },
+  { key: "cpc", label: "CPC הכל (cpc)", type: "money" },
+  { key: "cpm", label: "CPM (cpm)", type: "money" },
+  { key: "conversions", label: "המרות (actions)", type: "number" },
+  { key: "costPerConversion", label: "CPA (cost_per_action)", type: "money" },
   { key: "roas", label: "ROAS", type: "roas" },
-  { key: "purchases", label: "רכישות", type: "number" },
-  { key: "purchaseValue", label: "ערך רכישות", type: "money" },
-  { key: "leads", label: "לידים", type: "number" },
-  { key: "costPerLead", label: "CPL", type: "money" },
-  { key: "landingPageViews", label: "דפי נחיתה", type: "number" },
-  { key: "videoViews", label: "צפיות וידאו", type: "number" },
-  { key: "videoThruplay", label: "Thruplay", type: "number" },
-  { key: "engagement", label: "מעורבות", type: "number" },
+  { key: "purchases", label: "רכישות (purchase)", type: "number" },
+  { key: "purchaseValue", label: "ערך רכישות (purchase_value)", type: "money" },
+  { key: "leads", label: "לידים (lead)", type: "number" },
+  { key: "costPerLead", label: "CPL (cost_per_lead)", type: "money" },
+  { key: "linkClicks", label: "צפיות דף נחיתה (landing_page_view)", type: "number" },
+  { key: "landingPageViews", label: "דפי נחיתה (landing_page_views)", type: "number" },
+  { key: "videoViews", label: "צפיות וידאו (video_views)", type: "number" },
+  { key: "videoThruplay", label: "Thruplay (video_thruplay)", type: "number" },
+  { key: "engagement", label: "מעורבות פוסט (post_engagement)", type: "number" },
+  { key: "qualityRanking", label: "דירוג איכות (quality_ranking)", type: "text" },
+  { key: "engagementRanking", label: "דירוג מעורבות (engagement_rate_ranking)", type: "text" },
+  { key: "conversionRanking", label: "דירוג המרות (conversion_rate_ranking)", type: "text" },
+  { key: "bidStrategy", label: "אסטרטגיית הצעה (bid_strategy)", type: "text" },
+  { key: "dailyBudget", label: "תקציב יומי (daily_budget)", type: "money" },
+  { key: "lifetimeBudget", label: "תקציב כולל (lifetime_budget)", type: "money" },
 ];
 
 const DEFAULT_VISIBLE: ColumnKey[] = [

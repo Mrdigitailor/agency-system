@@ -45,7 +45,7 @@ export async function syncAdAccount(
       purchases: m.purchases,
       leads: m.leads,
       costPerLead: m.costPerLead,
-      actionsJson: JSON.stringify({ actions: ins.actions, action_values: ins.action_values }),
+      actionsJson: JSON.stringify(ins),
     };
 
     await prisma.metaInsightDaily.upsert({
@@ -170,9 +170,46 @@ export async function syncInstagram(
 }
 
 /**
- * סנכרון מלא של לקוח אחד — שואב insights + posts + IG לכל נכס שנבחר
+ * חישוב ימים חסרים — שואב רק ימים שלא קיימים ב-DB + last 2 days (Meta updates retroactively)
  */
-export async function syncClientMeta(clientId: string, daysBack = 30): Promise<SyncStats> {
+async function getMissingDates(clientId: string, since: string, until: string): Promise<{ since: string; until: string } | null> {
+  const existing = await prisma.metaInsightDaily.findMany({
+    where: { clientId, date: { gte: since, lte: until } },
+    select: { date: true },
+    distinct: ["date"],
+  });
+  const existingDates = new Set(existing.map((r) => r.date));
+
+  // תמיד סנכרן אתמול + היום (Meta מעדכן עד 48 שעות אחורה)
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+
+  // חשב ימים חסרים
+  const allDates: string[] = [];
+  const cur = new Date(since);
+  const end = new Date(until);
+  while (cur <= end) {
+    const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
+    if (!existingDates.has(ds) || ds === todayStr || ds === yesterdayStr) {
+      allDates.push(ds);
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  if (allDates.length === 0) return null;
+
+  // החזר את הטווח המינימלי שמכסה את כל הימים החסרים
+  return { since: allDates[0], until: allDates[allDates.length - 1] };
+}
+
+/**
+ * סנכרון של לקוח אחד — incremental: שואב רק ימים חסרים + last 2 days
+ * forceAll=true: שואב את כל התקופה מחדש (כשלוחצים "סנכרן עכשיו")
+ */
+export async function syncClientMeta(clientId: string, daysBack = 30, forceAll = false): Promise<SyncStats> {
   const stats: SyncStats = { adInsightsFetched: 0, pagePostsFetched: 0, igMediaFetched: 0, errors: [] };
 
   const connection = await prisma.platformConnection.findFirst({
@@ -185,13 +222,28 @@ export async function syncClientMeta(clientId: string, daysBack = 30): Promise<S
     return stats;
   }
 
-  const today = new Date().toISOString().split("T")[0];
-  const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const todayDate = new Date();
+  const sinceDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
+  const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, "0")}-${String(todayDate.getDate()).padStart(2, "0")}`;
+  const since = `${sinceDate.getFullYear()}-${String(sinceDate.getMonth() + 1).padStart(2, "0")}-${String(sinceDate.getDate()).padStart(2, "0")}`;
+
+  // Incremental: בדוק אם יש ימים חסרים
+  let effectiveSince = since;
+  let effectiveUntil = today;
+  if (!forceAll) {
+    const missing = await getMissingDates(clientId, since, today);
+    if (!missing) {
+      // הכל כבר קיים ב-DB — סנכרון לא נדרש
+      return stats;
+    }
+    effectiveSince = missing.since;
+    effectiveUntil = missing.until;
+  }
 
   for (const asset of connection.assets) {
     try {
       if (asset.assetType === "ad_account") {
-        await syncAdAccount(clientId, connection.accessToken, asset.id, asset.externalId, since, today, stats);
+        await syncAdAccount(clientId, connection.accessToken, asset.id, asset.externalId, effectiveSince, effectiveUntil, stats);
       } else if (asset.assetType === "facebook_page") {
         const extra = JSON.parse(asset.extraData ?? "{}");
         const pageToken = extra.pageAccessToken ?? connection.accessToken;
