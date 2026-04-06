@@ -34,6 +34,9 @@ export async function metaApiGet<T>(path: string, opts: MetaApiOptions): Promise
   }
 
   const url = `${BASE_URL}${path}?${params.toString()}`;
+  // הדפסת URL בלי access_token (לבטיחות)
+  const logUrl = url.replace(/access_token=[^&]+/, "access_token=***");
+  console.log(`[MetaAPI] GET ${logUrl.slice(0, 200)}...`);
 
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= retries; attempt++) {

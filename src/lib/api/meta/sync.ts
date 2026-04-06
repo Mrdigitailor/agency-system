@@ -19,7 +19,9 @@ export async function syncAdAccount(
   clientId: string, accessToken: string, assetId: string, externalId: string,
   since: string, until: string, stats: SyncStats
 ) {
+  console.log(`[Sync] Ad Account ${externalId} | client: ${clientId} | range: ${since} → ${until}`);
   const insights = await fetchAdInsights(externalId, accessToken, "campaign", since, until, true);
+  console.log(`[Sync] Ad Account ${externalId} → ${insights.length} insight rows received`);
 
   for (const ins of insights) {
     const m = extractMetrics(ins);
@@ -210,6 +212,7 @@ async function getMissingDates(clientId: string, since: string, until: string): 
  * forceAll=true: שואב את כל התקופה מחדש (כשלוחצים "סנכרן עכשיו")
  */
 export async function syncClientMeta(clientId: string, daysBack = 30, forceAll = false): Promise<SyncStats> {
+  console.log(`\n=== [SyncMeta] START client=${clientId} daysBack=${daysBack} forceAll=${forceAll} ===`);
   const stats: SyncStats = { adInsightsFetched: 0, pagePostsFetched: 0, igMediaFetched: 0, errors: [] };
 
   const connection = await prisma.platformConnection.findFirst({
@@ -218,9 +221,12 @@ export async function syncClientMeta(clientId: string, daysBack = 30, forceAll =
   });
 
   if (!connection) {
+    console.log("[SyncMeta] No active Meta connection found");
     stats.errors.push("לא נמצא חיבור Meta פעיל");
     return stats;
   }
+  console.log(`[SyncMeta] Connection: ${connection.id} | account: ${connection.accountName} | ${connection.assets.length} selected assets`);
+  connection.assets.forEach((a) => console.log(`  Asset: ${a.assetType} | ${a.externalId} | ${a.name}`));
 
   const todayDate = new Date();
   const sinceDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
@@ -240,7 +246,10 @@ export async function syncClientMeta(clientId: string, daysBack = 30, forceAll =
     effectiveUntil = missing.until;
   }
 
+  console.log(`[SyncMeta] Effective range: ${effectiveSince} → ${effectiveUntil} (forceAll=${forceAll})`);
+
   for (const asset of connection.assets) {
+    console.log(`[SyncMeta] Processing asset: ${asset.assetType} ${asset.externalId} (${asset.name})`);
     try {
       if (asset.assetType === "ad_account") {
         await syncAdAccount(clientId, connection.accessToken, asset.id, asset.externalId, effectiveSince, effectiveUntil, stats);
@@ -253,6 +262,8 @@ export async function syncClientMeta(clientId: string, daysBack = 30, forceAll =
       }
     } catch (err) {
       const msg = `${asset.assetType} ${asset.externalId}: ${err instanceof Error ? err.message : "unknown"}`;
+      console.error(`[SyncMeta] ERROR: ${msg}`);
+      if (err instanceof Error) console.error(`[SyncMeta] Stack: ${err.stack}`);
       stats.errors.push(msg);
       await prisma.syncLog.create({
         data: {
@@ -264,6 +275,9 @@ export async function syncClientMeta(clientId: string, daysBack = 30, forceAll =
       });
     }
   }
+
+  console.log(`[SyncMeta] DONE client=${clientId} | insights=${stats.adInsightsFetched} posts=${stats.pagePostsFetched} ig=${stats.igMediaFetched} errors=${stats.errors.length}`);
+  if (stats.errors.length > 0) stats.errors.forEach((e) => console.error(`  Error: ${e}`));
 
   await prisma.platformConnection.update({
     where: { id: connection.id },
