@@ -37,6 +37,7 @@ import PlatformConnections from "@/components/ui/PlatformConnections";
 import ConversionEventSelector from "@/components/ui/ConversionEventSelector";
 import MetaCampaignsTab from "@/components/ui/MetaCampaignsTab";
 import MetaPerformanceTab from "@/components/ui/MetaPerformanceTab";
+import MessagesTab from "@/components/ui/MessagesTab";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
@@ -842,43 +843,7 @@ export default function ClientDetailPage() {
       )}
 
       {/* ===== טאב 5 — הודעות ===== */}
-      {activeTab === "messages" && (
-        <div className="space-y-6">
-          <h2 className="text-lg font-semibold text-brand-dark">הודעות</h2>
-
-          <div className={cardClass}>
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <MessageSquare className="mb-3 h-10 w-10 text-brand-muted/50" />
-              <p className="text-sm text-brand-muted">
-                יתעדכן אוטומטית לאחר חיבור API של פייסבוק ואינסטגרם
-              </p>
-            </div>
-          </div>
-
-          {/* מבנה טבלה לדוגמה */}
-          <div className={cardClass}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-brand-border text-right">
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">שם שולח</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">תאריך</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">תוכן</th>
-                    <th className="px-4 py-3 text-xs font-medium text-brand-muted">סטטוס</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-sm text-brand-muted">
-                      אין הודעות להצגה
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === "messages" && <MessagesTab clientId={client.id} />}
 
       {/* ===== טאב 6 — אנליטיקס ===== */}
       {activeTab === "analytics" && (
