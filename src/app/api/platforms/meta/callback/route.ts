@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { decodeState, exchangeCodeForToken, exchangeForLongLivedToken, getMeInfo } from "@/lib/api/meta/oauth";
 import { fetchAdAccounts, fetchPages, fetchInstagramAccounts } from "@/lib/api/meta/assets";
 import { fetchCustomConversions, META_STANDARD_EVENTS } from "@/lib/api/meta/conversions";
+import { fetchPixels } from "@/lib/api/meta/pixels";
 
 /**
  * OAuth callback מ-Meta
@@ -197,6 +198,30 @@ export async function GET(req: Request) {
           extraData: JSON.stringify({ followers: ig.followers_count, profilePicture: ig.profile_picture_url }),
         },
       });
+    }
+
+    // 6b. שליפת פיקסלים מכל חשבון מודעות
+    for (const acc of adAccounts) {
+      const pixels = await fetchPixels(acc.id, accessToken);
+      for (const pixel of pixels) {
+        await prisma.platformAsset.upsert({
+          where: {
+            connectionId_assetType_externalId: {
+              connectionId: connection.id,
+              assetType: "pixel",
+              externalId: pixel.id,
+            },
+          },
+          update: { name: pixel.name, extraData: JSON.stringify({ lastFiredTime: pixel.last_fired_time, isUnified: pixel.is_unified_pixel, adAccountId: acc.id }) },
+          create: {
+            connectionId: connection.id,
+            assetType: "pixel",
+            externalId: pixel.id,
+            name: pixel.name,
+            extraData: JSON.stringify({ lastFiredTime: pixel.last_fired_time, isUnified: pixel.is_unified_pixel, adAccountId: acc.id }),
+          },
+        });
+      }
     }
 
     // 7. לוג סנכרון

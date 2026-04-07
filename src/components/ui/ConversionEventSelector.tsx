@@ -7,16 +7,17 @@ import { parseConversionEvents } from "@/lib/utils/metaMetrics";
 interface EventOption {
   id: string;
   name: string;
-  category: "leads" | "purchases" | "custom" | "engagement" | "other";
+  category: "pixel_events" | "lead_forms" | "other";
 }
 
 interface ConversionEventSelectorProps {
   clientId: string;
-  currentEvent: string; // JSON array string or single string
+  currentEvent: string;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  leads: "לידים",
+  pixel_events: "אירועי פיקסל",
+  lead_forms: "טפסי לידים מטא",
   purchases: "רכישות",
   custom: "המרות מותאמות",
   engagement: "מעורבות",
@@ -25,6 +26,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function ConversionEventSelector({ clientId, currentEvent }: ConversionEventSelectorProps) {
   const [events, setEvents] = useState<EventOption[]>([]);
+  const [pixelName, setPixelName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -42,7 +44,10 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
       const res = await fetch(`/api/platforms/meta/conversion-events/${clientId}`);
       const data = await res.json();
       if (data.error) { setError(data.error); setEvents([]); }
-      else setEvents(data.events ?? []);
+      else {
+        setEvents(data.events ?? []);
+        setPixelName(data.pixelName ?? null);
+      }
     } catch { setError("שגיאה בטעינה"); }
     finally { setLoading(false); }
   }, [clientId]);
@@ -103,7 +108,9 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
           <div className="max-h-60 space-y-3 overflow-y-auto rounded-lg border border-brand-border bg-brand-light p-3">
             {Object.entries(grouped).map(([source, items]) => (
               <div key={source}>
-                <p className="mb-1 text-[10px] font-semibold text-brand-muted">{CATEGORY_LABELS[source] ?? source}</p>
+                <p className="mb-1 text-[10px] font-semibold text-brand-muted">
+                  {source === "pixel_events" && pixelName ? `${CATEGORY_LABELS[source]} — ${pixelName}` : CATEGORY_LABELS[source] ?? source}
+                </p>
                 <div className="space-y-1">
                   {items.map((e) => (
                     <label key={e.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-brand-dark hover:bg-brand-bg">
@@ -143,7 +150,9 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
       )}
 
       {events.length === 0 && !loading && !error && (
-        <p className="text-xs text-brand-muted">לחץ על &quot;טען אירועים&quot; לרשימת ההמרות הזמינות.</p>
+        <p className="text-xs text-brand-muted">
+          בחר פיקסל ב&quot;ניהול נכסים&quot; למעלה, אחר כך לחץ &quot;טען אירועים&quot; לרשימת ההמרות של הפיקסל.
+        </p>
       )}
     </div>
   );
