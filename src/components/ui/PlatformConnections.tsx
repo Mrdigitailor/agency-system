@@ -50,6 +50,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
   const [loading, setLoading] = useState(true);
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
   const [syncingPlatform, setSyncingPlatform] = useState<string | null>(null);
+  const [refreshingAssets, setRefreshingAssets] = useState(false);
   const [assetsModalPlatform, setAssetsModalPlatform] = useState<string | null>(null);
   const [assetSelections, setAssetSelections] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
@@ -103,6 +104,16 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
       await fetch(`/api/clients/${clientId}/connections/${platform}`, { method: "DELETE" });
     }
     await fetchConnections();
+  };
+
+  const handleRefreshAssets = async () => {
+    setRefreshingAssets(true);
+    try {
+      await fetch(`/api/platforms/meta/refresh-assets/${clientId}`, { method: "POST" });
+      await fetchConnections();
+    } finally {
+      setRefreshingAssets(false);
+    }
   };
 
   const handleSync = async (platform: string) => {
@@ -191,10 +202,12 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                       </button>
                     )}
                     <button
-                      onClick={() => openAssetsModal(conn.platform)}
-                      className="rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-bg"
+                      onClick={async () => { await handleRefreshAssets(); openAssetsModal(conn.platform); }}
+                      disabled={refreshingAssets}
+                      className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-bg disabled:opacity-50"
                     >
-                      ניהול נכסים
+                      <RefreshCw className={`h-3 w-3 ${refreshingAssets ? "animate-spin" : ""}`} />
+                      {refreshingAssets ? "מרענן..." : "ניהול נכסים"}
                     </button>
                     <button
                       onClick={() => handleDisconnect(conn.platform)}
