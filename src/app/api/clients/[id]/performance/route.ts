@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
+import { countConversions } from "@/lib/utils/metaMetrics";
 
 /**
- * שליפת ביצועים של לקוח מ-MetaInsightDaily
- * מחשב נכון לפי metaConversionEvent שנבחר ללקוח
+ * GET /api/clients/[id]/performance?since=...&until=...
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const result = await requireAuth();
@@ -14,18 +14,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { searchParams } = new URL(req.url);
 
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-  const today = now.toISOString().split("T")[0];
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   const since = searchParams.get("since") ?? monthStart;
   const until = searchParams.get("until") ?? today;
 
-  // שלוף את הלקוח כדי לדעת איזה event type נחשב כהמרה
   const client = await prisma.client.findUnique({
     where: { id: clientId },
     select: { metaConversionEvent: true },
   });
-  const selectedEvent = client?.metaConversionEvent ?? "";
+  const selectedEventRaw = client?.metaConversionEvent ?? "";
 
   const insights = await prisma.metaInsightDaily.findMany({
     where: { clientId, date: { gte: since, lte: until } },
@@ -38,35 +37,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const totalPurchaseValue = insights.reduce((s, i) => s + i.purchaseValue, 0);
   const totalLeads = insights.reduce((s, i) => s + i.leads, 0);
 
-  // חישוב conversions לפי אירוע שנבחר
-  let conversions = 0;
-  let relevantSpend = totalSpend;
-
-  if (selectedEvent === "purchase" || selectedEvent === "offsite_conversion.fb_pixel_purchase") {
-    conversions = totalPurchases;
-  } else if (selectedEvent === "lead" || selectedEvent === "offsite_conversion.fb_pixel_lead") {
-    conversions = totalLeads;
-  } else if (selectedEvent) {
-    // custom event — לשלוף מ-actionsJson
-    let customSum = 0;
-    for (const ins of insights) {
-      try {
-        const parsed = JSON.parse(ins.actionsJson ?? "{}");
-        const actions = parsed.actions as Array<{ action_type: string; value: string }> | undefined;
-        if (actions) {
-          for (const a of actions) {
-            if (a.action_type === selectedEvent) customSum += parseFloat(a.value) || 0;
-          }
-        }
-      } catch {}
-    }
-    conversions = customSum;
-  } else {
-    // ברירת מחדל — כל conversions
-    conversions = insights.reduce((s, i) => s + i.conversions, 0);
-  }
-
-  const avgCostPerConv = conversions > 0 ? relevantSpend / conversions : 0;
+  // חישוב המרות דרך ה-helper שתומך ב-multi-select + JSON array
+  const conversions = countConversions(insights, selectedEventRaw);
+  const avgCostPerConv = conversions > 0 ? totalSpend / conversions : 0;
   const roas = totalSpend > 0 ? totalPurchaseValue / totalSpend : 0;
 
   const lastSync = await prisma.platformConnection.findFirst({
@@ -74,12 +47,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     select: { lastSyncAt: true },
   });
 
-  // שליפת תאריך האופטימיזציה האחרונה
   const lastOpt = await prisma.optimization.findFirst({
     where: { clientId },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     select: { date: true, createdAt: true },
   });
+
+  console.log(`[Performance] client=${clientId} | event=${selectedEventRaw} | spend=${totalSpend} | conv=${conversions} | CPA=${Math.round(avgCostPerConv)} | insights=${insights.length}`);
 
   return NextResponse.json({
     range: { since, until },
@@ -93,7 +67,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     totalLeads,
     avgCostPerConv,
     roas,
-    selectedEvent,
+    selectedEvent: selectedEventRaw,
     lastSync: lastSync?.lastSyncAt ?? null,
     lastOptimization: lastOpt?.date ?? (lastOpt?.createdAt ? lastOpt.createdAt.toISOString().split("T")[0] : null),
   });

@@ -41,9 +41,12 @@ export async function fetchPixels(adAccountId: string, accessToken: string): Pro
 export async function fetchPixelEvents(pixelId: string, accessToken: string): Promise<PixelEventStat[]> {
   try {
     console.log(`[Meta Pixel] Fetching stats for pixel ${pixelId}...`);
+    // שאיבה ב-30 ימים אחרונים כדי לתפוס את כל האירועים (לא רק שעות אחרונות)
+    const since = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+    const until = Math.floor(Date.now() / 1000);
     const res = await metaApiGet<{ data: Array<{ start_time?: string; aggregation?: string; data?: Array<{ value: string; count: number }> }> }>(
       `/${pixelId}/stats`,
-      { accessToken, params: { aggregation: "event" } }
+      { accessToken, params: { aggregation: "event", start_time: String(since), end_time: String(until) } }
     );
 
     // איחוד — כל time slot מכיל data[] עם events
