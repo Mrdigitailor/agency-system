@@ -7,7 +7,7 @@ import { parseConversionEvents } from "@/lib/utils/metaMetrics";
 interface EventOption {
   id: string;
   name: string;
-  category: "pixel_events" | "lead_forms" | "other";
+  eventType: string; // "Standard Event" | "Custom Event" | "Custom Conversion" | "Lead Form"
 }
 
 interface ConversionEventSelectorProps {
@@ -16,8 +16,10 @@ interface ConversionEventSelectorProps {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  pixel_events: "אירועי פיקסל",
-  lead_forms: "טפסי לידים מטא",
+  "Standard Event": "Standard Events",
+  "Custom Event": "Custom Events",
+  "Custom Conversion": "Custom Conversions",
+  "Lead Form": "Lead Forms",
   purchases: "רכישות",
   custom: "המרות מותאמות",
   engagement: "מעורבות",
@@ -84,8 +86,8 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
   };
 
   const grouped = events.reduce<Record<string, EventOption[]>>((acc, e) => {
-    if (!acc[e.category]) acc[e.category] = [];
-    acc[e.category].push(e);
+    if (!acc[e.eventType]) acc[e.eventType] = [];
+    acc[e.eventType].push(e);
     return acc;
   }, {});
 
@@ -138,7 +140,7 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
             {Object.entries(grouped).map(([source, items]) => (
               <div key={source}>
                 <p className="mb-1 text-[10px] font-semibold text-brand-muted">
-                  {source === "pixel_events" && pixelName ? `${CATEGORY_LABELS[source]} — ${pixelName}` : CATEGORY_LABELS[source] ?? source}
+                  {CATEGORY_LABELS[source] ?? source}{pixelName && source !== "Lead Form" ? ` — ${pixelName}` : ""}
                 </p>
                 <div className="space-y-1">
                   {items.map((e) => (
@@ -149,7 +151,7 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
                         onChange={() => toggleEvent(e.id)}
                         className="h-3.5 w-3.5 rounded border-brand-border"
                       />
-                      <span>{e.name}</span>
+                      <span>{e.name} <span className="text-brand-muted">({e.eventType})</span></span>
                     </label>
                   ))}
                 </div>
