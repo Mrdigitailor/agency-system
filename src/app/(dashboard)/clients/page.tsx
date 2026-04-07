@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, MoreHorizontal, Trash2, PauseCircle, AlertTriangle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
+import DateRangePicker, { getPresetRange, type DateRange } from "@/components/ui/DateRangePicker";
 import { useApp } from "@/lib/data/context";
 import { PLATFORMS, CLIENT_TYPES, CLIENT_STATUSES, type Client } from "@/lib/data/types";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
@@ -26,6 +27,12 @@ function daysLeftInMonth() {
 export default function ClientsPage() {
   const router = useRouter();
   const { clients, addClient, employees, refreshClients } = useApp();
+  const [dateRange, setDateRange] = useState<DateRange>(() => getPresetRange("this_month"));
+
+  // רענן לקוחות כשמשנים תאריכים
+  useEffect(() => {
+    refreshClients(dateRange.since, dateRange.until);
+  }, [dateRange.since, dateRange.until, refreshClients]);
   const campaigners = employees.filter((e) => e.role === "campaignManager" || e.role === "admin");
   const managers = employees.filter((e) => e.role === "manager" || e.role === "admin");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -98,12 +105,15 @@ export default function ClientsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-brand-dark">לקוחות</h1>
-        <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="flex items-center gap-2 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80">
-          <Plus className="h-4 w-4" />
-          לקוח חדש
-        </button>
+        <div className="flex items-center gap-3">
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="flex items-center gap-2 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80">
+            <Plus className="h-4 w-4" />
+            לקוח חדש
+          </button>
+        </div>
       </div>
 
       <div className="rounded-lg border border-brand-border bg-brand-light shadow-sm">
@@ -153,9 +163,11 @@ export default function ClientsPage() {
                         </div>
                       </div>
                     </td>
-                    {/* עלות להמרה — מ-API אם יש, אחרת "—" */}
+                    {/* עלות להמרה */}
                     <td className="px-4 py-4">
-                      {client.hasMetaData && (client.currentMonthCostPerConv ?? 0) > 0 ? (
+                      {!client.metaConversionEvent ? (
+                        <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-600">לא הוגדר</span>
+                      ) : client.hasMetaData && (client.currentMonthCostPerConv ?? 0) > 0 ? (
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
                             <span className="text-brand-dark font-medium">{sym}{Math.round(client.currentMonthCostPerConv ?? 0)}</span>
@@ -167,9 +179,11 @@ export default function ClientsPage() {
                         <span className="text-sm text-brand-muted">—</span>
                       )}
                     </td>
-                    {/* המרות — מ-API אם יש, אחרת "—" */}
+                    {/* המרות */}
                     <td className="px-4 py-4">
-                      {client.hasMetaData ? (
+                      {!client.metaConversionEvent ? (
+                        <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-600">לא הוגדר</span>
+                      ) : client.hasMetaData ? (
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
                             <span className="text-brand-dark font-medium">{(client.currentMonthConversions ?? 0).toLocaleString()}</span>

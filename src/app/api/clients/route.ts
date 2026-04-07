@@ -4,10 +4,12 @@ import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
 import { syncClientManagers } from "@/lib/utils/syncManagers";
 import { countConversions } from "@/lib/utils/metaMetrics";
 
-export async function GET() {
+export async function GET(req: Request) {
   const result = await requireAuth();
   if (result instanceof NextResponse) return result;
   const user = result as AuthUser;
+
+  const { searchParams } = new URL(req.url);
 
   // סינון לפי תפקיד
   const where: Record<string, unknown> = { deletedAt: null };
@@ -33,12 +35,16 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
 
-  // שליפת insights של החודש הנוכחי לכל לקוח
+  // שליפת insights לפי טווח תאריכים (ברירת מחדל: החודש הנוכחי)
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+  const defaultStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const defaultEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const since = searchParams.get("since") ?? defaultStart;
+  const until = searchParams.get("until") ?? defaultEnd;
+
   const clientIds = clients.map((c) => c.id);
   const insights = clientIds.length > 0 ? await prisma.metaInsightDaily.findMany({
-    where: { clientId: { in: clientIds }, date: { gte: monthStart } },
+    where: { clientId: { in: clientIds }, date: { gte: since, lte: until } },
     select: { clientId: true, spend: true, conversions: true, purchases: true, leads: true, actionsJson: true },
   }) : [];
 

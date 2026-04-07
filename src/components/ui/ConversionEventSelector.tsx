@@ -7,7 +7,7 @@ import { parseConversionEvents } from "@/lib/utils/metaMetrics";
 interface EventOption {
   id: string;
   name: string;
-  source: "custom" | "pixel" | "standard" | "insights";
+  category: "leads" | "purchases" | "custom" | "engagement" | "other";
 }
 
 interface ConversionEventSelectorProps {
@@ -15,11 +15,12 @@ interface ConversionEventSelectorProps {
   currentEvent: string; // JSON array string or single string
 }
 
-const SOURCE_LABELS: Record<string, string> = {
-  custom: "מותאם אישית",
-  pixel: "Pixel",
-  standard: "Standard",
-  insights: "מזוהה מ-insights",
+const CATEGORY_LABELS: Record<string, string> = {
+  leads: "לידים",
+  purchases: "רכישות",
+  custom: "המרות מותאמות",
+  engagement: "מעורבות",
+  other: "אחר",
 };
 
 export default function ConversionEventSelector({ clientId, currentEvent }: ConversionEventSelectorProps) {
@@ -64,8 +65,8 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
   };
 
   const grouped = events.reduce<Record<string, EventOption[]>>((acc, e) => {
-    if (!acc[e.source]) acc[e.source] = [];
-    acc[e.source].push(e);
+    if (!acc[e.category]) acc[e.category] = [];
+    acc[e.category].push(e);
     return acc;
   }, {});
 
@@ -102,7 +103,7 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
           <div className="max-h-60 space-y-3 overflow-y-auto rounded-lg border border-brand-border bg-brand-light p-3">
             {Object.entries(grouped).map(([source, items]) => (
               <div key={source}>
-                <p className="mb-1 text-[10px] font-semibold text-brand-muted">{SOURCE_LABELS[source] ?? source}</p>
+                <p className="mb-1 text-[10px] font-semibold text-brand-muted">{CATEGORY_LABELS[source] ?? source}</p>
                 <div className="space-y-1">
                   {items.map((e) => (
                     <label key={e.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-brand-dark hover:bg-brand-bg">

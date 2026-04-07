@@ -20,7 +20,7 @@ interface AppContextType {
   addClient: (data: Omit<Client, "id" | "createdAt" | "optimizations">) => Promise<void>;
   updateClient: (id: string, data: Partial<Client>) => Promise<void>;
   getClient: (id: string) => Client | undefined;
-  refreshClients: () => Promise<void>;
+  refreshClients: (since?: string, until?: string) => Promise<void>;
 
   tasks: Task[];
   addTask: (data: Omit<Task, "id" | "createdAt" | "notes">) => Promise<void>;
@@ -234,8 +234,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [tasks]);
 
   // ==================== Clients ====================
-  const refreshClients = useCallback(async () => {
-    const data = await api<Record<string, unknown>[]>("/api/clients");
+  const refreshClients = useCallback(async (since?: string, until?: string) => {
+    const params = since && until ? `?since=${since}&until=${until}` : "";
+    const data = await api<Record<string, unknown>[]>(`/api/clients${params}`);
     setClients(data.map(mapClient));
   }, []);
 
