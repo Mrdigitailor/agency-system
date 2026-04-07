@@ -18,11 +18,9 @@ export interface PixelCustomConversion {
   id: string;
   name: string;
   custom_event_type?: string;
+  pixel?: { id: string };
 }
 
-/**
- * שליפת כל הפיקסלים של חשבון מודעות
- */
 export async function fetchPixels(adAccountId: string, accessToken: string): Promise<MetaPixel[]> {
   try {
     return await metaApiGetAll<MetaPixel>(`/${adAccountId}/adspixels`, {
@@ -37,35 +35,31 @@ export async function fetchPixels(adAccountId: string, accessToken: string): Pro
 
 /**
  * שליפת אירועים שהפיקסל קולט
+ * ה-response: [{ start_time, aggregation, data: [{ value: "Lead", count: 5 }] }, ...]
+ * צריך לפלטר את data מכל שורה ולאחד
  */
 export async function fetchPixelEvents(pixelId: string, accessToken: string): Promise<PixelEventStat[]> {
   try {
     console.log(`[Meta Pixel] Fetching stats for pixel ${pixelId}...`);
-    const res = await metaApiGet<{ data: Array<Record<string, unknown>> }>(
+    const res = await metaApiGet<{ data: Array<{ start_time?: string; aggregation?: string; data?: Array<{ value: string; count: number }> }> }>(
       `/${pixelId}/stats`,
       { accessToken, params: { aggregation: "event" } }
     );
-    console.log(`[Meta Pixel] Raw response:`, JSON.stringify(res.data?.slice(0, 5)));
 
-    const events: PixelEventStat[] = [];
+    // איחוד — כל time slot מכיל data[] עם events
+    const eventMap = new Map<string, number>();
     if (res.data) {
-      for (const item of res.data) {
-        // ה-API מחזיר אובייקט שהמפתח הוא שם האירוע
-        // יכול להיות { event: "Lead", count: 42 }
-        // או { "Lead": { count: 42, ... } }
-        // או מבנה אחר — לנסות כמה אפשרויות
-        const eventName = (item.event as string)
-          ?? (item.value as string)
-          ?? Object.keys(item).find((k) => k !== "count" && k !== "timestamp" && typeof item[k] !== "number");
-
-        if (!eventName || eventName === "undefined") continue;
-
-        const count = (item.count as number) ?? 0;
-        events.push({ event: eventName, count });
+      for (const timeSlot of res.data) {
+        if (!timeSlot.data) continue;
+        for (const item of timeSlot.data) {
+          if (!item.value) continue;
+          eventMap.set(item.value, (eventMap.get(item.value) ?? 0) + (item.count ?? 0));
+        }
       }
     }
 
-    console.log(`[Meta Pixel] Parsed ${events.length} events:`, events.map((e) => e.event).join(", "));
+    const events = Array.from(eventMap.entries()).map(([event, count]) => ({ event, count }));
+    console.log(`[Meta Pixel] Found ${events.length} unique events:`, events.map((e) => `${e.event}(${e.count})`).join(", "));
     return events;
   } catch (err) {
     console.warn(`[Meta] Failed to fetch pixel stats for ${pixelId}:`, err);
@@ -74,7 +68,7 @@ export async function fetchPixelEvents(pixelId: string, accessToken: string): Pr
 }
 
 /**
- * שליפת custom conversions של פיקסל ספציפי מחשבון המודעות
+ * שליפת custom conversions — שואב הכל ומסנן לפי pixelId client-side
  */
 export async function fetchPixelCustomConversions(
   adAccountId: string,
@@ -82,18 +76,17 @@ export async function fetchPixelCustomConversions(
   accessToken: string
 ): Promise<PixelCustomConversion[]> {
   try {
-    console.log(`[Meta Pixel] Fetching custom conversions for pixel ${pixelId} in account ${adAccountId}...`);
-    const res = await metaApiGetAll<PixelCustomConversion>(`/${adAccountId}/customconversions`, {
+    console.log(`[Meta Pixel] Fetching all custom conversions for account ${adAccountId}...`);
+    const all = await metaApiGetAll<PixelCustomConversion>(`/${adAccountId}/customconversions`, {
       accessToken,
-      params: {
-        fields: "id,name,custom_event_type",
-        filtering: JSON.stringify([{ field: "pixel.id", operator: "EQUAL", value: pixelId }]),
-      },
+      params: { fields: "id,name,custom_event_type,pixel{id}" },
     });
-    console.log(`[Meta Pixel] Found ${res.length} custom conversions`);
-    return res;
+    // סינון — רק custom conversions שמשויכות לפיקסל שלנו
+    const filtered = all.filter((cc) => cc.pixel?.id === pixelId);
+    console.log(`[Meta Pixel] ${all.length} total custom conversions, ${filtered.length} for pixel ${pixelId}`);
+    return filtered;
   } catch (err) {
-    console.warn(`[Meta] Failed to fetch pixel custom conversions:`, err);
+    console.warn(`[Meta] Failed to fetch custom conversions:`, err);
     return [];
   }
 }
