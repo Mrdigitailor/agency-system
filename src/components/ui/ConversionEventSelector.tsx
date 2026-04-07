@@ -27,11 +27,25 @@ const CATEGORY_LABELS: Record<string, string> = {
 export default function ConversionEventSelector({ clientId, currentEvent }: ConversionEventSelectorProps) {
   const [events, setEvents] = useState<EventOption[]>([]);
   const [pixelName, setPixelName] = useState<string | null>(null);
+  const [hasPixel, setHasPixel] = useState<boolean | null>(null); // null = loading
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [savedOk, setSavedOk] = useState(false);
   const [error, setError] = useState("");
+
+  // בדיקה אם יש פיקסל נבחר
+  useEffect(() => {
+    fetch(`/api/clients/${clientId}/connections`)
+      .then((r) => r.json())
+      .then((conns: Array<{ assets: Array<{ assetType: string; isSelected: boolean }> }>) => {
+        const pixelSelected = conns.some((c) =>
+          c.assets.some((a) => a.assetType === "pixel" && a.isSelected)
+        );
+        setHasPixel(pixelSelected);
+      })
+      .catch(() => setHasPixel(false));
+  }, [clientId]);
 
   useEffect(() => {
     setSelected(parseConversionEvents(currentEvent));
@@ -77,6 +91,21 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
 
   const currentNames = selected.map((id) => events.find((e) => e.id === id)?.name ?? id);
 
+  // אם אין פיקסל נבחר — הצג הודעה
+  if (hasPixel === false) {
+    return (
+      <div className="rounded-lg border border-orange-200 bg-orange-50 p-4">
+        <div className="flex items-center gap-2">
+          <TargetIcon className="h-4 w-4 text-orange-500" />
+          <h4 className="text-sm font-semibold text-brand-dark">הגדרת המרות — Meta</h4>
+        </div>
+        <p className="mt-2 text-xs text-orange-700">
+          יש לבחור פיקסל ב&quot;ניהול נכסים&quot; למעלה כדי להגדיר המרות.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-brand-border bg-brand-bg p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -86,11 +115,11 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
         </div>
         <button
           onClick={loadEvents}
-          disabled={loading}
+          disabled={loading || hasPixel === null}
           className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-bg disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          {loading ? "טוען..." : events.length > 0 ? "רענן" : "טען אירועים מחשבון המודעות"}
+          {loading ? "טוען..." : events.length > 0 ? "רענן" : "טען אירועים מהפיקסל"}
         </button>
       </div>
 
@@ -151,7 +180,7 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
 
       {events.length === 0 && !loading && !error && (
         <p className="text-xs text-brand-muted">
-          בחר פיקסל ב&quot;ניהול נכסים&quot; למעלה, אחר כך לחץ &quot;טען אירועים&quot; לרשימת ההמרות של הפיקסל.
+          לחץ &quot;טען אירועים מהפיקסל&quot; כדי לראות את ההמרות שהפיקסל קולט.
         </p>
       )}
     </div>

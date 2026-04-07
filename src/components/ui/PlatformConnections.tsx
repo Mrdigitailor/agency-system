@@ -34,6 +34,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   ad_account: "חשבון מודעות",
   facebook_page: "עמוד פייסבוק",
   instagram: "אינסטגרם",
+  pixel: "פיקסל / Dataset",
   google_ads_account: "Google Ads",
   ga4_property: "Google Analytics",
   tiktok_account: "TikTok",

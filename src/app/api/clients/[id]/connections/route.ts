@@ -11,7 +11,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const connections = await prisma.platformConnection.findMany({
     where: { clientId: id, isActive: true },
     include: {
-      assets: { orderBy: { name: "asc" } },
+      // לא להציג conversion_event ברשימת הנכסים
+      assets: { where: { assetType: { not: "conversion_event" } }, orderBy: [{ assetType: "asc" }, { name: "asc" }] },
     },
     orderBy: { connectedAt: "desc" },
   });
