@@ -38,6 +38,8 @@ import ConversionEventSelector from "@/components/ui/ConversionEventSelector";
 import MetaCampaignsTab from "@/components/ui/MetaCampaignsTab";
 import MetaPerformanceTab from "@/components/ui/MetaPerformanceTab";
 import MessagesTab from "@/components/ui/MessagesTab";
+import ClientIdentityTab from "@/components/ui/ClientIdentityTab";
+import QuickProfileCard from "@/components/ui/QuickProfileCard";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
@@ -67,6 +69,7 @@ function formatDate(dateStr: string) {
 
 const tabs = [
   { id: "overview", label: "סקירה כללית", icon: Target },
+  { id: "identity", label: "תעודת זהות", icon: FileText },
   { id: "campaigns", label: "קמפיינים", icon: Monitor },
   { id: "performance", label: "ביצועים", icon: TrendingUp },
   { id: "optimizations", label: "אופטימיזציות", icon: Zap },
@@ -673,7 +676,29 @@ export default function ClientDetailPage() {
               </div>
             </div>
           </div>
+          {/* פרופיל מהיר */}
+          <div className={cardClass}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-brand-dark">פרופיל מהיר</h2>
+              <button
+                onClick={() => setActiveTab("identity" as TabId)}
+                className="text-xs font-medium text-brand-gold hover:text-brand-gold/70"
+              >
+                לתעודת זהות המלאה →
+              </button>
+            </div>
+            <QuickProfileCard clientId={client.id} />
+          </div>
         </div>
+      )}
+
+      {/* ===== טאב תעודת זהות ===== */}
+      {activeTab === "identity" && (
+        <ClientIdentityTab
+          clientId={client.id}
+          userRole={(session?.user as { role?: string })?.role ?? "campaignManager"}
+          clientData={{ website: client.digitalAssets?.website ?? "", monthlyBudget: client.monthlyBudget, currency: client.currency ?? "ILS", notes: client.notes }}
+        />
       )}
 
       {/* ===== טאב 2 — קמפיינים ===== */}

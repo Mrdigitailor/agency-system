@@ -85,8 +85,69 @@ model Client {
   alerts        Alert[]
   chatRoom      ChatRoom?
   platformConnections PlatformConnection[]
+  profile       ClientProfile?
 
   @@map("clients")
+}
+
+// ==================== תעודת זהות לקוח ====================
+
+model ClientProfile {
+  id        String @id @default(cuid())
+  clientId  String @unique
+  client    Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // סקשן 1 — פרטי העסק
+  businessSector      String @default("") // dropdown value
+  businessDescription String @default("") // textarea
+  serviceArea         String @default("") // local | national | international
+  serviceAreaDetails  String @default("") // ערים/אזורים
+  physicalAddress     String @default("")
+
+  // סקשן 2 — מוצרים ושירותים (JSON array)
+  products String @default("[]") // [{ name, description, priceRange, pricingModel, seasonality, promotions }]
+
+  // סקשן 3 — USP ומיצוב
+  usp                 String @default("") // משפט אחד
+  competitiveAdvantage String @default("") // textarea
+  whyChooseUs         String @default("") // textarea
+  socialProof         String @default("") // textarea
+  entryBarriers       String @default("") // textarea
+  objections          String @default("") // textarea — כל שורה = התנגדות + תשובה
+
+  // סקשן 4 — קהלי יעד (JSON)
+  awarenessLevels String @default("[]") // ["unaware","problem_aware",...]
+  audiences       String @default("{}") // { "unaware": { demographics, interests, feelings, keywords, contentTypes, notes }, ... }
+
+  // סקשן 5 — שפה וטון
+  marketingLanguages String @default("[]") // ["he","en",...]
+  toneOfVoice        String @default("") // dropdown
+  forbiddenWords     String @default("") // textarea
+  addressStyle       String @default("") // את/אתה/אתם/גוף שלישי
+
+  // סקשן 6 — מתחרים (JSON array)
+  competitors String @default("[]") // [{ name, website, facebook, instagram, adLibrary, strengths, weaknesses, notes }]
+
+  // סקשן 7 — נכסים ויזואליים
+  brandColors   String @default("[]") // ["#eed89b","#000000",...]
+  logoUrl       String @default("")
+  adDesignStyle String @default("") // dropdown
+  assetBankUrl  String @default("") // Google Drive/Dropbox
+
+  // סקשן 8 — פרטים כספיים (admin only)
+  leadSource    String @default("") // dropdown
+  lifetimeValue Float  @default(0)
+  paymentHistory String @default("[]") // JSON array
+
+  // סקשן 9 — מסמכים (admin only, JSON array)
+  documents String @default("[]") // [{ name, type, date, fileUrl }]
+
+  // סקשן 10 — הערות פנימיות (JSON array)
+  internalNotes String @default("[]") // [{ content, date, author }]
+
+  updatedAt DateTime @updatedAt
+
+  @@map("client_profiles")
 }
 
 model Optimization {
