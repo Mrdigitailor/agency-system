@@ -30,6 +30,9 @@ model User {
   chatMessages    ChatMessage[]
   chatReads       ChatMessageRead[]
   chatRooms       ChatParticipant[]
+  googleCalendar  GoogleCalendarConnection?
+  aiChats         AiChat[]
+  aiMessages      AiChatMessage[]
 
   @@map("users")
 }
@@ -525,4 +528,49 @@ model SyncLog {
   @@index([platform, createdAt])
   @@index([clientId, createdAt])
   @@map("sync_logs")
+}
+
+// ==================== Google Calendar ====================
+
+model GoogleCalendarConnection {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken  String
+  refreshToken String    @default("")
+  tokenExpiry  DateTime?
+  email        String    @default("")
+  connectedAt  DateTime  @default(now())
+
+  @@map("google_calendar_connections")
+}
+
+// ==================== AI Chat ====================
+
+model AiChat {
+  id        String   @id @default(cuid())
+  clientId  String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String   @default("שיחה חדשה")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages AiChatMessage[]
+
+  @@index([clientId, userId])
+  @@map("ai_chats")
+}
+
+model AiChatMessage {
+  id        String   @id @default(cuid())
+  chatId    String
+  chat      AiChat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  role      String   // "user" | "assistant" | "system"
+  content   String
+  createdAt DateTime @default(now())
+
+  @@map("ai_chat_messages")
 }

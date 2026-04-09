@@ -40,6 +40,7 @@ import MetaPerformanceTab from "@/components/ui/MetaPerformanceTab";
 import MessagesTab from "@/components/ui/MessagesTab";
 import ClientIdentityTab from "@/components/ui/ClientIdentityTab";
 import QuickProfileCard from "@/components/ui/QuickProfileCard";
+import AiChatTab from "@/components/ui/AiChatTab";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
@@ -77,6 +78,7 @@ const tabs = [
   { id: "messages", label: "הודעות", icon: MessageSquare },
   { id: "analytics", label: "אנליטיקס", icon: BarChart3 },
   { id: "tasks", label: "משימות", icon: ListTodo },
+  { id: "ai", label: "צ׳אט AI", icon: BarChart3 },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -1089,6 +1091,9 @@ export default function ClientDetailPage() {
           </Modal>
         </div>
       )}
+
+      {/* ===== טאב צ׳אט AI ===== */}
+      {activeTab === "ai" && <AiChatTab clientId={client.id} clientName={client.name} />}
 
       {/* ==================== מודל עריכת לקוח ==================== */}
       <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="עריכת לקוח" size="lg">

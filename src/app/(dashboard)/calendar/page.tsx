@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useApp } from "@/lib/data/context";
 import Modal from "@/components/ui/Modal";
-import { ChevronRight, ChevronLeft, Plus, Calendar } from "lucide-react";
+import { ChevronRight, ChevronLeft, Plus, Calendar, Link2 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /*  Types & helpers                                                    */
@@ -98,6 +98,31 @@ export default function CalendarPage() {
   const [showModal, setShowModal] = useState(false);
   const [newEvent, setNewEvent] = useState({ title: "", date: "", type: "פגישה" as ManualEvent["type"] });
 
+  // Google Calendar
+  const [gcalConnected, setGcalConnected] = useState(false);
+  const [gcalEvents, setGcalEvents] = useState<Array<{ id: string; title: string; start: string; end: string; allDay: boolean }>>([]);
+  const [gcalEmail, setGcalEmail] = useState("");
+
+  const fetchGcalEvents = useCallback(async (date: Date) => {
+    const start = new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
+    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59).toISOString();
+    try {
+      const res = await fetch(`/api/calendar/events?timeMin=${start}&timeMax=${end}`);
+      const data = await res.json();
+      setGcalConnected(data.connected);
+      setGcalEvents(data.events ?? []);
+      if (data.email) setGcalEmail(data.email);
+    } catch {}
+  }, []);
+
+  useEffect(() => { fetchGcalEvents(currentDate); }, [currentDate, fetchGcalEvents]);
+
+  const handleConnectGcal = async () => {
+    const res = await fetch("/api/calendar/connect");
+    const data = await res.json();
+    if (data.authUrl) window.location.href = data.authUrl;
+  };
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const todayKey = formatDateKey(new Date());
@@ -131,6 +156,17 @@ export default function CalendarPage() {
     }
     return map;
   }, [events]);
+
+  const gcalByDate = useMemo(() => {
+    const map = new Map<string, typeof gcalEvents>();
+    for (const e of gcalEvents) {
+      const key = e.start?.split("T")[0] ?? "";
+      if (!key) continue;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(e);
+    }
+    return map;
+  }, [gcalEvents]);
 
   /* --- Navigation --- */
   function prevMonth() {
@@ -315,6 +351,15 @@ export default function CalendarPage() {
                       <span className="opacity-70">{e.type}</span> {e.title}
                     </div>
                   ))}
+                  {(gcalByDate.get(dateKey) ?? []).map((ge) => (
+                    <div
+                      key={ge.id}
+                      className="rounded bg-purple-500 px-2 py-1 text-xs font-medium text-white"
+                      title={ge.title}
+                    >
+                      📅 {ge.title}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -336,13 +381,28 @@ export default function CalendarPage() {
           <Calendar className="h-6 w-6 text-brand-gold" />
           <h1 className="text-2xl font-bold text-brand-dark">לוח שנה</h1>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80"
-        >
-          <Plus className="h-4 w-4" />
-          הוסף אירוע
-        </button>
+        <div className="flex items-center gap-2">
+          {!gcalConnected ? (
+            <button
+              onClick={handleConnectGcal}
+              className="flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-2 text-xs font-medium text-brand-dark hover:bg-brand-bg"
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              חבר Google Calendar
+            </button>
+          ) : (
+            <span className="rounded-lg bg-green-50 px-2 py-1 text-[10px] text-green-700">
+              מחובר — {gcalEmail}
+            </span>
+          )}
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80"
+          >
+            <Plus className="h-4 w-4" />
+            הוסף אירוע
+          </button>
+        </div>
       </div>
 
       {/* View mode tabs + month/week navigation */}
