@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useApp } from "@/lib/data/context";
 import Modal from "@/components/ui/Modal";
 import { ChevronRight, ChevronLeft, Plus, Calendar, Link2, X, Pencil, Trash2 } from "lucide-react";
+import MeetingReminder from "@/components/ui/MeetingReminder";
 
 /* ------------------------------------------------------------------ */
 /*  Types & helpers                                                    */
@@ -71,17 +72,7 @@ const MONTHS_HE = [
   "דצמבר",
 ];
 
-const HOLIDAYS: { date: string; name: string }[] = [
-  { date: "2026-03-21", name: "פורים" },
-  { date: "2026-04-11", name: "ערב פסח" },
-  { date: "2026-04-17", name: "שביעי של פסח" },
-  { date: "2026-06-01", name: "שבועות" },
-  { date: "2026-09-22", name: "ראש השנה" },
-  { date: "2026-10-01", name: "יום כיפור" },
-  { date: "2026-10-06", name: "סוכות" },
-];
-
-const HOLIDAY_MAP = new Map(HOLIDAYS.map((h) => [h.date, h.name]));
+/* Holidays are fetched dynamically from /api/calendar/holidays */
 
 const EVENT_TYPES = ["פגישה", "שיחה", "אחר"] as const;
 
@@ -139,6 +130,33 @@ export default function CalendarPage() {
     reminder: 30,
     saveToGcal: true,
   });
+
+  // State for holidays
+  const [hebrewHolidays, setHebrewHolidays] = useState<Array<{ date: string; title: string; category: string }>>([]);
+  const [specialDays, setSpecialDays] = useState<Array<{ date: string; title: string }>>([]);
+
+  useEffect(() => {
+    const year = currentDate.getFullYear();
+    fetch(`/api/calendar/holidays?year=${year}`)
+      .then(r => r.json())
+      .then(data => {
+        setHebrewHolidays(data.hebrewHolidays ?? []);
+        setSpecialDays(data.specialDays ?? []);
+      })
+      .catch(() => {});
+  }, [currentDate]);
+
+  const HOLIDAY_MAP = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const h of hebrewHolidays) map.set(h.date, h.title);
+    return map;
+  }, [hebrewHolidays]);
+
+  const SPECIAL_DAY_MAP = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of specialDays) map.set(s.date, s.title);
+    return map;
+  }, [specialDays]);
 
   // Detail panel state
   const [detailEvent, setDetailEvent] = useState<{
@@ -351,6 +369,11 @@ export default function CalendarPage() {
             {holiday}
           </span>
         )}
+        {SPECIAL_DAY_MAP.get(dateKey) && (
+          <div className="text-[9px] text-brand-muted/60 mt-1" title={SPECIAL_DAY_MAP.get(dateKey)}>
+            {SPECIAL_DAY_MAP.get(dateKey)}
+          </div>
+        )}
         {dayTasks.map((t: any) => (
           <button
             key={t.id}
@@ -444,71 +467,51 @@ export default function CalendarPage() {
   /*  Weekly view                                                      */
   /* ---------------------------------------------------------------- */
 
+  function getHourFromString(s: string): number {
+    if (!s) return -1;
+    const t = s.includes("T") ? s.split("T")[1] : s;
+    return parseInt(t?.split(":")[0] ?? "-1", 10);
+  }
+
   function renderWeeklyView() {
     const weekDates = getWeekDates(currentDate);
 
     return (
       <div className="rounded-lg border border-brand-border bg-brand-light overflow-hidden">
-        <div className="grid grid-cols-7">
+        {/* Frozen day headers */}
+        <div className="grid grid-cols-[3.5rem_repeat(7,1fr)] border-b border-brand-border">
+          <div className="bg-brand-bg" /> {/* spacer for hour column */}
           {weekDates.map((d, i) => {
-            const dateKey = formatDateKey(d);
-            const isToday = dateKey === todayKey;
-            const dayTasks = tasksByDate.get(dateKey) ?? [];
-            const dayEvents = eventsByDate.get(dateKey) ?? [];
-            const holiday = HOLIDAY_MAP.get(dateKey);
-
+            const dk = formatDateKey(d);
+            const today = dk === todayKey;
             return (
-              <div
-                key={dateKey}
-                className={`min-h-[300px] border p-3 ${
-                  isToday ? "border-brand-gold bg-brand-gold/10" : "border-brand-border/50"
-                }`}
-              >
-                <div className="mb-2 text-center">
-                  <div className="text-xs font-semibold text-brand-muted">{DAYS_HE[i]}</div>
-                  <div className={`text-lg font-bold ${isToday ? "text-brand-gold" : "text-brand-dark"}`}>
-                    {d.getDate()}
-                  </div>
-                </div>
-
-                {holiday && (
-                  <div className="mb-1 rounded px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 text-center">
-                    {holiday}
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-1">
-                  {dayTasks.map((t: any) => (
-                    <button
-                      key={t.id}
-                      onClick={() => openDetail("task", t.id, t.title, t.dueDate)}
-                      className={`rounded px-2 py-1 text-xs font-medium text-right w-full ${taskPillClass(t)}`}
-                      title={t.title}
-                    >
-                      {t.title}
-                    </button>
-                  ))}
-                  {dayEvents.map((e) => (
-                    <button
-                      key={e.id}
-                      onClick={() => openDetail("manual", e.id, e.title, e.startTime ? `${e.startTime}–${e.endTime}` : undefined, e.description)}
-                      className="rounded bg-green-500 px-2 py-1 text-xs font-medium text-white text-right w-full"
-                      title={e.title}
-                    >
-                      <span className="opacity-70">{e.type}</span> {e.title}
-                    </button>
-                  ))}
-                  {(gcalByDate.get(dateKey) ?? []).map((ge) => (
-                    <button
-                      key={ge.id}
-                      onClick={() => openDetail("gcal", ge.id, ge.title, ge.start, ge.description, ge.colorId)}
-                      className={`rounded px-2 py-1 text-xs font-medium text-white text-right w-full ${ge.colorId ? GCAL_COLOR_MAP[ge.colorId] ?? "bg-blue-500" : "bg-blue-500"}`}
-                      title={ge.title}
-                    >
-                      {ge.title}
-                    </button>
-                  ))}
-                </div>
+              <div key={dk} className={`text-center py-2 border-l border-brand-border/50 ${today ? "bg-brand-gold/10" : "bg-brand-bg"}`}>
+                <div className="text-xs font-semibold text-brand-muted">{DAYS_HE[i]}</div>
+                <div className={`text-lg font-bold ${today ? "text-brand-gold" : "text-brand-dark"}`}>{d.getDate()}</div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Scrollable hourly grid */}
+        <div className="max-h-[600px] overflow-y-auto" ref={el => { if (el && !el.dataset.scrolled) { el.scrollTop = 7 * 48; el.dataset.scrolled = "1"; }}}>
+          {HOURS.map(hour => {
+            const hStr = String(hour).padStart(2, "0");
+            return (
+              <div key={hour} className="grid grid-cols-[3.5rem_repeat(7,1fr)] min-h-[48px] border-b border-brand-border/30">
+                <div className="flex items-start justify-center bg-brand-bg pt-1 text-xs text-brand-muted border-l border-brand-border/50">{hStr}:00</div>
+                {weekDates.map(d => {
+                  const dk = formatDateKey(d);
+                  const dayTasks = (tasksByDate.get(dk) ?? []).filter(t => getHourFromString(t.dueDate) === hour);
+                  const dayEvents = (eventsByDate.get(dk) ?? []).filter(e => getHourFromString(e.startTime ?? "") === hour);
+                  const dayGcal = (gcalByDate.get(dk) ?? []).filter(ge => getHourFromString(ge.start) === hour);
+                  return (
+                    <div key={dk} className="border-l border-brand-border/30 p-0.5 flex flex-wrap gap-0.5">
+                      {dayTasks.map(t => <div key={t.id} className={`rounded px-1 py-0.5 text-[9px] ${taskPillClass(t)} truncate max-w-full`}>{t.title}</div>)}
+                      {dayEvents.map(e => <div key={e.id} className="rounded bg-green-500 px-1 py-0.5 text-[9px] text-white truncate max-w-full">{e.title}</div>)}
+                      {dayGcal.map(ge => <div key={ge.id} className="rounded bg-blue-500 px-1 py-0.5 text-[9px] text-white truncate max-w-full">{ge.title}</div>)}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
@@ -647,6 +650,7 @@ export default function CalendarPage() {
 
   return (
     <div dir="rtl" className="mx-auto max-w-7xl space-y-6 p-6">
+      <MeetingReminder events={gcalEvents.map(e => ({ id: e.id, title: e.title, start: e.start }))} />
       {/* Title row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
