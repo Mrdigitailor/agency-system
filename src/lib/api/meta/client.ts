@@ -41,7 +41,10 @@ export async function metaApiGet<T>(path: string, opts: MetaApiOptions): Promise
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const res = await fetch(url, { method: "GET" });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(url, { method: "GET", signal: controller.signal });
+      clearTimeout(timeout);
 
       if (res.ok) {
         return res.json() as Promise<T>;

@@ -106,13 +106,41 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
     await fetchConnections();
   };
 
+  const [loadingMessage, setLoadingMessage] = useState("");
+
   const handleRefreshAssets = async () => {
     setRefreshingAssets(true);
+    setLoadingMessage("טוען חשבונות מודעות, דפים ואינסטגרם...");
     try {
-      await fetch(`/api/platforms/meta/refresh-assets/${clientId}`, { method: "POST" });
+      await fetch(`/api/platforms/meta/refresh-assets/${clientId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "all" }),
+      });
+
+      // שלב 2 — פיקסלים לכל חשבון מודעות שנבחר
+      const connsRes = await fetch(`/api/clients/${clientId}/connections`);
+      const conns = await connsRes.json();
+      const metaConn = conns.find((c: { platform: string }) => c.platform === "meta");
+      if (metaConn) {
+        const selectedAdAccounts = metaConn.assets.filter((a: { assetType: string; isSelected: boolean }) => a.assetType === "ad_account" && a.isSelected);
+        if (selectedAdAccounts.length > 0) {
+          setLoadingMessage("טוען פיקסלים מחשבון המודעות...");
+          for (const acc of selectedAdAccounts) {
+            await fetch(`/api/platforms/meta/refresh-assets/${clientId}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ type: "pixels", adAccountId: acc.externalId }),
+            });
+          }
+        }
+      }
+
       await fetchConnections();
+      setLoadingMessage("");
     } finally {
       setRefreshingAssets(false);
+      setLoadingMessage("");
     }
   };
 
@@ -207,7 +235,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                       className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-bg disabled:opacity-50"
                     >
                       <RefreshCw className={`h-3 w-3 ${refreshingAssets ? "animate-spin" : ""}`} />
-                      {refreshingAssets ? "מרענן..." : "ניהול נכסים"}
+                      {refreshingAssets ? (loadingMessage || "טוען...") : "ניהול נכסים"}
                     </button>
                     <button
                       onClick={() => handleDisconnect(conn.platform)}
