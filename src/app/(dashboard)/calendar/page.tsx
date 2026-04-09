@@ -137,13 +137,16 @@ export default function CalendarPage() {
 
   useEffect(() => {
     const year = currentDate.getFullYear();
+    console.log("[Calendar] Loading holidays for year:", year);
     fetch(`/api/calendar/holidays?year=${year}`)
       .then(r => r.json())
       .then(data => {
+        console.log("[Calendar] Holidays loaded:", data.hebrewHolidays?.length, "hebrew,", data.specialDays?.length, "special");
+        if (data.hebrewHolidays?.length > 0) console.log("[Calendar] First 3:", data.hebrewHolidays.slice(0, 3).map((h: { date: string; title: string }) => `${h.date}: ${h.title}`));
         setHebrewHolidays(data.hebrewHolidays ?? []);
         setSpecialDays(data.specialDays ?? []);
       })
-      .catch(() => {});
+      .catch((err) => console.error("[Calendar] Holiday fetch failed:", err));
   }, [currentDate]);
 
   const HOLIDAY_MAP = useMemo(() => {
