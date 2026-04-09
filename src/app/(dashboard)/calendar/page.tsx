@@ -48,7 +48,7 @@ const REMINDER_OPTIONS = [
   { value: 1440, label: "יום לפני" },
 ];
 
-const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 6:00 to 23:00
+const HOURS = Array.from({ length: 24 }, (_, i) => i); // 0:00 to 23:00
 
 function formatDateKey(d: Date) {
   return d.toISOString().split("T")[0];
@@ -158,15 +158,25 @@ export default function CalendarPage() {
   const [gcalEmail, setGcalEmail] = useState("");
 
   const fetchGcalEvents = useCallback(async (date: Date) => {
-    const start = new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
-    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59).toISOString();
+    // שלוף חודש +/- שבוע כדי לתפוס אירועים בתצוגה שבועית/יומית
+    const y = date.getFullYear();
+    const m = date.getMonth();
+    const start = `${y}-${String(m + 1).padStart(2, "0")}-01T00:00:00+03:00`;
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const end = `${y}-${String(m + 1).padStart(2, "0")}-${lastDay}T23:59:59+03:00`;
+
+    console.log("[Calendar UI] Fetching events:", start, "→", end);
     try {
-      const res = await fetch(`/api/calendar/events?timeMin=${start}&timeMax=${end}`);
+      const res = await fetch(`/api/calendar/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}`);
       const data = await res.json();
+      console.log("[Calendar UI] Response:", { connected: data.connected, eventCount: data.events?.length ?? 0, error: data.error });
       setGcalConnected(data.connected);
       setGcalEvents(data.events ?? []);
       if (data.email) setGcalEmail(data.email);
-    } catch {}
+      if (data.error) console.error("[Calendar UI] API error:", data.error);
+    } catch (err) {
+      console.error("[Calendar UI] Fetch failed:", err);
+    }
   }, []);
 
   useEffect(() => { fetchGcalEvents(currentDate); }, [currentDate, fetchGcalEvents]);
@@ -569,8 +579,8 @@ export default function CalendarPage() {
           );
         })()}
 
-        {/* Hour grid */}
-        <div className="relative">
+        {/* Hour grid — scrollable, starts at 07:00 */}
+        <div className="relative max-h-[600px] overflow-y-auto" ref={(el) => { if (el && !el.dataset.scrolled) { el.scrollTop = 7 * 52; el.dataset.scrolled = "1"; } }}>
           {HOURS.map((hour) => {
             const hourStr = String(hour).padStart(2, "0");
             const hourTasks = dayTasks.filter((t: any) => {
@@ -653,9 +663,23 @@ export default function CalendarPage() {
               חבר Google Calendar
             </button>
           ) : (
-            <span className="rounded-lg bg-green-50 px-2 py-1 text-[10px] text-green-700">
-              מחובר — {gcalEmail}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-lg bg-green-50 px-2 py-1 text-[10px] text-green-700">
+                מחובר — {gcalEmail}
+              </span>
+              <button
+                onClick={async () => {
+                  if (!confirm("האם אתה בטוח שברצונך לנתק את Google Calendar?")) return;
+                  await fetch("/api/calendar/disconnect", { method: "DELETE" });
+                  setGcalConnected(false);
+                  setGcalEvents([]);
+                  setGcalEmail("");
+                }}
+                className="rounded-lg border border-red-200 px-2 py-1 text-[10px] text-red-600 hover:bg-red-50"
+              >
+                נתק יומן
+              </button>
+            </div>
           )}
           <button
             onClick={() => setShowModal(true)}
