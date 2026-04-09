@@ -213,7 +213,7 @@ model Lead {
   phone              String   @default("")
   company            String   @default("")
   website            String   @default("")
-  digitalAssets      String   @default("") // legacy
+  digitalAssets      String   @default("")
   leadFacebookPage   String   @default("")
   leadInstagram      String   @default("")
   leadLinkedin       String   @default("")
@@ -222,16 +222,31 @@ model Lead {
   leadMetaAds        String   @default("")
   estimatedBudget    String   @default("")
   salesPerson        String   @default("")
-  interestedServices String   @default("[]") // JSON array
+  interestedServices String   @default("[]")
   source             String   @default("other")
   status             String   @default("new")
+  stage              String   @default("") // Monday group: לידים נכנסים, פולואפ, נסגרו...
   value              Float    @default(0)
   notes              String   @default("")
   nextFollowUp       String   @default("")
   hasProposal        Boolean  @default(false)
   proposalDate       String   @default("")
   proposalFileName   String   @default("")
+  proposalUrl        String   @default("")
   internalNotes      String   @default("")
+  quality            String   @default("")
+  priority           String   @default("")
+  serviceType        String   @default("")
+  dealValue          Float    @default(0)
+  monthlyValue       Float    @default(0)
+  contractSigned     Boolean  @default(false)
+  contractUrl        String   @default("")
+  proposalSentAt     String   @default("")
+  closedAt           String   @default("")
+  endDate            String   @default("")
+  dealType           String   @default("")
+  lifetimeValue      Float    @default(0)
+  minMonths          Int      @default(0)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -573,4 +588,40 @@ model AiChatMessage {
   createdAt DateTime @default(now())
 
   @@map("ai_chat_messages")
+}
+
+// ==================== גיוסים ====================
+
+model Recruitment {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @default("")
+  phone      String   @default("")
+  experience String   @default("")
+  notes      String   @default("")
+  cvUrl      String   @default("")
+  stage      String   @default("submitted") // submitted | task_sent | interview | accepted | rejected
+  position   String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("recruitments")
+}
+
+// ==================== ספקים ====================
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   @default("") // ספק | שותף | פרילנסר
+  field     String   @default("") // בניית אתרים | עיצוב | ...
+  phone     String   @default("")
+  role      String   @default("")
+  company   String   @default("")
+  email     String   @default("")
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("suppliers")
 }

@@ -211,6 +211,17 @@ export const LEAD_STATUSES = [
   { value: "lost" as const, label: "אבד", color: "bg-brand-danger" },
 ];
 
+// Monday stages — for CRM Kanban columns
+export const LEAD_STAGES = [
+  { value: "לידים נכנסים", label: "לידים נכנסים", color: "bg-brand-info" },
+  { value: "פולואפ", label: "פולואפ", color: "bg-purple-500" },
+  { value: "נשלחה הצעת מחיר", label: "נשלחה הצעת מחיר", color: "bg-brand-warning" },
+  { value: "נסגרו", label: "נסגרו", color: "bg-brand-success" },
+  { value: "לא רלוונטיים", label: "לא רלוונטיים", color: "bg-brand-muted" },
+  { value: "סיימו פעילות", label: "סיימו פעילות", color: "bg-brand-danger" },
+  { value: "טווח רחוק", label: "טווח רחוק", color: "bg-gray-400" },
+] as const;
+
 export const INTERESTED_SERVICES = [
   "ניהול קמפיינים",
   "SEO",

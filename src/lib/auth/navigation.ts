@@ -51,6 +51,18 @@ export const navigationItems: NavItem[] = [
     roles: ["admin", "manager", "campaignManager"],
   },
   {
+    label: "גיוסים",
+    href: "/recruitment",
+    icon: "Users",
+    roles: ["admin"],
+  },
+  {
+    label: "ספקים",
+    href: "/suppliers",
+    icon: "Users",
+    roles: ["admin", "manager"],
+  },
+  {
     label: "הגדרות",
     href: "/settings",
     icon: "Settings",
