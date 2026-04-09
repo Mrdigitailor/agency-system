@@ -168,17 +168,50 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
     setAssetsModalPlatform(platform);
   };
 
+  const [savingStep, setSavingStep] = useState("");
+
   const saveAssetSelections = async () => {
     if (!assetsModalPlatform) return;
     setSaving(true);
+
+    // שלב 1: שמירת בחירות
+    setSavingStep("שומר בחירות...");
     await fetch(`/api/clients/${clientId}/connections/${assetsModalPlatform}/assets`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ selections: assetSelections }),
     });
+
+    // שלב 2: שאיבת פיקסלים מחשבונות מודעות שנבחרו
+    if (assetsModalPlatform === "meta") {
+      const selectedAdAccounts = (activeModalConnection?.assets ?? [])
+        .filter((a) => a.assetType === "ad_account" && assetSelections[a.id]);
+
+      if (selectedAdAccounts.length > 0) {
+        setSavingStep("טוען פיקסלים...");
+        for (const acc of selectedAdAccounts) {
+          await fetch(`/api/platforms/meta/refresh-assets/${clientId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "pixels", adAccountId: acc.externalId }),
+          });
+        }
+      }
+
+      // שלב 3: סנכרון נתונים ברקע (לא חוסם)
+      setSavingStep("מסנכרן נתונים ברקע...");
+      fetch(`/api/platforms/meta/sync/${clientId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ daysBack: 30, forceAll: false }),
+      }).catch(() => {}); // ברקע — לא ממתינים
+    }
+
     await fetchConnections();
     setSaving(false);
-    setAssetsModalPlatform(null);
+    setSavingStep("");
+    // לא סוגרים את ה-modal — מציגים את הפיקסלים שנוספו
+    // המשתמש יסגור ידנית אחרי שבחר פיקסל
   };
 
   const connectedPlatforms = new Set(connections.map((c) => c.platform));
@@ -230,7 +263,11 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                       </button>
                     )}
                     <button
-                      onClick={async () => { await handleRefreshAssets(); openAssetsModal(conn.platform); }}
+                      onClick={() => {
+                        // פתח מיד עם מה שיש ב-DB, רענן ברקע
+                        openAssetsModal(conn.platform);
+                        handleRefreshAssets();
+                      }}
                       disabled={refreshingAssets}
                       className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-bg disabled:opacity-50"
                     >
@@ -347,7 +384,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                 disabled={saving}
                 className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
               >
-                {saving ? "שומר..." : "שמור"}
+                {saving ? (savingStep || "שומר...") : "שמור ובחר פיקסלים"}
               </button>
             </div>
           </div>

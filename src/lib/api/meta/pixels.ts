@@ -23,12 +23,15 @@ export interface PixelCustomConversion {
 
 export async function fetchPixels(adAccountId: string, accessToken: string): Promise<MetaPixel[]> {
   try {
-    return await metaApiGetAll<MetaPixel>(`/${adAccountId}/adspixels`, {
+    console.log(`[Pixels] Fetching pixels for ad account ${adAccountId}...`);
+    const pixels = await metaApiGetAll<MetaPixel>(`/${adAccountId}/adspixels`, {
       accessToken,
-      params: { fields: "id,name,last_fired_time,is_unified_pixel" },
+      params: { fields: "id,name,last_fired_time" },
     });
+    console.log(`[Pixels] Found ${pixels.length} pixels for ${adAccountId}:`, pixels.map(p => `${p.name} (${p.id})`).join(', '));
+    return pixels;
   } catch (err) {
-    console.warn(`[Meta] Failed to fetch pixels for ${adAccountId}:`, err);
+    console.error(`[Pixels] FAILED for ${adAccountId}:`, err instanceof Error ? err.message : err);
     return [];
   }
 }
