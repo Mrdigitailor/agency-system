@@ -45,4 +45,8 @@ next-env.d.ts
 # database
 prisma/dev.db
 prisma/dev.db-journal
+
+# data imports
+*.xlsx
+*.xls
 dev.db
