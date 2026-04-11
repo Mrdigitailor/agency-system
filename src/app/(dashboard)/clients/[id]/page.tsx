@@ -41,6 +41,8 @@ import MessagesTab from "@/components/ui/MessagesTab";
 import ClientIdentityTab from "@/components/ui/ClientIdentityTab";
 import QuickProfileCard from "@/components/ui/QuickProfileCard";
 import AiChatTab from "@/components/ui/AiChatTab";
+import MonthPerformanceKpis from "@/components/ui/MonthPerformanceKpis";
+import OptimizationsTab from "@/components/ui/OptimizationsTab";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
@@ -169,13 +171,6 @@ export default function ClientDetailPage() {
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [newCampaign, setNewCampaign] = useState({ name: "", platform: "Meta", dailyBudget: "" });
 
-  /* אופטימיזציות — מצב מקומי */
-  const [localOptimizations, setLocalOptimizations] = useState<
-    { id: string; date: string; description: string; platform: string; result: string }[]
-  >([]);
-  const [showOptModal, setShowOptModal] = useState(false);
-  const [newOpt, setNewOpt] = useState({ date: "", description: "", platform: "Meta", result: "" });
-
   /* משימות — מודל */
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [newTask, setNewTask] = useState({
@@ -284,13 +279,6 @@ export default function ClientDetailPage() {
   const statusInfo = getStatusInfo(client.status);
   const { performance: perf, digitalAssets: assets } = client;
 
-  const convProgress =
-    perf.targetConversions > 0
-      ? Math.round((perf.conversionsThisMonth / perf.targetConversions) * 100)
-      : 0;
-  const convProgressColor =
-    convProgress >= 85 ? "bg-brand-success" : convProgress >= 60 ? "bg-brand-warning" : "bg-brand-danger";
-
   const assetLinks = [
     { label: "עמוד פייסבוק", url: assets.facebookPage, color: "#1877F2", icon: <svg className="h-5 w-5" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg> },
     { label: "אינסטגרם", url: assets.instagram, color: "#E4405F", icon: <svg className="h-5 w-5" viewBox="0 0 24 24" fill="#E4405F"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg> },
@@ -303,19 +291,6 @@ export default function ClientDetailPage() {
     { label: "Google Ads", value: assets.googleAdAccount, icon: <svg className="h-5 w-5" viewBox="0 0 24 24"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/></svg> },
     { label: "TikTok Ads", value: assets.tiktokAdAccount, icon: <svg className="h-5 w-5" viewBox="0 0 24 24" fill="#000"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.43v-7.15a8.16 8.16 0 005.58 2.18v-3.44a4.85 4.85 0 01-3-.53z"/></svg> },
   ].filter((a) => a.value);
-
-  /* אופטימיזציות ממוזגות — מה-client + מקומיות */
-  const allOptimizations = [
-    ...client.optimizations.map((o) => ({ ...o, platform: "", result: "" })),
-    ...localOptimizations,
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  /* חישוב ימים מאופטימיזציה אחרונה */
-  const lastOptDate =
-    allOptimizations.length > 0 ? new Date(allOptimizations[0].date) : null;
-  const daysSinceOpt = lastOptDate
-    ? Math.floor((Date.now() - lastOptDate.getTime()) / (1000 * 60 * 60 * 24))
-    : null;
 
   /* ==================== פעולות ==================== */
 
@@ -337,22 +312,6 @@ export default function ClientDetailPage() {
     ]);
     setNewCampaign({ name: "", platform: "Meta", dailyBudget: "" });
     setShowCampaignModal(false);
-  }
-
-  function handleAddOptimization() {
-    if (!newOpt.description || !newOpt.date) return;
-    setLocalOptimizations((prev) => [
-      ...prev,
-      {
-        id: `opt-${Date.now()}`,
-        date: newOpt.date,
-        description: newOpt.description,
-        platform: newOpt.platform,
-        result: newOpt.result,
-      },
-    ]);
-    setNewOpt({ date: "", description: "", platform: "Meta", result: "" });
-    setShowOptModal(false);
   }
 
   async function handleAddTask() {
@@ -496,54 +455,16 @@ export default function ClientDetailPage() {
       {/* ===== טאב 1 — סקירה כללית ===== */}
       {activeTab === "overview" && (
         <div className="space-y-6">
-          {/* ביצועים — KPI (מועבר לראש העמוד) */}
-          <div className={cardClass}>
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-brand-dark">
-              <TrendingUp className="h-5 w-5 text-brand-muted" />
-              ביצועי החודש
-            </h2>
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-              <div className="rounded-lg bg-brand-bg p-4">
-                <p className="text-xs font-medium text-brand-muted">תקציב שנוצל</p>
-                <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {getCurrencySymbol(client.currency)} {(metaPerf?.totalSpend ?? perf.budgetUsed).toLocaleString()}
-                </p>
-                <p className="text-xs text-brand-muted">מתוך {getCurrencySymbol(client.currency)} {client.monthlyBudget.toLocaleString()}</p>
-              </div>
-              <div className="rounded-lg bg-brand-bg p-4">
-                <p className="text-xs font-medium text-brand-muted">עלות להמרה</p>
-                <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {getCurrencySymbol(client.currency)} {Math.round(metaPerf?.avgCostPerConv ?? perf.avgCostPerConversion)}
-                </p>
-                <p className="text-xs text-brand-muted">יעד: {getCurrencySymbol(client.currency)} {perf.targetCostPerConversion}</p>
-              </div>
-              <div className="rounded-lg bg-brand-bg p-4">
-                <p className="text-xs font-medium text-brand-muted">המרות החודש</p>
-                <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {(metaPerf?.totalConversions ?? perf.conversionsThisMonth).toLocaleString()}
-                </p>
-                <p className="text-xs text-brand-muted">יעד: {perf.targetConversions.toLocaleString()}</p>
-                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-brand-border">
-                  <div
-                    className={`h-full rounded-full ${convProgressColor}`}
-                    style={{ width: `${Math.min(convProgress, 100)}%` }}
-                  />
-                </div>
-              </div>
-              <div className="rounded-lg bg-brand-bg p-4">
-                <p className="text-xs font-medium text-brand-muted">אופטימיזציה אחרונה</p>
-                <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {formatDate(metaPerf?.lastOptimization ?? perf.lastOptimization)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-brand-bg p-4">
-                <p className="text-xs font-medium text-brand-muted">משימות פתוחות</p>
-                <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {clientTasks.filter((t) => t.status !== "done").length}
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* ביצועים — KPI מתקדם */}
+          <MonthPerformanceKpis
+            currency={client.currency}
+            monthlyBudget={client.monthlyBudget}
+            spent={metaPerf?.totalSpend ?? perf.budgetUsed}
+            conversions={metaPerf?.totalConversions ?? perf.conversionsThisMonth}
+            targetConversions={perf.targetConversions}
+            costPerConversion={metaPerf?.avgCostPerConv ?? perf.avgCostPerConversion}
+            targetCostPerConversion={perf.targetCostPerConversion}
+          />
 
           {/* שורה: פרטים + נכסים דיגיטליים */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -738,108 +659,7 @@ export default function ClientDetailPage() {
       )}
 
       {/* ===== טאב 4 — אופטימיזציות ===== */}
-      {activeTab === "optimizations" && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-brand-dark">אופטימיזציות</h2>
-            <button onClick={() => setShowOptModal(true)} className={`inline-flex items-center gap-2 ${btnPrimary}`}>
-              <Plus className="h-4 w-4" />
-              הוסף אופטימיזציה
-            </button>
-          </div>
-
-          {/* התראה אם עברו 7+ ימים */}
-          {daysSinceOpt !== null && daysSinceOpt > 7 && (
-            <div className="rounded-lg border border-brand-danger/30 bg-red-50 p-4">
-              <p className="text-sm font-medium text-brand-danger">
-                עברו {daysSinceOpt} ימים מהאופטימיזציה האחרונה!
-              </p>
-            </div>
-          )}
-
-          <div className={cardClass}>
-            {allOptimizations.length === 0 ? (
-              <p className="text-sm text-brand-muted">אין אופטימיזציות עדיין</p>
-            ) : (
-              <div className="space-y-4">
-                {allOptimizations.map((opt) => (
-                  <div key={opt.id} className="border-r-2 border-brand-gold pr-4">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs text-brand-muted">{formatDate(opt.date)}</p>
-                      {opt.platform && (
-                        <span className="rounded-full bg-brand-bg px-2 py-0.5 text-xs text-brand-muted">
-                          {opt.platform}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-sm text-brand-dark">{opt.description}</p>
-                    {opt.result && (
-                      <p className="mt-1 text-xs text-brand-muted">תוצאה: {opt.result}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* מודל הוספת אופטימיזציה */}
-          <Modal isOpen={showOptModal} onClose={() => setShowOptModal(false)} title="הוסף אופטימיזציה">
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brand-dark">תאריך</label>
-                <input
-                  type="date"
-                  className={inputClass}
-                  value={newOpt.date}
-                  onChange={(e) => setNewOpt((p) => ({ ...p, date: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brand-dark">תיאור</label>
-                <input
-                  className={inputClass}
-                  value={newOpt.description}
-                  onChange={(e) => setNewOpt((p) => ({ ...p, description: e.target.value }))}
-                  placeholder="מה בוצע?"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brand-dark">פלטפורמה</label>
-                <select
-                  className={inputClass}
-                  value={newOpt.platform}
-                  onChange={(e) => setNewOpt((p) => ({ ...p, platform: e.target.value }))}
-                >
-                  <option value="Meta">Meta</option>
-                  <option value="Google Ads">Google Ads</option>
-                  <option value="TikTok">TikTok</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brand-dark">תוצאה</label>
-                <textarea
-                  className={inputClass}
-                  rows={3}
-                  value={newOpt.result}
-                  onChange={(e) => setNewOpt((p) => ({ ...p, result: e.target.value }))}
-                  placeholder="מה היה הפידבק / תוצאה?"
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  onClick={() => setShowOptModal(false)}
-                  className="rounded-lg px-4 py-2 text-sm text-brand-muted transition-colors duration-200 hover:bg-brand-bg"
-                >
-                  ביטול
-                </button>
-                <button onClick={handleAddOptimization} className={btnPrimary}>
-                  הוסף
-                </button>
-              </div>
-            </div>
-          </Modal>
-        </div>
-      )}
+      {activeTab === "optimizations" && <OptimizationsTab clientId={client.id} />}
 
       {/* ===== טאב דוחות ===== */}
       {activeTab === "reports" && (

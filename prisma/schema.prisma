@@ -154,13 +154,21 @@ model ClientProfile {
 }
 
 model Optimization {
-  id          String   @id @default(cuid())
-  clientId    String
-  client      Client   @relation(fields: [clientId], references: [id])
-  date        String
-  description String
-  createdAt   DateTime @default(now())
+  id              String    @id @default(cuid())
+  clientId        String
+  client          Client    @relation(fields: [clientId], references: [id])
+  date            String
+  description     String    @default("") // legacy
+  platform        String    @default("") // Meta | Google Ads | TikTok | אתר | אסטרטגיה | קריאייטיב
+  campaignIds     String    @default("[]") // JSON array של שמות/IDs של קמפיינים
+  actionTaken     String    @default("") // מה ביצענו
+  expectedOutcome String    @default("") // מה אנחנו מצפים לקבל
+  isChecked       Boolean   @default(false)
+  checkedAt       DateTime?
+  actualResult    String    @default("") // מה קרה בפועל
+  createdAt       DateTime  @default(now())
 
+  @@index([clientId, isChecked])
   @@map("optimizations")
 }
 
