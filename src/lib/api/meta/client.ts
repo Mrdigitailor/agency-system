@@ -80,6 +80,37 @@ export async function metaApiGet<T>(path: string, opts: MetaApiOptions): Promise
 }
 
 /**
+ * POST ל-Graph API — לפעולות כתיבה (תגובות, הודעות, פוסטים)
+ */
+export async function metaApiPost<T>(
+  path: string,
+  body: Record<string, string>,
+  opts: { accessToken: string }
+): Promise<T> {
+  const url = `${BASE_URL}${path}`;
+  const formData = new URLSearchParams({ ...body, access_token: opts.accessToken });
+
+  console.log(`[MetaAPI] POST ${url}`);
+  console.log(`[MetaAPI] POST body:`, { ...body, access_token: "***" });
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: formData.toString(),
+  });
+
+  if (!res.ok) {
+    const errorBody = (await res.json().catch(() => null)) as MetaApiError | null;
+    const errorMsg = errorBody?.error?.message ?? `HTTP ${res.status}`;
+    const errorCode = errorBody?.error?.code ?? res.status;
+    console.error(`[MetaAPI] POST failed: ${errorMsg} (code: ${errorCode})`);
+    throw new Error(`Meta API error: ${errorMsg} (code: ${errorCode})`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+/**
  * קריאה pagination-aware — שואבת את כל הדפים
  */
 export async function metaApiGetAll<T>(path: string, opts: MetaApiOptions): Promise<T[]> {

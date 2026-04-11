@@ -1,6 +1,6 @@
 // שליפת הודעות ותגובות מ-Facebook ו-Instagram
 
-import { metaApiGet, metaApiGetAll } from "./client";
+import { metaApiGet, metaApiGetAll, metaApiPost } from "./client";
 
 // ==================== Facebook Messages ====================
 
@@ -39,43 +39,135 @@ export async function fetchPageConversations(pageId: string, pageAccessToken: st
 
 // ==================== Facebook Comments ====================
 
+export interface FbCommentReply {
+  id: string;
+  message: string;
+  from?: { name: string; id: string };
+  created_time: string;
+  like_count?: number;
+}
+
 export interface FbComment {
   id: string;
   message: string;
   from?: { name: string; id: string };
   created_time: string;
   like_count: number;
+  comment_count?: number;
+  permalink_url?: string;
   post_id?: string;
   post_message?: string;
+  post_permalink?: string;
+  replies?: FbCommentReply[];
 }
 
 export async function fetchPageComments(pageId: string, pageAccessToken: string, limit = 50): Promise<FbComment[]> {
-  // שלוף פוסטים אחרונים עם תגובות
+  console.log(`[FB Comments] Fetching for page ${pageId} with token ${pageAccessToken.slice(0, 8)}...`);
+  console.log(`[FB Comments] URL: /${pageId}/feed?fields=id,message,permalink_url,created_time,comments.filter(stream).limit(50){...}`);
+
+  // שלוף פוסטים אחרונים + תגובות + תגובות משנה
+  // .filter(stream) — מחזיר את כל התגובות, לא רק top-level
   const posts = await metaApiGetAll<{
     id: string;
     message?: string;
-    comments?: { data: Array<{ id: string; message: string; from?: { name: string; id: string }; created_time: string; like_count?: number }> };
+    permalink_url?: string;
+    created_time?: string;
+    comments?: {
+      data: Array<{
+        id: string;
+        message: string;
+        from?: { name: string; id: string };
+        created_time: string;
+        like_count?: number;
+        comment_count?: number;
+        permalink_url?: string;
+        comments?: { data: FbCommentReply[] };
+      }>;
+    };
   }>(`/${pageId}/feed`, {
     accessToken: pageAccessToken,
     params: {
-      fields: "id,message,comments{message,from,created_time,like_count}",
+      fields:
+        "id,message,permalink_url,created_time,comments.filter(stream).limit(50){id,message,from,created_time,like_count,comment_count,permalink_url,comments.limit(25){id,message,from,created_time,like_count}}",
       limit: String(Math.min(limit, 25)),
     },
   });
 
+  console.log(`[FB Comments] Got ${posts.length} posts from feed`);
+
   const comments: FbComment[] = [];
   for (const post of posts) {
+    const postCommentCount = post.comments?.data?.length ?? 0;
+    if (postCommentCount > 0) {
+      console.log(`[FB Comments] Post ${post.id}: ${postCommentCount} comments`);
+    }
     if (!post.comments?.data) continue;
     for (const c of post.comments.data) {
       comments.push({
-        ...c,
+        id: c.id,
+        message: c.message,
+        from: c.from,
+        created_time: c.created_time,
         like_count: c.like_count ?? 0,
+        comment_count: c.comment_count,
+        permalink_url: c.permalink_url,
         post_id: post.id,
         post_message: post.message?.slice(0, 80),
+        post_permalink: post.permalink_url,
+        replies: c.comments?.data ?? [],
       });
     }
   }
+
+  console.log(`[FB Comments] Total comments collected: ${comments.length}`);
   return comments.sort((a, b) => new Date(b.created_time).getTime() - new Date(a.created_time).getTime());
+}
+
+// ==================== Reply functions ====================
+
+/**
+ * תגובה לתגובה/פוסט בפייסבוק
+ * POST /{object_id}/comments?message={text}
+ */
+export async function replyToFbComment(objectId: string, message: string, pageAccessToken: string) {
+  console.log(`[FB Reply] Replying to ${objectId}`);
+  return metaApiPost<{ id: string }>(`/${objectId}/comments`, { message }, { accessToken: pageAccessToken });
+}
+
+/**
+ * שליחת הודעה ב-Messenger בשם העמוד
+ * POST /{conversation_id}/messages?message={text}
+ */
+export async function sendFbMessage(conversationId: string, message: string, pageAccessToken: string) {
+  console.log(`[FB Message] Sending to conversation ${conversationId}`);
+  return metaApiPost<{ id: string }>(`/${conversationId}/messages`, { message }, { accessToken: pageAccessToken });
+}
+
+/**
+ * תגובה לתגובה באינסטגרם
+ * POST /{comment_id}/replies?message={text}
+ */
+export async function replyToIgComment(commentId: string, message: string, pageAccessToken: string) {
+  console.log(`[IG Reply] Replying to ${commentId}`);
+  return metaApiPost<{ id: string }>(`/${commentId}/replies`, { message }, { accessToken: pageAccessToken });
+}
+
+/**
+ * שליפת page access token מה-Graph API (למקרה שלא נשמר ב-extraData)
+ * GET /{page_id}?fields=access_token
+ */
+export async function fetchPageAccessToken(pageId: string, userAccessToken: string): Promise<string | null> {
+  try {
+    console.log(`[FB Page Token] Fetching token for page ${pageId}`);
+    const res = await metaApiGet<{ access_token?: string }>(`/${pageId}`, {
+      accessToken: userAccessToken,
+      params: { fields: "access_token" },
+    });
+    return res.access_token ?? null;
+  } catch (err) {
+    console.error(`[FB Page Token] Failed to fetch:`, err);
+    return null;
+  }
 }
 
 // ==================== Instagram Comments ====================
