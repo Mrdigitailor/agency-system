@@ -56,10 +56,13 @@ export default function MessagesTab({ clientId }: Props) {
   const [activeTab, setActiveTab] = useState<TabType>("fb_messages");
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [expandedConversation, setExpandedConversation] = useState<string | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
 
+  // טעינה ראשונית — מ-cache (מהיר)
   const fetchMessages = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -67,7 +70,7 @@ export default function MessagesTab({ clientId }: Props) {
     setExpandedConversation(null);
     try {
       const res = await fetch(`/api/clients/${clientId}/messages?type=${activeTab}`);
-      const json: ApiResponse = await res.json();
+      const json: ApiResponse & { lastSyncAt?: string | null } = await res.json();
       if (json.permissionError) {
         setPermissionError(json.permissionError);
         setData([]);
@@ -76,12 +79,38 @@ export default function MessagesTab({ clientId }: Props) {
         setData([]);
       } else {
         setData(json.data ?? []);
+        setLastSyncAt(json.lastSyncAt ?? null);
       }
     } catch {
       setError("שגיאה בטעינת הנתונים");
       setData([]);
     } finally {
       setLoading(false);
+    }
+  }, [clientId, activeTab]);
+
+  // רענון ידני — מבצע sync ואז קורא מהצד
+  const refreshFromApi = useCallback(async () => {
+    setSyncing(true);
+    setError(null);
+    setPermissionError(null);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/messages?type=${activeTab}`, {
+        method: "POST",
+      });
+      const json: ApiResponse & { lastSyncAt?: string | null } = await res.json();
+      if (json.permissionError) {
+        setPermissionError(json.permissionError);
+      } else if (json.error) {
+        setError(json.error);
+      } else {
+        setData(json.data ?? []);
+        setLastSyncAt(json.lastSyncAt ?? new Date().toISOString());
+      }
+    } catch {
+      setError("שגיאה בסנכרון");
+    } finally {
+      setSyncing(false);
     }
   }, [clientId, activeTab]);
 
@@ -181,13 +210,18 @@ export default function MessagesTab({ clientId }: Props) {
           </button>
         ))}
         <button
-          onClick={fetchMessages}
-          disabled={loading}
+          onClick={refreshFromApi}
+          disabled={syncing || loading}
           className="p-2 rounded-full bg-brand-bg text-brand-muted hover:text-brand-dark transition-colors duration-200 disabled:opacity-50"
-          title="רענון"
+          title="סנכרן מ-Meta"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
         </button>
+        {lastSyncAt && (
+          <span className="text-xs text-brand-muted">
+            סנכרון אחרון: {new Date(lastSyncAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+          </span>
+        )}
       </div>
 
       {permissionError && (

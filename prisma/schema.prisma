@@ -534,6 +534,85 @@ model MetaInstagramMedia {
   @@map("meta_instagram_media")
 }
 
+// ==================== הודעות ותגובות (cache מקומי) ====================
+
+// שיחת Messenger בעמוד פייסבוק
+model FbConversationCache {
+  id              String   @id @default(cuid())
+  clientId        String
+  pageId          String
+  externalId      String   // Meta conversation id
+  participantName String   @default("")
+  participantPsid String   @default("") // PSID של המשתמש (לא העמוד)
+  snippet         String   @default("")
+  messageCount    Int      @default(0)
+  updatedTime     DateTime?
+  messagesJson    String   @default("[]") // JSON של הודעות
+  lastSyncAt      DateTime @default(now())
+
+  @@unique([clientId, externalId])
+  @@index([clientId, updatedTime])
+  @@map("fb_conversation_cache")
+}
+
+// תגובה על פוסט פייסבוק
+model FbCommentCache {
+  id            String    @id @default(cuid())
+  clientId      String
+  pageId        String
+  externalId    String    // Comment id
+  postId        String    @default("")
+  postMessage   String    @default("")
+  postPermalink String    @default("")
+  message       String    @default("")
+  fromName      String    @default("")
+  fromId        String    @default("")
+  createdTime   DateTime?
+  likeCount     Int       @default(0)
+  commentCount  Int       @default(0)
+  permalinkUrl  String    @default("")
+  repliesJson   String    @default("[]") // JSON
+  lastSyncAt    DateTime  @default(now())
+
+  @@unique([clientId, externalId])
+  @@index([clientId, createdTime])
+  @@map("fb_comment_cache")
+}
+
+// תגובה באינסטגרם
+model IgCommentCache {
+  id           String    @id @default(cuid())
+  clientId     String
+  igAccountId  String
+  externalId   String    // Comment id
+  mediaId      String    @default("")
+  mediaCaption String    @default("")
+  text         String    @default("")
+  fromUsername String    @default("")
+  fromId       String    @default("")
+  timestamp    DateTime?
+  likeCount    Int       @default(0)
+  repliesJson  String    @default("[]")
+  lastSyncAt   DateTime  @default(now())
+
+  @@unique([clientId, externalId])
+  @@index([clientId, timestamp])
+  @@map("ig_comment_cache")
+}
+
+// סטטוס סנכרון לכל סוג של הודעות לכל לקוח
+model MessageSyncStatus {
+  id         String    @id @default(cuid())
+  clientId   String
+  type       String    // "fb_messages" | "fb_comments" | "ig_comments"
+  lastSyncAt DateTime?
+  recordCount Int      @default(0)
+  errorMsg   String    @default("")
+
+  @@unique([clientId, type])
+  @@map("message_sync_status")
+}
+
 // לוג סנכרון — תיעוד כל ריצה של שליפת נתונים
 model SyncLog {
   id             String   @id @default(cuid())

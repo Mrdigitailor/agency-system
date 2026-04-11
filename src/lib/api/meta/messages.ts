@@ -63,10 +63,7 @@ export interface FbComment {
 
 export async function fetchPageComments(pageId: string, pageAccessToken: string, limit = 50): Promise<FbComment[]> {
   console.log(`[FB Comments] Fetching for page ${pageId} with token ${pageAccessToken.slice(0, 8)}...`);
-  console.log(`[FB Comments] URL: /${pageId}/feed?fields=id,message,permalink_url,created_time,comments.filter(stream).limit(50){...}`);
 
-  // שלוף פוסטים אחרונים + תגובות + תגובות משנה
-  // .filter(stream) — מחזיר את כל התגובות, לא רק top-level
   const posts = await metaApiGetAll<{
     id: string;
     message?: string;
@@ -88,7 +85,7 @@ export async function fetchPageComments(pageId: string, pageAccessToken: string,
     accessToken: pageAccessToken,
     params: {
       fields:
-        "id,message,permalink_url,created_time,comments.filter(stream).limit(50){id,message,from,created_time,like_count,comment_count,permalink_url,comments.limit(25){id,message,from,created_time,like_count}}",
+        "id,message,permalink_url,created_time,comments{id,message,from,created_time,like_count,comment_count,permalink_url,comments{id,message,from,created_time,like_count}}",
       limit: String(Math.min(limit, 25)),
     },
   });
@@ -136,11 +133,19 @@ export async function replyToFbComment(objectId: string, message: string, pageAc
 
 /**
  * שליחת הודעה ב-Messenger בשם העמוד
- * POST /{conversation_id}/messages?message={text}
+ * POST /{page_id}/messages עם recipient.id = USER_PSID ו-message.text
  */
-export async function sendFbMessage(conversationId: string, message: string, pageAccessToken: string) {
-  console.log(`[FB Message] Sending to conversation ${conversationId}`);
-  return metaApiPost<{ id: string }>(`/${conversationId}/messages`, { message }, { accessToken: pageAccessToken });
+export async function sendFbMessage(pageId: string, recipientPsid: string, message: string, pageAccessToken: string) {
+  console.log(`[FB Message] Sending from page ${pageId} to PSID ${recipientPsid}`);
+  return metaApiPost<{ recipient_id: string; message_id: string }>(
+    `/${pageId}/messages`,
+    {
+      recipient: JSON.stringify({ id: recipientPsid }),
+      message: JSON.stringify({ text: message }),
+      messaging_type: "RESPONSE",
+    },
+    { accessToken: pageAccessToken }
+  );
 }
 
 /**

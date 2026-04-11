@@ -7,10 +7,13 @@ const META_API_VERSION = process.env.META_API_VERSION ?? "v21.0";
 export const META_SCOPES = [
   "ads_read",
   "pages_read_engagement",
+  "pages_manage_engagement",
+  "pages_manage_metadata",
   "pages_show_list",
   "pages_messaging",
   "instagram_basic",
   "instagram_manage_insights",
+  "instagram_manage_comments",
   "business_management",
   "read_insights",
 ].join(",");
