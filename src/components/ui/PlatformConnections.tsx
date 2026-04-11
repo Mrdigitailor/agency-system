@@ -68,6 +68,24 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
     fetchConnections();
   }, [fetchConnections]);
 
+  // כשהחיבורים מתעדכנים בזמן שהמודל פתוח — לוודא שכל הנכסים החדשים מופיעים ב-selections
+  useEffect(() => {
+    if (!assetsModalPlatform) return;
+    const conn = connections.find((c) => c.platform === assetsModalPlatform);
+    if (!conn) return;
+    setAssetSelections((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const asset of conn.assets) {
+        if (!(asset.id in next)) {
+          next[asset.id] = asset.isSelected;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [connections, assetsModalPlatform]);
+
   const handleConnect = async (platform: string) => {
     setConnectingPlatform(platform);
     try {
@@ -108,36 +126,16 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
 
   const [loadingMessage, setLoadingMessage] = useState("");
 
-  const handleRefreshAssets = async () => {
+  const handleRefreshAssets = async (force = false) => {
     setRefreshingAssets(true);
-    setLoadingMessage("טוען חשבונות מודעות, דפים ואינסטגרם...");
+    setLoadingMessage("טוען חשבונות מודעות, דפים, אינסטגרם ופיקסלים...");
     try {
       await fetch(`/api/platforms/meta/refresh-assets/${clientId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "all" }),
+        body: JSON.stringify({ type: "all", force }),
       });
-
-      // שלב 2 — פיקסלים לכל חשבון מודעות שנבחר
-      const connsRes = await fetch(`/api/clients/${clientId}/connections`);
-      const conns = await connsRes.json();
-      const metaConn = conns.find((c: { platform: string }) => c.platform === "meta");
-      if (metaConn) {
-        const selectedAdAccounts = metaConn.assets.filter((a: { assetType: string; isSelected: boolean }) => a.assetType === "ad_account" && a.isSelected);
-        if (selectedAdAccounts.length > 0) {
-          setLoadingMessage("טוען פיקסלים מחשבון המודעות...");
-          for (const acc of selectedAdAccounts) {
-            await fetch(`/api/platforms/meta/refresh-assets/${clientId}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ type: "pixels", adAccountId: acc.externalId }),
-            });
-          }
-        }
-      }
-
       await fetchConnections();
-      setLoadingMessage("");
     } finally {
       setRefreshingAssets(false);
       setLoadingMessage("");
@@ -174,7 +172,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
     if (!assetsModalPlatform) return;
     setSaving(true);
 
-    // שלב 1: שמירת בחירות
+    // שלב 1: שמירת בחירות (כל הנכסים — כולל פיקסלים — במכה אחת)
     setSavingStep("שומר בחירות...");
     await fetch(`/api/clients/${clientId}/connections/${assetsModalPlatform}/assets`, {
       method: "PATCH",
@@ -182,36 +180,20 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
       body: JSON.stringify({ selections: assetSelections }),
     });
 
-    // שלב 2: שאיבת פיקסלים מחשבונות מודעות שנבחרו
+    // שלב 2: סנכרון נתונים אוטומטי ברקע (Meta בלבד)
     if (assetsModalPlatform === "meta") {
-      const selectedAdAccounts = (activeModalConnection?.assets ?? [])
-        .filter((a) => a.assetType === "ad_account" && assetSelections[a.id]);
-
-      if (selectedAdAccounts.length > 0) {
-        setSavingStep("טוען פיקסלים...");
-        for (const acc of selectedAdAccounts) {
-          await fetch(`/api/platforms/meta/refresh-assets/${clientId}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type: "pixels", adAccountId: acc.externalId }),
-          });
-        }
-      }
-
-      // שלב 3: סנכרון נתונים ברקע (לא חוסם)
-      setSavingStep("מסנכרן נתונים ברקע...");
+      setSavingStep("מתחיל סנכרון נתונים ברקע...");
       fetch(`/api/platforms/meta/sync/${clientId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ daysBack: 30, forceAll: false }),
-      }).catch(() => {}); // ברקע — לא ממתינים
+      }).catch(() => {});
     }
 
     await fetchConnections();
     setSaving(false);
     setSavingStep("");
-    // לא סוגרים את ה-modal — מציגים את הפיקסלים שנוספו
-    // המשתמש יסגור ידנית אחרי שבחר פיקסל
+    setAssetsModalPlatform(null);
   };
 
   const connectedPlatforms = new Set(connections.map((c) => c.platform));
@@ -264,9 +246,9 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                     )}
                     <button
                       onClick={() => {
-                        // פתח מיד עם מה שיש ב-DB, רענן ברקע
+                        // פתח מיד עם מה שיש ב-DB, רענן ברקע (כולל פיקסלים)
                         openAssetsModal(conn.platform);
-                        handleRefreshAssets();
+                        handleRefreshAssets(true);
                       }}
                       disabled={refreshingAssets}
                       className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-bg disabled:opacity-50"
@@ -384,7 +366,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                 disabled={saving}
                 className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
               >
-                {saving ? (savingStep || "שומר...") : "שמור ובחר פיקסלים"}
+                {saving ? (savingStep || "שומר...") : "שמור וסנכרן"}
               </button>
             </div>
           </div>

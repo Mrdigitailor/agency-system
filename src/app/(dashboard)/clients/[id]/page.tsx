@@ -496,7 +496,56 @@ export default function ClientDetailPage() {
       {/* ===== טאב 1 — סקירה כללית ===== */}
       {activeTab === "overview" && (
         <div className="space-y-6">
-          {/* שורה עליונה: פרטים + נכסים דיגיטליים */}
+          {/* ביצועים — KPI (מועבר לראש העמוד) */}
+          <div className={cardClass}>
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-brand-dark">
+              <TrendingUp className="h-5 w-5 text-brand-muted" />
+              ביצועי החודש
+            </h2>
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+              <div className="rounded-lg bg-brand-bg p-4">
+                <p className="text-xs font-medium text-brand-muted">תקציב שנוצל</p>
+                <p className="mt-1 text-xl font-semibold text-brand-dark">
+                  {getCurrencySymbol(client.currency)} {(metaPerf?.totalSpend ?? perf.budgetUsed).toLocaleString()}
+                </p>
+                <p className="text-xs text-brand-muted">מתוך {getCurrencySymbol(client.currency)} {client.monthlyBudget.toLocaleString()}</p>
+              </div>
+              <div className="rounded-lg bg-brand-bg p-4">
+                <p className="text-xs font-medium text-brand-muted">עלות להמרה</p>
+                <p className="mt-1 text-xl font-semibold text-brand-dark">
+                  {getCurrencySymbol(client.currency)} {Math.round(metaPerf?.avgCostPerConv ?? perf.avgCostPerConversion)}
+                </p>
+                <p className="text-xs text-brand-muted">יעד: {getCurrencySymbol(client.currency)} {perf.targetCostPerConversion}</p>
+              </div>
+              <div className="rounded-lg bg-brand-bg p-4">
+                <p className="text-xs font-medium text-brand-muted">המרות החודש</p>
+                <p className="mt-1 text-xl font-semibold text-brand-dark">
+                  {(metaPerf?.totalConversions ?? perf.conversionsThisMonth).toLocaleString()}
+                </p>
+                <p className="text-xs text-brand-muted">יעד: {perf.targetConversions.toLocaleString()}</p>
+                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-brand-border">
+                  <div
+                    className={`h-full rounded-full ${convProgressColor}`}
+                    style={{ width: `${Math.min(convProgress, 100)}%` }}
+                  />
+                </div>
+              </div>
+              <div className="rounded-lg bg-brand-bg p-4">
+                <p className="text-xs font-medium text-brand-muted">אופטימיזציה אחרונה</p>
+                <p className="mt-1 text-xl font-semibold text-brand-dark">
+                  {formatDate(metaPerf?.lastOptimization ?? perf.lastOptimization)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-brand-bg p-4">
+                <p className="text-xs font-medium text-brand-muted">משימות פתוחות</p>
+                <p className="mt-1 text-xl font-semibold text-brand-dark">
+                  {clientTasks.filter((t) => t.status !== "done").length}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* שורה: פרטים + נכסים דיגיטליים */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* פרטים כלליים */}
             <div className={cardClass}>
@@ -563,16 +612,38 @@ export default function ClientDetailPage() {
                   <div>
                     <p className="mb-2 text-xs font-medium text-brand-muted">חשבונות פרסום</p>
                     <div className="space-y-2">
-                      {adAccounts.map((acc) => (
-                        <div
-                          key={acc.label}
-                          className="flex items-center gap-3 rounded-lg bg-brand-bg p-3"
-                        >
-                          {acc.icon}
-                          <span className="flex-1 text-sm font-medium text-brand-dark">{acc.label}</span>
-                          <span className="font-mono text-xs text-brand-muted">{acc.value}</span>
-                        </div>
-                      ))}
+                      {adAccounts.map((acc) => {
+                        const isLink = /^https?:\/\//i.test(acc.value);
+                        const content = (
+                          <>
+                            {acc.icon}
+                            <span className="flex-1 text-sm font-medium text-brand-dark">{acc.label}</span>
+                            {isLink ? (
+                              <ExternalLink className="h-4 w-4 text-brand-muted" />
+                            ) : (
+                              <span className="font-mono text-xs text-brand-muted">{acc.value}</span>
+                            )}
+                          </>
+                        );
+                        return isLink ? (
+                          <a
+                            key={acc.label}
+                            href={acc.value}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 rounded-lg bg-brand-bg p-3 transition-colors duration-200 hover:bg-brand-border/50"
+                          >
+                            {content}
+                          </a>
+                        ) : (
+                          <div
+                            key={acc.label}
+                            className="flex items-center gap-3 rounded-lg bg-brand-bg p-3"
+                          >
+                            {content}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -630,54 +701,6 @@ export default function ClientDetailPage() {
             </div>
           </div>
 
-          {/* ביצועים — KPI */}
-          <div className={cardClass}>
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-brand-dark">
-              <TrendingUp className="h-5 w-5 text-brand-muted" />
-              ביצועי החודש
-            </h2>
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-              <div className="rounded-lg bg-brand-bg p-4">
-                <p className="text-xs font-medium text-brand-muted">תקציב שנוצל</p>
-                <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {getCurrencySymbol(client.currency)} {(metaPerf?.totalSpend ?? perf.budgetUsed).toLocaleString()}
-                </p>
-                <p className="text-xs text-brand-muted">מתוך {getCurrencySymbol(client.currency)} {client.monthlyBudget.toLocaleString()}</p>
-              </div>
-              <div className="rounded-lg bg-brand-bg p-4">
-                <p className="text-xs font-medium text-brand-muted">עלות להמרה</p>
-                <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {getCurrencySymbol(client.currency)} {Math.round(metaPerf?.avgCostPerConv ?? perf.avgCostPerConversion)}
-                </p>
-                <p className="text-xs text-brand-muted">יעד: {getCurrencySymbol(client.currency)} {perf.targetCostPerConversion}</p>
-              </div>
-              <div className="rounded-lg bg-brand-bg p-4">
-                <p className="text-xs font-medium text-brand-muted">המרות החודש</p>
-                <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {(metaPerf?.totalConversions ?? perf.conversionsThisMonth).toLocaleString()}
-                </p>
-                <p className="text-xs text-brand-muted">יעד: {perf.targetConversions.toLocaleString()}</p>
-                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-brand-border">
-                  <div
-                    className={`h-full rounded-full ${convProgressColor}`}
-                    style={{ width: `${Math.min(convProgress, 100)}%` }}
-                  />
-                </div>
-              </div>
-              <div className="rounded-lg bg-brand-bg p-4">
-                <p className="text-xs font-medium text-brand-muted">אופטימיזציה אחרונה</p>
-                <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {formatDate(metaPerf?.lastOptimization ?? perf.lastOptimization)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-brand-bg p-4">
-                <p className="text-xs font-medium text-brand-muted">משימות פתוחות</p>
-                <p className="mt-1 text-xl font-semibold text-brand-dark">
-                  {clientTasks.filter((t) => t.status !== "done").length}
-                </p>
-              </div>
-            </div>
-          </div>
           {/* פרופיל מהיר */}
           <div className={cardClass}>
             <div className="flex items-center justify-between mb-3">
@@ -1229,8 +1252,9 @@ export default function ClientDetailPage() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-brand-dark">חשבון Meta Ads</label>
                 <input
+                  type="url"
                   className={inputClass}
-                  placeholder="מזהה חשבון Meta"
+                  placeholder="https://business.facebook.com/adsmanager/manage/accounts?act=..."
                   value={editForm.metaAdAccount}
                   onChange={(e) => setEditForm((p) => ({ ...p, metaAdAccount: e.target.value }))}
                 />
@@ -1238,8 +1262,9 @@ export default function ClientDetailPage() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-brand-dark">חשבון Google Ads</label>
                 <input
+                  type="url"
                   className={inputClass}
-                  placeholder="מזהה חשבון Google"
+                  placeholder="https://ads.google.com/aw/overview?ocid=..."
                   value={editForm.googleAdAccount}
                   onChange={(e) => setEditForm((p) => ({ ...p, googleAdAccount: e.target.value }))}
                 />
@@ -1247,8 +1272,9 @@ export default function ClientDetailPage() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-brand-dark">חשבון TikTok Ads</label>
                 <input
+                  type="url"
                   className={inputClass}
-                  placeholder="מזהה חשבון TikTok"
+                  placeholder="https://ads.tiktok.com/i18n/account/info?aadvid=..."
                   value={editForm.tiktokAdAccount}
                   onChange={(e) => setEditForm((p) => ({ ...p, tiktokAdAccount: e.target.value }))}
                 />

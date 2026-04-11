@@ -63,6 +63,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ clientI
     ]);
     const igAccounts = await fetchInstagramAccounts(pages, accessToken).catch(() => []);
 
+    // שלב 2.5 — שאיבת פיקסלים מכל חשבונות המודעות במקביל
+    const pixelsByAccount = await Promise.all(
+      adAccounts.map(async (acc) => ({
+        adAccountId: acc.id,
+        pixels: await fetchPixels(acc.id, accessToken).catch(() => []),
+      }))
+    );
+
     // שמירה — ad accounts
     for (const acc of adAccounts) {
       await prisma.platformAsset.upsert({
@@ -70,6 +78,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ clientI
         update: { name: acc.name },
         create: { connectionId: connection.id, assetType: "ad_account", externalId: acc.id, name: acc.name, extraData: JSON.stringify({ currency: acc.currency }) },
       });
+    }
+
+    // pixels (מכל חשבונות המודעות)
+    let totalPixels = 0;
+    for (const { adAccountId, pixels } of pixelsByAccount) {
+      for (const pixel of pixels) {
+        await prisma.platformAsset.upsert({
+          where: { connectionId_assetType_externalId: { connectionId: connection.id, assetType: "pixel", externalId: pixel.id } },
+          update: { name: pixel.name, extraData: JSON.stringify({ lastFiredTime: pixel.last_fired_time, adAccountId }) },
+          create: { connectionId: connection.id, assetType: "pixel", externalId: pixel.id, name: pixel.name, extraData: JSON.stringify({ lastFiredTime: pixel.last_fired_time, adAccountId }) },
+        });
+        totalPixels++;
+      }
     }
 
     // pages
@@ -100,6 +121,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ clientI
       adAccounts: adAccounts.length,
       pages: pages.length,
       instagram: igAccounts.length,
+      pixels: totalPixels,
     });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "unknown" }, { status: 500 });
