@@ -8,6 +8,7 @@ export const META_SCOPES = [
   "ads_read",
   "pages_read_engagement",
   "pages_show_list",
+  "pages_messaging",
   "instagram_basic",
   "instagram_manage_insights",
   "business_management",
