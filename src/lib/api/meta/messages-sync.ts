@@ -145,19 +145,85 @@ export async function syncFbMessages(clientId: string): Promise<{ count: number;
   }
 }
 
-/* ============ Sync FB Comments ============ */
+/* ============ Sync FB Comments (organic + ads) ============ */
+
+type CommentData = {
+  id: string;
+  message: string;
+  from?: { name: string; id: string };
+  created_time: string;
+  like_count?: number;
+  comment_count?: number;
+  permalink_url?: string;
+  comments?: { data: Array<{ id: string; message: string; from?: { name: string; id: string }; created_time: string; like_count?: number }> };
+};
+
+async function upsertComment(
+  clientId: string,
+  pageId: string,
+  postId: string,
+  postMessage: string,
+  postPermalink: string,
+  source: "organic" | "ad",
+  adName: string,
+  c: CommentData
+) {
+  await prisma.fbCommentCache.upsert({
+    where: { clientId_externalId: { clientId, externalId: c.id } },
+    update: {
+      postId,
+      postMessage,
+      postPermalink,
+      message: c.message ?? "",
+      fromName: c.from?.name ?? "",
+      fromId: c.from?.id ?? "",
+      createdTime: safeDate(c.created_time),
+      likeCount: c.like_count ?? 0,
+      commentCount: c.comment_count ?? 0,
+      permalinkUrl: c.permalink_url ?? "",
+      repliesJson: JSON.stringify(c.comments?.data ?? []),
+      source,
+      adName,
+      lastSyncAt: new Date(),
+    },
+    create: {
+      clientId,
+      pageId,
+      externalId: c.id,
+      postId,
+      postMessage,
+      postPermalink,
+      message: c.message ?? "",
+      fromName: c.from?.name ?? "",
+      fromId: c.from?.id ?? "",
+      createdTime: safeDate(c.created_time),
+      likeCount: c.like_count ?? 0,
+      commentCount: c.comment_count ?? 0,
+      permalinkUrl: c.permalink_url ?? "",
+      repliesJson: JSON.stringify(c.comments?.data ?? []),
+      source,
+      adName,
+    },
+  });
+}
 
 export async function syncFbComments(clientId: string): Promise<{ count: number; error?: string }> {
   console.log(`[Sync FB Comments] Starting for client ${clientId}`);
 
   const connection = await prisma.platformConnection.findFirst({
     where: { clientId, platform: "meta", isActive: true },
-    include: { assets: { where: { isSelected: true, assetType: "facebook_page" } } },
+    include: {
+      assets: {
+        where: { isSelected: true, assetType: { in: ["facebook_page", "ad_account"] } },
+      },
+    },
   });
   if (!connection) return { count: 0, error: "אין חיבור Meta פעיל" };
 
-  const pageAsset = connection.assets[0];
+  const pageAsset = connection.assets.find((a) => a.assetType === "facebook_page");
   if (!pageAsset) return { count: 0, error: "לא נבחר עמוד פייסבוק" };
+
+  const adAccountAsset = connection.assets.find((a) => a.assetType === "ad_account");
 
   const pageToken = await getOrFetchPageToken(
     pageAsset.id,
@@ -166,24 +232,16 @@ export async function syncFbComments(clientId: string): Promise<{ count: number;
     connection.accessToken
   );
 
+  let total = 0;
+
+  // ========== שלב 1: תגובות מפוסטים אורגניים ==========
   try {
     const posts = await metaApiGetAll<{
       id: string;
       message?: string;
       permalink_url?: string;
       created_time?: string;
-      comments?: {
-        data: Array<{
-          id: string;
-          message: string;
-          from?: { name: string; id: string };
-          created_time: string;
-          like_count?: number;
-          comment_count?: number;
-          permalink_url?: string;
-          comments?: { data: Array<{ id: string; message: string; from?: { name: string; id: string }; created_time: string; like_count?: number }> };
-        }>;
-      };
+      comments?: { data: CommentData[] };
     }>(`/${pageAsset.externalId}/feed`, {
       accessToken: pageToken,
       params: {
@@ -193,73 +251,105 @@ export async function syncFbComments(clientId: string): Promise<{ count: number;
       },
     });
 
-    console.log(`[Sync FB Comments] Got ${posts.length} posts`);
+    console.log(`[Sync FB Comments] Got ${posts.length} organic posts`);
 
-    let total = 0;
     for (const post of posts) {
-      const postCommentCount = post.comments?.data?.length ?? 0;
-      if (postCommentCount > 0) {
-        console.log(`[Sync FB Comments] Post ${post.id}: ${postCommentCount} comments`);
-      }
       if (!post.comments?.data) continue;
-
       for (const c of post.comments.data) {
-        await prisma.fbCommentCache.upsert({
-          where: { clientId_externalId: { clientId, externalId: c.id } },
-          update: {
-            postId: post.id,
-            postMessage: post.message?.slice(0, 200) ?? "",
-            postPermalink: post.permalink_url ?? "",
-            message: c.message ?? "",
-            fromName: c.from?.name ?? "",
-            fromId: c.from?.id ?? "",
-            createdTime: safeDate(c.created_time),
-            likeCount: c.like_count ?? 0,
-            commentCount: c.comment_count ?? 0,
-            permalinkUrl: c.permalink_url ?? "",
-            repliesJson: JSON.stringify(c.comments?.data ?? []),
-            lastSyncAt: new Date(),
-          },
-          create: {
-            clientId,
-            pageId: pageAsset.externalId,
-            externalId: c.id,
-            postId: post.id,
-            postMessage: post.message?.slice(0, 200) ?? "",
-            postPermalink: post.permalink_url ?? "",
-            message: c.message ?? "",
-            fromName: c.from?.name ?? "",
-            fromId: c.from?.id ?? "",
-            createdTime: safeDate(c.created_time),
-            likeCount: c.like_count ?? 0,
-            commentCount: c.comment_count ?? 0,
-            permalinkUrl: c.permalink_url ?? "",
-            repliesJson: JSON.stringify(c.comments?.data ?? []),
-          },
-        });
+        await upsertComment(
+          clientId,
+          pageAsset.externalId,
+          post.id,
+          post.message?.slice(0, 200) ?? "",
+          post.permalink_url ?? "",
+          "organic",
+          "",
+          c
+        );
         total++;
       }
     }
-
-    console.log(`[Sync FB Comments] Total comments saved: ${total}`);
-
-    await prisma.messageSyncStatus.upsert({
-      where: { clientId_type: { clientId, type: "fb_comments" } },
-      update: { lastSyncAt: new Date(), recordCount: total, errorMsg: "" },
-      create: { clientId, type: "fb_comments", lastSyncAt: new Date(), recordCount: total },
-    });
-
-    return { count: total };
+    console.log(`[Sync FB Comments] Organic comments: ${total}`);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "unknown";
-    console.error(`[Sync FB Comments] Error:`, msg);
-    await prisma.messageSyncStatus.upsert({
-      where: { clientId_type: { clientId, type: "fb_comments" } },
-      update: { errorMsg: msg },
-      create: { clientId, type: "fb_comments", errorMsg: msg },
-    });
-    return { count: 0, error: msg };
+    console.error(`[Sync FB Comments] Organic fetch error:`, err instanceof Error ? err.message : err);
   }
+
+  // ========== שלב 2: תגובות ממודעות ==========
+  if (adAccountAsset) {
+    try {
+      console.log(`[Sync FB Comments] Fetching ads from ${adAccountAsset.externalId}`);
+      const ads = await metaApiGetAll<{
+        id: string;
+        name: string;
+        status: string;
+        creative?: { effective_object_story_id?: string };
+      }>(`/${adAccountAsset.externalId}/ads`, {
+        accessToken: connection.accessToken,
+        params: {
+          fields: "id,name,status,creative{effective_object_story_id}",
+          filtering: JSON.stringify([{
+            field: "effective_status",
+            operator: "IN",
+            value: ["ACTIVE", "PAUSED"],
+          }]),
+          limit: "100",
+        },
+      });
+
+      console.log(`[Sync FB Comments] Got ${ads.length} ads`);
+
+      let adComments = 0;
+      for (const ad of ads) {
+        const storyId = ad.creative?.effective_object_story_id;
+        if (!storyId) continue;
+
+        try {
+          const comments = await metaApiGetAll<CommentData>(`/${storyId}/comments`, {
+            accessToken: pageToken,
+            params: {
+              fields:
+                "id,message,from,created_time,like_count,comment_count,permalink_url,comments{id,message,from,created_time,like_count}",
+              limit: "50",
+            },
+          });
+
+          for (const c of comments) {
+            await upsertComment(
+              clientId,
+              pageAsset.externalId,
+              storyId,
+              ad.name?.slice(0, 200) ?? "",
+              "", // מודעות לא תמיד יש permalink
+              "ad",
+              ad.name ?? "",
+              c
+            );
+            adComments++;
+            total++;
+          }
+        } catch (err) {
+          // שגיאה בודדת על מודעה — ממשיכים הלאה
+          console.warn(`[Sync FB Comments] Could not fetch comments for ad story ${storyId}:`, err instanceof Error ? err.message : err);
+        }
+      }
+      console.log(`[Sync FB Comments] Ad comments: ${adComments}`);
+    } catch (err) {
+      console.error(`[Sync FB Comments] Ads fetch error:`, err instanceof Error ? err.message : err);
+      // לא מחזירים שגיאה — אורגניים אולי נטענו בהצלחה
+    }
+  } else {
+    console.log(`[Sync FB Comments] No ad account selected — skipping ads`);
+  }
+
+  console.log(`[Sync FB Comments] Total comments saved: ${total}`);
+
+  await prisma.messageSyncStatus.upsert({
+    where: { clientId_type: { clientId, type: "fb_comments" } },
+    update: { lastSyncAt: new Date(), recordCount: total, errorMsg: "" },
+    create: { clientId, type: "fb_comments", lastSyncAt: new Date(), recordCount: total },
+  });
+
+  return { count: total };
 }
 
 /* ============ Sync IG Comments ============ */

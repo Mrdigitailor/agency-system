@@ -61,6 +61,7 @@ export default function MessagesTab({ clientId }: Props) {
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [expandedConversation, setExpandedConversation] = useState<string | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "organic" | "ad">("all");
 
   // טעינה ראשונית — מ-cache (מהיר)
   const fetchMessages = useCallback(async () => {
@@ -217,9 +218,20 @@ export default function MessagesTab({ clientId }: Props) {
         >
           <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
         </button>
+        {activeTab === "fb_comments" && (
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value as "all" | "organic" | "ad")}
+            className="rounded-full bg-brand-bg px-3 py-2 text-xs text-brand-dark border border-brand-border focus:border-brand-gold focus:outline-none"
+          >
+            <option value="all">הכל</option>
+            <option value="organic">אורגני בלבד</option>
+            <option value="ad">מודעות בלבד</option>
+          </select>
+        )}
         {lastSyncAt && (
           <span className="text-xs text-brand-muted">
-            סנכרון אחרון: {new Date(lastSyncAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            סנכרון: {new Date(lastSyncAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
           </span>
         )}
       </div>
@@ -267,7 +279,7 @@ export default function MessagesTab({ clientId }: Props) {
           )}
           {activeTab === "fb_comments" && (
             <FbCommentsList
-              data={data}
+              data={sourceFilter === "all" ? data : data.filter((c: any) => c.source === sourceFilter)}
               canReply={canReply}
               onReply={async (commentId, msg) => {
                 const ok = await sendReply("fb_comment", commentId, msg);
@@ -431,18 +443,24 @@ function FbCommentsList({
         const isOpen = openReplyId === comment.id;
         return (
           <div key={comment.id} className="px-4 py-3 hover:bg-brand-bg/50 transition-colors">
-            {/* פוסט */}
-            {comment.post_message && (
-              <div className="mb-2 flex items-center gap-2 text-xs text-brand-muted">
-                <span className="font-medium">פוסט:</span>
-                <span className="truncate">{truncate(comment.post_message, 80)}</span>
-                {comment.post_permalink && (
-                  <a href={comment.post_permalink} target="_blank" rel="noopener noreferrer" className="text-brand-gold hover:text-brand-dark">
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-              </div>
-            )}
+            {/* פוסט/מודעה + תגית מקור */}
+            <div className="mb-2 flex items-center gap-2 text-xs text-brand-muted">
+              {comment.source === "ad" ? (
+                <span className="shrink-0 rounded-full bg-brand-info/15 px-2 py-0.5 text-[10px] font-semibold text-brand-info">מודעה</span>
+              ) : (
+                <span className="shrink-0 rounded-full bg-brand-success/15 px-2 py-0.5 text-[10px] font-semibold text-brand-success">אורגני</span>
+              )}
+              {comment.source === "ad" && comment.ad_name ? (
+                <span className="truncate font-medium">{truncate(comment.ad_name, 60)}</span>
+              ) : comment.post_message ? (
+                <span className="truncate">{truncate(comment.post_message, 60)}</span>
+              ) : null}
+              {comment.post_permalink && (
+                <a href={comment.post_permalink} target="_blank" rel="noopener noreferrer" className="shrink-0 text-brand-gold hover:text-brand-dark">
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </div>
 
             {/* תגובה ראשית */}
             <div className="flex items-start justify-between gap-3">

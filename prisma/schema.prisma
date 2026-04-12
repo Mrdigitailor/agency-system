@@ -555,7 +555,7 @@ model FbConversationCache {
   @@map("fb_conversation_cache")
 }
 
-// תגובה על פוסט פייסבוק
+// תגובה על פוסט/מודעה בפייסבוק
 model FbCommentCache {
   id            String    @id @default(cuid())
   clientId      String
@@ -572,6 +572,8 @@ model FbCommentCache {
   commentCount  Int       @default(0)
   permalinkUrl  String    @default("")
   repliesJson   String    @default("[]") // JSON
+  source        String    @default("organic") // "organic" | "ad"
+  adName        String    @default("") // שם המודעה (אם source=ad)
   lastSyncAt    DateTime  @default(now())
 
   @@unique([clientId, externalId])

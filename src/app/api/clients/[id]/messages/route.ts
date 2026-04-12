@@ -126,6 +126,8 @@ async function readFromCache(type: string, clientId: string) {
       post_message: r.postMessage,
       post_permalink: r.postPermalink,
       replies: JSON.parse(r.repliesJson || "[]"),
+      source: r.source ?? "organic",
+      ad_name: r.adName ?? "",
     }));
   }
 
