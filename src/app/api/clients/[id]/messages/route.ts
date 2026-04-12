@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
-import { syncFbMessages, syncFbComments, syncIgComments } from "@/lib/api/meta/messages-sync";
+import { syncFbMessages, syncFbComments, syncIgComments, syncIgMessages } from "@/lib/api/meta/messages-sync";
 
 const STALE_MS = 5 * 60 * 1000; // 5 דקות — אחרי זה מטריגר רענון ברקע
 
@@ -86,6 +86,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 async function runSync(type: string, clientId: string) {
   if (type === "fb_messages") return syncFbMessages(clientId);
   if (type === "fb_comments") return syncFbComments(clientId);
+  if (type === "ig_messages") return syncIgMessages(clientId);
   if (type === "ig_comments") return syncIgComments(clientId);
   return { count: 0, error: "סוג לא תקין" };
 }
@@ -128,6 +129,22 @@ async function readFromCache(type: string, clientId: string) {
       replies: JSON.parse(r.repliesJson || "[]"),
       source: r.source ?? "organic",
       ad_name: r.adName ?? "",
+    }));
+  }
+
+  if (type === "ig_messages") {
+    const rows = await prisma.igConversationCache.findMany({
+      where: { clientId },
+      orderBy: { updatedTime: "desc" },
+      take: 100,
+    });
+    return rows.map((r) => ({
+      id: r.externalId,
+      participantId: r.participantId,
+      participants: { data: [{ name: r.participantName, id: r.participantId, username: r.participantName }] },
+      message_count: r.messageCount,
+      updated_time: r.updatedTime?.toISOString() ?? null,
+      messages: { data: JSON.parse(r.messagesJson || "[]") },
     }));
   }
 

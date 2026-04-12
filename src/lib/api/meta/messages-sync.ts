@@ -453,3 +453,89 @@ export async function syncIgComments(clientId: string): Promise<{ count: number;
     return { count: 0, error: msg };
   }
 }
+
+/* ============ Sync IG Messages (DM) ============ */
+
+export async function syncIgMessages(clientId: string): Promise<{ count: number; error?: string }> {
+  console.log(`[Sync IG Messages] Starting for client ${clientId}`);
+
+  const connection = await prisma.platformConnection.findFirst({
+    where: { clientId, platform: "meta", isActive: true },
+    include: {
+      assets: { where: { isSelected: true, assetType: { in: ["facebook_page", "instagram"] } } },
+    },
+  });
+  if (!connection) return { count: 0, error: "אין חיבור Meta פעיל" };
+
+  const igAsset = connection.assets.find((a) => a.assetType === "instagram");
+  const pageAsset = connection.assets.find((a) => a.assetType === "facebook_page");
+  if (!igAsset) return { count: 0, error: "לא נבחר חשבון אינסטגרם" };
+
+  const token = pageAsset
+    ? await getOrFetchPageToken(pageAsset.id, pageAsset.externalId, pageAsset.extraData, connection.accessToken)
+    : connection.accessToken;
+
+  try {
+    const conversations = await metaApiGetAll<{
+      id: string;
+      updated_time?: string;
+      participants?: { data: Array<{ id: string; username?: string; name?: string }> };
+      messages?: { data: Array<{ id: string; message?: string; from?: { id: string; username?: string; name?: string }; created_time?: string }> };
+    }>(`/${igAsset.externalId}/conversations`, {
+      accessToken: token,
+      params: {
+        fields: "participants,updated_time,messages.limit(20){message,from,created_time}",
+        platform: "instagram",
+        limit: "20",
+      },
+    });
+
+    console.log(`[Sync IG Messages] Got ${conversations.length} conversations`);
+
+    for (const conv of conversations) {
+      const igId = igAsset.externalId;
+      const userParticipant = conv.participants?.data?.find((p) => p.id !== igId);
+      const participantName = userParticipant?.username ?? userParticipant?.name ?? conv.participants?.data?.map((p) => p.username ?? p.name ?? p.id).join(", ") ?? "";
+      const participantId = userParticipant?.id ?? "";
+
+      await prisma.igConversationCache.upsert({
+        where: { clientId_externalId: { clientId, externalId: conv.id } },
+        update: {
+          participantName,
+          participantId,
+          messagesJson: JSON.stringify(conv.messages?.data ?? []),
+          messageCount: conv.messages?.data?.length ?? 0,
+          updatedTime: safeDate(conv.updated_time),
+          lastSyncAt: new Date(),
+        },
+        create: {
+          clientId,
+          igAccountId: igId,
+          externalId: conv.id,
+          participantName,
+          participantId,
+          messagesJson: JSON.stringify(conv.messages?.data ?? []),
+          messageCount: conv.messages?.data?.length ?? 0,
+          updatedTime: safeDate(conv.updated_time),
+        },
+      });
+    }
+
+    await prisma.messageSyncStatus.upsert({
+      where: { clientId_type: { clientId, type: "ig_messages" } },
+      update: { lastSyncAt: new Date(), recordCount: conversations.length, errorMsg: "" },
+      create: { clientId, type: "ig_messages", lastSyncAt: new Date(), recordCount: conversations.length },
+    });
+
+    return { count: conversations.length };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    console.error(`[Sync IG Messages] Error:`, msg);
+    await prisma.messageSyncStatus.upsert({
+      where: { clientId_type: { clientId, type: "ig_messages" } },
+      update: { errorMsg: msg },
+      create: { clientId, type: "ig_messages", errorMsg: msg },
+    });
+    return { count: 0, error: msg };
+  }
+}

@@ -6,6 +6,7 @@ import {
   replyToFbComment,
   sendFbMessage,
   replyToIgComment,
+  sendIgMessage,
 } from "@/lib/api/meta/messages";
 
 const ALLOWED_ROLES = new Set(["admin", "manager", "campaignManager"]);
@@ -109,6 +110,37 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         where: { id: conv.id },
         data: {
           messagesJson: JSON.stringify([newMsg, ...messages]),
+          messageCount: conv.messageCount + 1,
+          updatedTime: new Date(),
+        },
+      });
+    } else if (type === "ig_message") {
+      // שליחת הודעת DM באינסטגרם
+      const igAsset = connection.assets.find((a) => a.assetType === "instagram");
+      if (!igAsset) {
+        return NextResponse.json({ error: "לא נבחר חשבון אינסטגרם" }, { status: 400 });
+      }
+      const conv = await prisma.igConversationCache.findFirst({
+        where: { clientId, externalId: targetId },
+      });
+      if (!conv?.participantId) {
+        return NextResponse.json({ error: "לא נמצא IGSID למשתמש. רענן את הטאב." }, { status: 400 });
+      }
+      result = await sendIgMessage(igAsset.externalId, conv.participantId, message, pageToken);
+
+      // עדכון cache
+      const igMessages = JSON.parse(conv.messagesJson || "[]") as Array<unknown>;
+      const newIgMsg = {
+        id: result.id ?? `local_${Date.now()}`,
+        message,
+        from: { name: "אתם", username: "אתם", id: igAsset.externalId },
+        created_time: new Date().toISOString(),
+        _own: true,
+      };
+      await prisma.igConversationCache.update({
+        where: { id: conv.id },
+        data: {
+          messagesJson: JSON.stringify([newIgMsg, ...igMessages]),
           messageCount: conv.messageCount + 1,
           updatedTime: new Date(),
         },

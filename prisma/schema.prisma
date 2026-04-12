@@ -602,6 +602,24 @@ model IgCommentCache {
   @@map("ig_comment_cache")
 }
 
+// שיחת DM באינסטגרם
+model IgConversationCache {
+  id              String   @id @default(cuid())
+  clientId        String
+  igAccountId     String
+  externalId      String   // conversation id
+  participantName String   @default("")
+  participantId   String   @default("") // IGSID
+  messagesJson    String   @default("[]")
+  messageCount    Int      @default(0)
+  updatedTime     DateTime?
+  lastSyncAt      DateTime @default(now())
+
+  @@unique([clientId, externalId])
+  @@index([clientId, updatedTime])
+  @@map("ig_conversation_cache")
+}
+
 // סטטוס סנכרון לכל סוג של הודעות לכל לקוח
 model MessageSyncStatus {
   id         String    @id @default(cuid())

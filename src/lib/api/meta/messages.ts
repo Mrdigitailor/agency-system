@@ -175,6 +175,22 @@ export async function fetchPageAccessToken(pageId: string, userAccessToken: stri
   }
 }
 
+/**
+ * שליחת הודעה ב-Instagram DM בשם העמוד
+ * POST /{ig_account_id}/messages עם recipient.id = IGSID ו-message.text
+ */
+export async function sendIgMessage(igAccountId: string, recipientId: string, message: string, pageAccessToken: string) {
+  console.log(`[IG Message] Sending from IG ${igAccountId} to ${recipientId}`);
+  return metaApiPost<{ id: string }>(
+    `/${igAccountId}/messages`,
+    {
+      recipient: JSON.stringify({ id: recipientId }),
+      message: JSON.stringify({ text: message }),
+    },
+    { accessToken: pageAccessToken }
+  );
+}
+
 // ==================== Instagram Comments ====================
 
 export interface IgComment {
