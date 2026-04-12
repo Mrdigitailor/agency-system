@@ -11,6 +11,10 @@ interface Props {
   targetConversions: number;
   costPerConversion: number;
   targetCostPerConversion: number;
+  metaSpend?: number;
+  metaConversions?: number;
+  gadsSpend?: number;
+  gadsConversions?: number;
 }
 
 /**
@@ -50,7 +54,12 @@ export default function MonthPerformanceKpis({
   targetConversions,
   costPerConversion,
   targetCostPerConversion,
+  metaSpend,
+  metaConversions,
+  gadsSpend,
+  gadsConversions,
 }: Props) {
+  const hasBreakdown = (metaSpend ?? 0) > 0 || (gadsSpend ?? 0) > 0;
   const { totalDays, daysElapsed, daysRemaining, monthPct } = getMonthProgress();
 
   /* ============ קוביית תקציב ============ */
@@ -112,6 +121,13 @@ export default function MonthPerformanceKpis({
               <span className="text-xs font-normal text-brand-muted"> · {daysRemaining} ימים נותרו</span>
             </p>
           </div>
+          {hasBreakdown && (
+            <div className="mt-2 border-t border-brand-border/60 pt-2 text-[11px] text-brand-muted">
+              {(metaSpend ?? 0) > 0 && <span>Meta: {formatCurrency(metaSpend ?? 0, currency)}</span>}
+              {(metaSpend ?? 0) > 0 && (gadsSpend ?? 0) > 0 && <span> · </span>}
+              {(gadsSpend ?? 0) > 0 && <span>Google: {formatCurrency(gadsSpend ?? 0, currency)}</span>}
+            </div>
+          )}
         </div>
 
         {/* ============ קוביית עלות להמרה ============ */}

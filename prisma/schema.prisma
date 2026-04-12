@@ -633,6 +633,44 @@ model MessageSyncStatus {
   @@map("message_sync_status")
 }
 
+// ==================== נתוני Google Ads ====================
+
+model GoogleAdsInsightDaily {
+  id               String   @id @default(cuid())
+  clientId         String
+  assetId          String   // PlatformAsset.id של google_ads_account
+  campaignId       String   // campaign.id
+  campaignName     String   @default("")
+  campaignStatus   String   @default("") // ENABLED | PAUSED | REMOVED
+  channelType      String   @default("") // SEARCH | DISPLAY | VIDEO | SHOPPING | PERFORMANCE_MAX
+  budgetMicros     BigInt   @default(0)
+  date             String   // YYYY-MM-DD
+
+  spend              Float @default(0)
+  impressions        Int   @default(0)
+  clicks             Int   @default(0)
+  conversions        Float @default(0)
+  conversionsValue   Float @default(0)
+  costPerConversion  Float @default(0)
+  ctr                Float @default(0)
+  averageCpc         Float @default(0)
+  averageCpm         Float @default(0)
+  interactions       Int   @default(0)
+  allConversions     Float @default(0)
+  allConversionsValue Float @default(0)
+  videoViews         Int   @default(0)
+  videoQuartile100   Float @default(0)
+  searchImprShare    Float @default(0)
+  contentImprShare   Float @default(0)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([assetId, campaignId, date])
+  @@index([clientId, date])
+  @@map("google_ads_insight_daily")
+}
+
 // לוג סנכרון — תיעוד כל ריצה של שליפת נתונים
 model SyncLog {
   id             String   @id @default(cuid())

@@ -89,9 +89,19 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
   const handleConnect = async (platform: string) => {
     setConnectingPlatform(platform);
     try {
-      // Meta — משתמש ב-OAuth flow האמיתי
+      // Meta — OAuth flow
       if (platform === "meta") {
         const res = await fetch(`/api/platforms/meta/connect?clientId=${clientId}`);
+        const data = await res.json();
+        if (data.authUrl) {
+          window.location.href = data.authUrl;
+          return;
+        }
+      }
+
+      // Google Ads — OAuth flow
+      if (platform === "google_ads") {
+        const res = await fetch(`/api/platforms/google-ads/connect?clientId=${clientId}`);
         const data = await res.json();
         if (data.authUrl) {
           window.location.href = data.authUrl;
@@ -143,10 +153,12 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
   };
 
   const handleSync = async (platform: string) => {
-    if (platform !== "meta") return;
     setSyncingPlatform(platform);
     try {
-      await fetch(`/api/platforms/meta/sync/${clientId}`, {
+      const endpoint = platform === "google_ads"
+        ? `/api/platforms/google-ads/sync/${clientId}`
+        : `/api/platforms/meta/sync/${clientId}`;
+      await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ daysBack: 90 }),
@@ -234,7 +246,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {conn.platform === "meta" && (
+                    {(conn.platform === "meta" || conn.platform === "google_ads") && (
                       <button
                         onClick={() => handleSync(conn.platform)}
                         disabled={syncingPlatform === conn.platform}
