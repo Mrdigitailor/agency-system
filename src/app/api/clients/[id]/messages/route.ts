@@ -35,8 +35,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (syncResult.error) {
       const msg = syncResult.error;
       if (msg.startsWith("PERMISSION_MISSING:")) {
-        const perm = msg.split(":")[1];
-        return NextResponse.json({ data: [], permissionError: `נדרשת הרשאה: ${perm}` });
+        return NextResponse.json({ data: [], permissionError: msg.split(":")[1] });
+      }
+      // IG messages capability error
+      if (msg.includes("capability") || msg.includes("does not have") || (msg.includes("code: 3") && type === "ig_messages")) {
+        return NextResponse.json({
+          data: [],
+          permissionError: "הודעות אינסטגרם דורשות הרשאה מתקדמת (Advanced Access) שצריך לבקש מ-Meta. בינתיים, תגובות אינסטגרם זמינות.",
+          advancedAccessRequired: true,
+          reviewUrl: "https://developers.facebook.com/apps/720419214222729/review",
+        });
       }
       return NextResponse.json({ data: [], error: msg });
     }
@@ -71,8 +79,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (syncResult.error) {
     const msg = syncResult.error;
     if (msg.startsWith("PERMISSION_MISSING:")) {
-      const perm = msg.split(":")[1];
-      return NextResponse.json({ data: [], permissionError: `נדרשת הרשאה: ${perm}` });
+      return NextResponse.json({ data: [], permissionError: msg.split(":")[1] });
+    }
+    if (msg.includes("capability") || msg.includes("does not have") || (msg.includes("code: 3") && type === "ig_messages")) {
+      return NextResponse.json({
+        data: [],
+        permissionError: "הודעות אינסטגרם דורשות הרשאה מתקדמת (Advanced Access) שצריך לבקש מ-Meta. בינתיים, תגובות אינסטגרם זמינות.",
+        advancedAccessRequired: true,
+        reviewUrl: "https://developers.facebook.com/apps/720419214222729/review",
+      });
     }
     return NextResponse.json({ data: [], error: msg });
   }

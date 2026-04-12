@@ -26,6 +26,7 @@ interface ApiResponse {
   error?: string;
   permissionError?: string;
   lastSyncAt?: string | null;
+  reviewUrl?: string;
 }
 
 const REPLY_ALLOWED_ROLES = new Set(["admin", "manager", "campaignManager"]);
@@ -65,16 +66,18 @@ export default function MessagesTab({ clientId }: Props) {
   const [expandedConversation, setExpandedConversation] = useState<string | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<"all" | "organic" | "ad">("all");
+  const [reviewUrl, setReviewUrl] = useState<string | null>(null);
 
   const fetchMessages = useCallback(async () => {
     setLoading(true);
     setError(null);
     setPermissionError(null);
+    setReviewUrl(null);
     setExpandedConversation(null);
     try {
       const res = await fetch(`/api/clients/${clientId}/messages?type=${apiType}`);
       const json: ApiResponse = await res.json();
-      if (json.permissionError) { setPermissionError(json.permissionError); setData([]); }
+      if (json.permissionError) { setPermissionError(json.permissionError); setReviewUrl(json.reviewUrl ?? null); setData([]); }
       else if (json.error) { setError(json.error); setData([]); }
       else { setData(json.data ?? []); setLastSyncAt(json.lastSyncAt ?? null); }
     } catch { setError("שגיאה בטעינת הנתונים"); setData([]); }
@@ -85,10 +88,11 @@ export default function MessagesTab({ clientId }: Props) {
     setSyncing(true);
     setError(null);
     setPermissionError(null);
+    setReviewUrl(null);
     try {
       const res = await fetch(`/api/clients/${clientId}/messages?type=${apiType}`, { method: "POST" });
       const json: ApiResponse = await res.json();
-      if (json.permissionError) setPermissionError(json.permissionError);
+      if (json.permissionError) { setPermissionError(json.permissionError); setReviewUrl(json.reviewUrl ?? null); }
       else if (json.error) setError(json.error);
       else { setData(json.data ?? []); setLastSyncAt(json.lastSyncAt ?? new Date().toISOString()); }
     } catch { setError("שגיאה בסנכרון"); }
@@ -203,8 +207,20 @@ export default function MessagesTab({ clientId }: Props) {
         <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-4 text-yellow-800 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
           <div>
-            <p className="font-medium">נדרשת הרשאה: {permissionError}</p>
-            <p className="text-sm mt-1">התנתק וחבר מחדש את Meta כדי לקבל את ההרשאה.</p>
+            <p className="font-medium">{permissionError}</p>
+            {reviewUrl && (
+              <a
+                href={reviewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-block rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80"
+              >
+                בקש הרשאה ב-Meta →
+              </a>
+            )}
+            {!reviewUrl && (
+              <p className="text-sm mt-1">התנתק וחבר מחדש את Meta כדי לקבל את ההרשאה.</p>
+            )}
           </div>
         </div>
       )}

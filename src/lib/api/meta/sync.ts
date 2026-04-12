@@ -1,7 +1,7 @@
 // לוגיקת סנכרון משותפת בין manual sync ל-cron
 
 import { prisma } from "@/lib/db/prisma";
-import { fetchAdInsights, extractMetrics } from "./ad-insights";
+import { fetchAdInsights, extractMetrics, type MetaInsight } from "./ad-insights";
 import { fetchPagePosts, fetchPostInsights, fetchPostEngagement, extractMediaInfo } from "./page";
 import { fetchIgMedia, fetchIgMediaInsights } from "./instagram";
 
@@ -15,13 +15,54 @@ export interface SyncStats {
 /**
  * סנכרון חשבון מודעות — שואב insights ברמת קמפיין (daily) ושומר ב-DB
  */
+/**
+ * מפצל טווח תאריכים לחלונות של maxDays ימים
+ */
+function splitDateRange(since: string, until: string, maxDays = 7): Array<{ since: string; until: string }> {
+  const chunks: Array<{ since: string; until: string }> = [];
+  const start = new Date(since);
+  const end = new Date(until);
+  const cur = new Date(start);
+
+  while (cur <= end) {
+    const chunkEnd = new Date(cur);
+    chunkEnd.setDate(chunkEnd.getDate() + maxDays - 1);
+    if (chunkEnd > end) chunkEnd.setTime(end.getTime());
+
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    chunks.push({ since: fmt(cur), until: fmt(chunkEnd) });
+    cur.setDate(cur.getDate() + maxDays);
+  }
+
+  return chunks;
+}
+
 export async function syncAdAccount(
   clientId: string, accessToken: string, assetId: string, externalId: string,
   since: string, until: string, stats: SyncStats
 ) {
   console.log(`[Sync] Ad Account ${externalId} | client: ${clientId} | range: ${since} → ${until}`);
-  const insights = await fetchAdInsights(externalId, accessToken, "campaign", since, until, true);
-  console.log(`[Sync] Ad Account ${externalId} → ${insights.length} insight rows received`);
+
+  // פיצול ל-7 ימים כדי למנוע timeout
+  const chunks = splitDateRange(since, until, 7);
+  console.log(`[Sync] Splitting into ${chunks.length} chunks`);
+
+  const allInsights: MetaInsight[] = [];
+  for (const chunk of chunks) {
+    try {
+      const chunkInsights = await fetchAdInsights(externalId, accessToken, "campaign", chunk.since, chunk.until, true);
+      allInsights.push(...chunkInsights);
+      console.log(`[Sync] Chunk ${chunk.since}→${chunk.until}: ${chunkInsights.length} rows`);
+    } catch (err) {
+      console.error(`[Sync] Chunk ${chunk.since}→${chunk.until} failed: ${err instanceof Error ? err.message : err}`);
+      stats.errors.push(`chunk ${chunk.since}-${chunk.until}: ${err instanceof Error ? err.message : "unknown"}`);
+    }
+  }
+
+  const insights = allInsights;
+  console.log(`[Sync] Ad Account ${externalId} → ${insights.length} total insight rows`);
 
   for (const ins of insights) {
     const m = extractMetrics(ins);
