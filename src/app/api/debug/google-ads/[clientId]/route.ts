@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
-import { refreshGoogleToken } from "@/lib/api/google-ads/client";
+import { refreshGoogleToken, listMccChildAccounts } from "@/lib/api/google-ads/client";
 
 const GOOGLE_ADS_API = "https://googleads.googleapis.com/v20";
 
@@ -116,7 +116,26 @@ export async function GET(_req: Request, { params }: { params: Promise<{ clientI
         }
       }
 
-      return NextResponse.json({ log, customerIds, count: customerIds.length });
+      // 5. Try listing MCC child accounts for each top-level
+      out(`\n📡 Checking for MCC child accounts...`);
+      const allChildren: Array<{ id: string; name: string; mccId: string; isManager: boolean }> = [];
+      for (const custId of customerIds.slice(0, 5)) {
+        try {
+          const children = await listMccChildAccounts(custId, { accessToken: token });
+          const nonManager = children.filter((c) => !c.isManager);
+          if (children.length > 0) {
+            out(`   MCC ${custId}: ${children.length} children (${nonManager.length} non-manager)`);
+            for (const c of nonManager.slice(0, 10)) {
+              out(`     ${c.id} — ${c.name} | ${c.currencyCode} | manager=${c.isManager}`);
+              allChildren.push({ ...c, mccId: custId });
+            }
+          }
+        } catch (err) {
+          out(`   ${custId}: not MCC or error — ${(err as Error).message?.slice(0, 100)}`);
+        }
+      }
+
+      return NextResponse.json({ log, customerIds, childAccounts: allChildren, count: customerIds.length });
     } else {
       out(`\n❌ API returned error ${res.status}`);
 

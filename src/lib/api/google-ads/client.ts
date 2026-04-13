@@ -78,6 +78,47 @@ export async function listAccessibleCustomers(opts: GoogleAdsApiOptions): Promis
 }
 
 /**
+ * שליפת חשבונות לקוח תחת MCC (manager account)
+ * מחזיר רק חשבונות רגילים (manager=false, status=ENABLED)
+ */
+export async function listMccChildAccounts(
+  mccId: string,
+  opts: GoogleAdsApiOptions
+): Promise<Array<{ id: string; name: string; currencyCode: string; isManager: boolean }>> {
+  const cleanMcc = mccId.replace(/-/g, "");
+  console.log(`[GoogleAds] Listing child accounts under MCC ${cleanMcc}`);
+
+  const query = `
+    SELECT
+      customer_client.id,
+      customer_client.descriptive_name,
+      customer_client.manager,
+      customer_client.status,
+      customer_client.currency_code
+    FROM customer_client
+    WHERE customer_client.status = 'ENABLED'
+  `;
+
+  const results = await searchStream(cleanMcc, query, {
+    ...opts,
+    loginCustomerId: cleanMcc,
+  });
+
+  const accounts = results.map((r: any) => {
+    const cc = r.customerClient ?? {};
+    return {
+      id: String(cc.id ?? ""),
+      name: cc.descriptiveName ?? String(cc.id ?? ""),
+      currencyCode: cc.currencyCode ?? "ILS",
+      isManager: cc.manager === true,
+    };
+  });
+
+  console.log(`[GoogleAds] MCC ${cleanMcc}: found ${accounts.length} child accounts (${accounts.filter(a => !a.isManager).length} non-manager)`);
+  return accounts;
+}
+
+/**
  * שליפת פרטי חשבון
  */
 export async function getCustomerInfo(

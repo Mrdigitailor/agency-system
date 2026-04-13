@@ -15,7 +15,8 @@ export async function syncGoogleAdsAccount(
   accessToken: string,
   refreshToken: string,
   since: string,
-  until: string
+  until: string,
+  mccId?: string,
 ): Promise<{ fetched: number; errors: string[] }> {
   const errors: string[] = [];
   let token = accessToken;
@@ -57,7 +58,10 @@ export async function syncGoogleAdsAccount(
   `;
 
   try {
-    const results = await searchStream(customerId, query, { accessToken: token });
+    const results = await searchStream(customerId, query, {
+      accessToken: token,
+      loginCustomerId: mccId || undefined,
+    });
     console.log(`[GoogleAds Sync] Got ${results.length} rows for customer ${customerId}`);
 
     for (const row of results) {
@@ -161,6 +165,8 @@ export async function syncClientGoogleAds(clientId: string, daysBack = 30): Prom
   const allErrors: string[] = [];
 
   for (const asset of connection.assets) {
+    const extra = JSON.parse(asset.extraData || "{}");
+    const mccId = extra.mccId ?? "";
     const result = await syncGoogleAdsAccount(
       clientId,
       asset.id,
@@ -168,7 +174,8 @@ export async function syncClientGoogleAds(clientId: string, daysBack = 30): Prom
       connection.accessToken,
       connection.refreshToken,
       since,
-      until
+      until,
+      mccId,
     );
     totalFetched += result.fetched;
     allErrors.push(...result.errors);
