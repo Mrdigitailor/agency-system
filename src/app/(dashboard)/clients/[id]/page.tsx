@@ -681,12 +681,22 @@ export default function ClientDetailPage() {
 
             const reports: Array<{ id: string; type: string; period: string; sentDate: string; status: string }> = [];
 
-            // 6 שבועות — כל שבוע: endDate = יום שבת שעבר (או אתמול), startDate = 6 ימים קודם
+            // שבוע = ראשון עד שבת. מחשבים את השבת האחרונה (יום 6) שעברה.
+            // getDay(): 0=ראשון, 6=שבת
+            const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+            // השבת האחרונה: אם היום ראשון (0) → אתמול. אם שני (1) → לפני יומיים. וכו'
+            // daysSinceSat = dayOfWeek === 0 ? 1 : dayOfWeek + 1  — אבל אנחנו רוצים שבת שעברה
+            // אם היום שבת (6) → השבת הזו עוד לא הסתיימה, לכן נשתמש בשבת שלפניה
+            const daysSinceLastSat = dayOfWeek === 6 ? 7 : dayOfWeek + 1;
+            const lastSaturday = new Date(now);
+            lastSaturday.setDate(now.getDate() - daysSinceLastSat);
+
+            // 6 שבועות — כל שבוע: ראשון עד שבת
             for (let w = 0; w < 6; w++) {
-              const endDate = new Date(now);
-              endDate.setDate(now.getDate() - 1 - w * 7); // אתמול - w שבועות
+              const endDate = new Date(lastSaturday);
+              endDate.setDate(lastSaturday.getDate() - w * 7);
               const startDate = new Date(endDate);
-              startDate.setDate(endDate.getDate() - 6);
+              startDate.setDate(endDate.getDate() - 6); // ראשון = 6 ימים לפני שבת
               const isCurrent = w === 0;
               reports.push({
                 id: `w${w}`,
