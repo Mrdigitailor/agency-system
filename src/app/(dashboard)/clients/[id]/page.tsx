@@ -681,15 +681,13 @@ export default function ClientDetailPage() {
 
             const reports: Array<{ id: string; type: string; period: string; sentDate: string; status: string }> = [];
 
-            // שבוע = ראשון עד שבת. מחשבים את השבת האחרונה (יום 6) שעברה.
-            // getDay(): 0=ראשון, 6=שבת
-            const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-            // השבת האחרונה: אם היום ראשון (0) → אתמול. אם שני (1) → לפני יומיים. וכו'
-            // daysSinceSat = dayOfWeek === 0 ? 1 : dayOfWeek + 1  — אבל אנחנו רוצים שבת שעברה
-            // אם היום שבת (6) → השבת הזו עוד לא הסתיימה, לכן נשתמש בשבת שלפניה
-            const daysSinceLastSat = dayOfWeek === 6 ? 7 : dayOfWeek + 1;
+            // שבוע = ראשון עד שבת.
+            // מצא את השבת האחרונה שסיימה שבוע מלא (לא היום).
+            // dayOfWeek: 0=ראשון, 1=שני, ..., 6=שבת
+            const dayOfWeek = now.getDay();
+            // ראשון(0)→1, שני(1)→2, ..., שבת(6)→7
             const lastSaturday = new Date(now);
-            lastSaturday.setDate(now.getDate() - daysSinceLastSat);
+            lastSaturday.setDate(now.getDate() - (dayOfWeek + 1));
 
             // 6 שבועות — כל שבוע: ראשון עד שבת
             for (let w = 0; w < 6; w++) {
