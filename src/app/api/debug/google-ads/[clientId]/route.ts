@@ -5,11 +5,12 @@ import { refreshGoogleToken, listMccChildAccounts } from "@/lib/api/google-ads/c
 
 const GOOGLE_ADS_API = "https://googleads.googleapis.com/v20";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ clientId: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ clientId: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
   const { clientId } = await params;
+  const fix = new URL(req.url).searchParams.get("fix") === "true";
   const log: string[] = [];
   const out = (msg: string) => { console.log(`[DEBUG GAds] ${msg}`); log.push(msg); };
 
@@ -118,14 +119,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ clientI
 
       // 5. Try listing MCC child accounts for each top-level
       out(`\n📡 Checking for MCC child accounts...`);
-      const allChildren: Array<{ id: string; name: string; mccId: string; isManager: boolean }> = [];
+      const allChildren: Array<{ id: string; name: string; currencyCode: string; mccId: string; isManager: boolean }> = [];
       for (const custId of customerIds.slice(0, 5)) {
         try {
           const children = await listMccChildAccounts(custId, { accessToken: token });
           const nonManager = children.filter((c) => !c.isManager);
           if (children.length > 0) {
             out(`   MCC ${custId}: ${children.length} children (${nonManager.length} non-manager)`);
-            for (const c of nonManager.slice(0, 10)) {
+            for (const c of nonManager) {
               out(`     ${c.id} — ${c.name} | ${c.currencyCode} | manager=${c.isManager}`);
               allChildren.push({ ...c, mccId: custId });
             }
@@ -135,7 +136,57 @@ export async function GET(_req: Request, { params }: { params: Promise<{ clientI
         }
       }
 
-      return NextResponse.json({ log, customerIds, childAccounts: allChildren, count: customerIds.length });
+      // 6. If fix=true — save all child accounts to DB
+      if (fix && allChildren.length > 0) {
+        out(`\n🔧 fix=true — saving ${allChildren.length} child accounts to DB...`);
+
+        // Remove old MCC-only asset
+        const oldMccAsset = connection.assets.find(
+          (a) => a.assetType === "google_ads_account" && customerIds.includes(a.externalId)
+        );
+        if (oldMccAsset) {
+          await prisma.platformAsset.delete({ where: { id: oldMccAsset.id } });
+          out(`   Deleted old MCC asset: ${oldMccAsset.externalId}`);
+        }
+
+        // Update connection accountName with MCC
+        const mccId = allChildren[0]?.mccId ?? "";
+        if (mccId) {
+          await prisma.platformConnection.update({
+            where: { id: connection.id },
+            data: { accountName: `MCC: ${mccId}` },
+          });
+        }
+
+        for (const child of allChildren) {
+          await prisma.platformAsset.upsert({
+            where: {
+              connectionId_assetType_externalId: {
+                connectionId: connection.id,
+                assetType: "google_ads_account",
+                externalId: child.id,
+              },
+            },
+            update: {
+              name: child.name,
+              extraData: JSON.stringify({ currency: child.currencyCode, mccId: child.mccId }),
+            },
+            create: {
+              connectionId: connection.id,
+              assetType: "google_ads_account",
+              externalId: child.id,
+              name: child.name,
+              extraData: JSON.stringify({ currency: child.currencyCode, mccId: child.mccId }),
+            },
+          });
+          out(`   ✅ Saved: ${child.id} — ${child.name}`);
+        }
+        out(`\n✅ Done! ${allChildren.length} accounts saved. Go to client page and select the accounts you want.`);
+      } else if (!fix && allChildren.length > 0) {
+        out(`\n💡 Add ?fix=true to URL to save these ${allChildren.length} accounts to DB`);
+      }
+
+      return NextResponse.json({ log, customerIds, childAccounts: allChildren, count: customerIds.length, fixed: fix });
     } else {
       out(`\n❌ API returned error ${res.status}`);
 
