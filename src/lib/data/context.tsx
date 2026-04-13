@@ -24,6 +24,7 @@ interface AppContextType {
 
   tasks: Task[];
   addTask: (data: Omit<Task, "id" | "createdAt" | "notes">) => Promise<void>;
+  updateTask: (id: string, data: Partial<Task>) => Promise<void>;
   addTaskNote: (taskId: string, note: { author: string; content: string }) => Promise<void>;
   refreshTasks: () => Promise<void>;
 
@@ -284,6 +285,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await refreshTasks();
   }, [refreshTasks]);
 
+  const updateTask = useCallback(async (id: string, data: Partial<Task>) => {
+    await api(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+    await refreshTasks();
+  }, [refreshTasks]);
+
   const addTaskNote = useCallback(async (taskId: string, note: { author: string; content: string }) => {
     await api(`/api/tasks/${taskId}/notes`, { method: "POST", body: JSON.stringify(note) });
     await refreshTasks();
@@ -352,7 +358,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       clients, addClient, updateClient, getClient, refreshClients,
-      tasks, addTask, addTaskNote, refreshTasks,
+      tasks, addTask, updateTask, addTaskNote, refreshTasks,
       leads, addLead, updateLead, addLeadCall, refreshLeads,
       employees, addEmployee, updateEmployee, deleteEmployee, refreshEmployees,
       alerts, markAlertRead,

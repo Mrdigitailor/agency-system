@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Calendar, Filter, Clock, Loader2, CheckCircle2, AlertTriangle, AlertOctagon, Send } from "lucide-react";
+import { Plus, Calendar, Filter, Clock, Loader2, CheckCircle2, AlertOctagon, Send, Pencil } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Modal from "@/components/ui/Modal";
 import { useApp } from "@/lib/data/context";
@@ -23,14 +23,16 @@ function isOverdue(task: Task) {
 
 export default function TasksPage() {
   const { data: session } = useSession();
-  const role = session?.user?.role ?? "admin";
-  const userName = session?.user?.name ?? "";
-  const { tasks: allTasks, addTask, addTaskNote, clients, employees, settings } = useApp();
+  const role = (session?.user as { role?: string })?.role ?? "admin";
+  const userId = (session?.user as { id?: string })?.id ?? "";
+  const userName = (session?.user as { name?: string })?.name ?? "";
+  const { tasks: allTasks, addTask, updateTask, addTaskNote, clients, employees, settings } = useApp();
 
   // מנהל קמפיינים רואה רק משימות שלו
   const tasks = role === "campaignManager" ? allTasks.filter((t) => t.assignee === userName) : allTasks;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterAssignee, setFilterAssignee] = useState("all");
@@ -41,6 +43,20 @@ export default function TasksPage() {
     priority: "medium" as Task["priority"], dueDate: "", status: "pending" as Task["status"],
     taskType: "other" as Task["taskType"], platform: "",
   });
+
+  const [editForm, setEditForm] = useState({
+    description: "", priority: "medium" as Task["priority"], dueDate: "",
+    status: "pending" as Task["status"], assignee: "", clientId: "",
+  });
+
+  // === הרשאות ===
+  function canEditTask(task: Task): boolean {
+    if (role === "admin") return true;
+    if (role === "manager") return true; // manager רואה רק לקוחות שלו anyway
+    if (role === "campaignManager") return task.assignee === userName;
+    return false;
+  }
+  const isAdmin = role === "admin";
 
   // KPI
   const kpi = useMemo(() => {
@@ -80,6 +96,42 @@ export default function TasksPage() {
     addTaskNote(selectedTask.id, { author: settings.userName, content: noteText });
     setNoteText("");
   };
+
+  // === שינוי סטטוס מהיר ===
+  async function handleQuickStatus(taskId: string, newStatus: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    await updateTask(taskId, { status: newStatus } as Partial<Task>);
+  }
+
+  // === פתיחת עריכה ===
+  function openEdit(task: Task) {
+    setEditingTask(task);
+    setEditForm({
+      description: task.description,
+      priority: task.priority,
+      dueDate: task.dueDate,
+      status: task.status,
+      assignee: task.assignee,
+      clientId: task.clientId,
+    });
+  }
+
+  async function handleSaveEdit() {
+    if (!editingTask) return;
+    const data: Record<string, unknown> = {
+      description: editForm.description,
+      priority: editForm.priority,
+      dueDate: editForm.dueDate,
+      status: editForm.status,
+    };
+    // רק admin יכול לשנות assignee ו-clientId
+    if (isAdmin) {
+      data.assignee = editForm.assignee;
+      data.clientId = editForm.clientId || null;
+    }
+    await updateTask(editingTask.id, data as Partial<Task>);
+    setEditingTask(null);
+  }
 
   const inputClass = "w-full rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-sm text-brand-dark placeholder:text-brand-muted focus:border-brand-gold focus:bg-brand-light focus:outline-none focus:ring-1 focus:ring-brand-gold";
 
@@ -152,16 +204,17 @@ export default function TasksPage() {
                 <th className="px-4 py-3 text-right font-medium text-brand-muted">דחיפות</th>
                 <th className="px-4 py-3 text-right font-medium text-brand-muted">תאריך יעד</th>
                 <th className="px-4 py-3 text-right font-medium text-brand-muted">סטטוס</th>
+                <th className="w-10 px-2 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {filteredTasks.length === 0 && (
-                <tr><td colSpan={7} className="px-6 py-12 text-center text-brand-muted">אין משימות להצגה</td></tr>
+                <tr><td colSpan={8} className="px-6 py-12 text-center text-brand-muted">אין משימות להצגה</td></tr>
               )}
               {filteredTasks.map((task) => {
                 const priorityInfo = getPriorityInfo(task.priority);
-                const statusInfo = getTaskStatusInfo(task.status);
                 const overdue = isOverdue(task);
+                const editable = canEditTask(task);
                 return (
                   <tr key={task.id} onClick={() => { setSelectedTask(task); setNoteText(""); }} className={`cursor-pointer border-b border-brand-border transition-colors duration-200 hover:bg-brand-bg/30 ${overdue ? "bg-red-50/50" : ""}`}>
                     <td className="px-4 py-4">
@@ -181,11 +234,30 @@ export default function TasksPage() {
                       <div className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{formatDate(task.dueDate)}</div>
                       {overdue && <span className="text-[10px] text-brand-danger">באיחור</span>}
                     </td>
-                    <td className="px-4 py-4">
-                      {overdue ? (
+                    <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                      {editable ? (
+                        <select
+                          value={task.status}
+                          onChange={(e) => handleQuickStatus(task.id, e.target.value, e as unknown as React.MouseEvent)}
+                          className="rounded-lg border border-brand-border bg-brand-bg px-2 py-1 text-xs font-medium text-brand-dark focus:border-brand-gold focus:outline-none"
+                        >
+                          {TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                        </select>
+                      ) : overdue ? (
                         <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-brand-danger">באיחור</span>
                       ) : (
-                        <span className="rounded-full bg-brand-bg px-2.5 py-1 text-xs font-medium text-brand-dark">{statusInfo.label}</span>
+                        <span className="rounded-full bg-brand-bg px-2.5 py-1 text-xs font-medium text-brand-dark">{getTaskStatusInfo(task.status).label}</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-4" onClick={(e) => e.stopPropagation()}>
+                      {editable && (
+                        <button
+                          onClick={() => openEdit(task)}
+                          className="rounded p-1 text-brand-muted transition-colors hover:bg-brand-bg hover:text-brand-dark"
+                          title="ערוך"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -223,6 +295,32 @@ export default function TasksPage() {
         </form>
       </Modal>
 
+      {/* מודל עריכת משימה */}
+      <Modal isOpen={!!editingTask} onClose={() => setEditingTask(null)} title="עריכת משימה">
+        {editingTask && (
+          <div className="space-y-4">
+            <p className="text-sm font-medium text-brand-dark">{editingTask.title}</p>
+            <div><label className="mb-1 block text-sm font-medium text-brand-dark">תיאור</label><textarea value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} rows={3} className={inputClass} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="mb-1 block text-sm font-medium text-brand-dark">דחיפות</label><select value={editForm.priority} onChange={(e) => setEditForm((p) => ({ ...p, priority: e.target.value as Task["priority"] }))} className={inputClass}>{PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
+              <div><label className="mb-1 block text-sm font-medium text-brand-dark">סטטוס</label><select value={editForm.status} onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value as Task["status"] }))} className={inputClass}>{TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
+            </div>
+            <div><label className="mb-1 block text-sm font-medium text-brand-dark">תאריך יעד</label><input type="date" value={editForm.dueDate} onChange={(e) => setEditForm((p) => ({ ...p, dueDate: e.target.value }))} className={inputClass} /></div>
+            {/* שדות admin-only */}
+            {isAdmin && (
+              <div className="grid grid-cols-2 gap-3 border-t border-brand-border pt-3">
+                <div><label className="mb-1 block text-sm font-medium text-brand-dark">אחראי</label><select value={editForm.assignee} onChange={(e) => setEditForm((p) => ({ ...p, assignee: e.target.value }))} className={inputClass}>{employees.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}</select></div>
+                <div><label className="mb-1 block text-sm font-medium text-brand-dark">לקוח</label><select value={editForm.clientId} onChange={(e) => setEditForm((p) => ({ ...p, clientId: e.target.value }))} className={inputClass}><option value="">ללא שיוך</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              </div>
+            )}
+            <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
+              <button onClick={() => setEditingTask(null)} className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg">ביטול</button>
+              <button onClick={handleSaveEdit} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">שמור</button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* מודל פרטי משימה */}
       <Modal isOpen={!!selectedTask} onClose={() => setSelectedTask(null)} title="פרטי משימה" size="lg">
         {liveTask && (() => {
@@ -236,7 +334,15 @@ export default function TasksPage() {
                   <h3 className="text-lg font-semibold text-brand-dark">{liveTask.title}</h3>
                   {liveTask.description && <p className="mt-1 text-sm text-brand-muted">{liveTask.description}</p>}
                 </div>
-                {overdue && <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-brand-danger">באיחור</span>}
+                <div className="flex items-center gap-2">
+                  {overdue && <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-brand-danger">באיחור</span>}
+                  {canEditTask(liveTask) && (
+                    <button onClick={() => { setSelectedTask(null); openEdit(liveTask); }} className="flex items-center gap-1 rounded-lg border border-brand-border px-2.5 py-1 text-xs text-brand-muted hover:bg-brand-bg">
+                      <Pencil className="h-3 w-3" />
+                      ערוך
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
