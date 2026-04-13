@@ -108,14 +108,26 @@ export async function notifyTaskAssigned(params: TaskNotifyParams) {
     subject: `משימה חדשה: ${taskTitle}${clientName ? ` — ${clientName}` : ""}`,
   };
 
+  // Resend sandbox: יכול לשלוח רק לבעל החשבון.
+  // אם הדומיין לא מאומת — שולח לבעלים עם ציון שם הנמען בנושא.
+  // אחרי אימות דומיין ב-resend.com/domains — אפשר לשלוח לכולם.
+  const OWNER_EMAIL = "saar@digitailors.co.il";
+  const isDomainVerified = emailPayload.from.includes("@digitailors.co.il");
+  const actualTo = isDomainVerified ? emailPayload.to : OWNER_EMAIL;
+  const actualSubject = isDomainVerified
+    ? emailPayload.subject
+    : `[עבור ${assignee.name}] ${emailPayload.subject}`;
+
   console.log(`[TaskNotify] Sending email:`);
   console.log(`  from: ${emailPayload.from}`);
-  console.log(`  to: ${emailPayload.to}`);
-  console.log(`  subject: ${emailPayload.subject}`);
+  console.log(`  to: ${actualTo} (original: ${emailPayload.to}, domainVerified: ${isDomainVerified})`);
+  console.log(`  subject: ${actualSubject}`);
 
   try {
     const result = await resend.emails.send({
-      ...emailPayload,
+      from: emailPayload.from,
+      to: actualTo,
+      subject: actualSubject,
       html: taskEmailTemplate({
         assigneeName: assignee.name,
         creatorName,
