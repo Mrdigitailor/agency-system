@@ -1,6 +1,6 @@
 // Google Ads REST API client (v17)
 
-const GOOGLE_ADS_API = "https://googleads.googleapis.com/v17";
+const GOOGLE_ADS_API = "https://googleads.googleapis.com/v20";
 const DEV_TOKEN = process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "";
 
 interface GoogleAdsApiOptions {
