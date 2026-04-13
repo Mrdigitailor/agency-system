@@ -103,7 +103,7 @@ export async function notifyTaskAssigned(params: TaskNotifyParams) {
   const taskUrl = `${baseUrl}${link}`;
 
   const emailPayload = {
-    from: "DigiTailors <onboarding@resend.dev>",
+    from: "DigiTailors <noreply@mr-digitailor.co.il>",
     to: assignee.email,
     subject: `משימה חדשה: ${taskTitle}${clientName ? ` — ${clientName}` : ""}`,
   };
@@ -112,7 +112,7 @@ export async function notifyTaskAssigned(params: TaskNotifyParams) {
   // אם הדומיין לא מאומת — שולח לבעלים עם ציון שם הנמען בנושא.
   // אחרי אימות דומיין ב-resend.com/domains — אפשר לשלוח לכולם.
   const OWNER_EMAIL = "saar@digitailors.co.il";
-  const isDomainVerified = emailPayload.from.includes("@digitailors.co.il");
+  const isDomainVerified = emailPayload.from.includes("@mr-digitailor.co.il");
   const actualTo = isDomainVerified ? emailPayload.to : OWNER_EMAIL;
   const actualSubject = isDomainVerified
     ? emailPayload.subject

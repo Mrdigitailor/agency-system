@@ -14,13 +14,13 @@ export async function sendWelcomeEmail({ to, name, email, password, loginUrl }: 
   const apiKey = process.env.RESEND_API_KEY;
   console.log("=== [Resend] שליחת מייל ברוכים הבאים ===");
   console.log("[Resend] API key:", apiKey ? `${apiKey.substring(0, 10)}...` : "MISSING!");
-  console.log("[Resend] From: DigiTailors <onboarding@resend.dev>");
+  console.log("[Resend] From: DigiTailors <noreply@mr-digitailor.co.il>");
   console.log("[Resend] To:", to);
   console.log("[Resend] Subject: ברוכים הבאים למערכת DigiTailors");
 
   try {
     const result = await resend.emails.send({
-      from: "DigiTailors <onboarding@resend.dev>",
+      from: "DigiTailors <noreply@mr-digitailor.co.il>",
       to,
       subject: "ברוכים הבאים למערכת DigiTailors",
       html: welcomeTemplate({ name, email, password, loginUrl }),
@@ -53,7 +53,7 @@ export async function sendPasswordResetEmail({ to, name, newPassword, loginUrl }
     console.log("[Resend] Sending password reset email to:", to);
 
     const { data, error } = await resend.emails.send({
-      from: "DigiTailors <onboarding@resend.dev>",
+      from: "DigiTailors <noreply@mr-digitailor.co.il>",
       to,
       subject: "הסיסמה שלך עודכנה — DigiTailors",
       html: passwordResetTemplate({ name, newPassword, loginUrl }),
