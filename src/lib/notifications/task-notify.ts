@@ -3,8 +3,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 const PRIORITY_LABELS: Record<string, string> = {
   low: "נמוכה",
   medium: "בינונית",
@@ -19,8 +17,8 @@ interface TaskNotifyParams {
   taskDueDate: string;
   taskPriority: string;
   clientId: string | null;
-  assigneeId: string;    // ה-user שמקבל את המשימה
-  creatorId: string;     // ה-user שיצר/עדכן
+  assigneeId: string;
+  creatorId: string;
   creatorName: string;
   baseUrl?: string;
 }
@@ -36,9 +34,15 @@ export async function notifyTaskAssigned(params: TaskNotifyParams) {
     baseUrl = "https://agency.mr-digitailor.co.il",
   } = params;
 
+  console.log(`\n=== [TaskNotify] START ===`);
+  console.log(`[TaskNotify] Task: "${taskTitle}"`);
+  console.log(`[TaskNotify] assigneeId: ${assigneeId}`);
+  console.log(`[TaskNotify] creatorId: ${creatorId} (${creatorName})`);
+  console.log(`[TaskNotify] clientId: ${clientId}`);
+
   // לא לשלוח אם העובד יצר לעצמו
   if (assigneeId === creatorId) {
-    console.log("[TaskNotify] Assignee is creator — skipping notification");
+    console.log("[TaskNotify] SKIP — assignee is creator (self-assignment)");
     return;
   }
 
@@ -48,8 +52,11 @@ export async function notifyTaskAssigned(params: TaskNotifyParams) {
     clientId ? prisma.client.findUnique({ where: { id: clientId }, select: { name: true } }) : null,
   ]);
 
+  console.log(`[TaskNotify] Assignee found: ${assignee ? `${assignee.name} <${assignee.email}>` : "NOT FOUND"}`);
+  console.log(`[TaskNotify] Client found: ${client?.name ?? "(no client)"}`);
+
   if (!assignee) {
-    console.warn("[TaskNotify] Assignee not found:", assigneeId);
+    console.warn("[TaskNotify] ABORT — assignee not found in DB");
     return;
   }
 
@@ -68,16 +75,26 @@ export async function notifyTaskAssigned(params: TaskNotifyParams) {
         clientId: clientId || null,
       },
     });
-    console.log(`[TaskNotify] Alert created for ${assignee.name}`);
+    console.log(`[TaskNotify] Alert CREATED for ${assignee.name}`);
   } catch (err) {
-    console.error("[TaskNotify] Failed to create alert:", err);
+    console.error("[TaskNotify] Alert creation FAILED:", err);
   }
 
   // 2. שליחת מייל
   if (!assignee.email) {
-    console.warn("[TaskNotify] No email for assignee — skipping email");
+    console.warn("[TaskNotify] SKIP email — assignee has no email address");
     return;
   }
+
+  const apiKey = process.env.RESEND_API_KEY;
+  console.log(`[TaskNotify] RESEND_API_KEY: ${apiKey ? `${apiKey.slice(0, 10)}... (len=${apiKey.length})` : "❌ NOT SET"}`);
+
+  if (!apiKey) {
+    console.error("[TaskNotify] ABORT email — RESEND_API_KEY not configured");
+    return;
+  }
+
+  const resend = new Resend(apiKey);
 
   const dueDateFormatted = taskDueDate
     ? new Date(taskDueDate).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -85,31 +102,45 @@ export async function notifyTaskAssigned(params: TaskNotifyParams) {
   const priorityLabel = PRIORITY_LABELS[taskPriority] ?? taskPriority;
   const taskUrl = `${baseUrl}${link}`;
 
+  const emailPayload = {
+    from: "DigiTailors <onboarding@resend.dev>",
+    to: assignee.email,
+    subject: `משימה חדשה: ${taskTitle}${clientName ? ` — ${clientName}` : ""}`,
+  };
+
+  console.log(`[TaskNotify] Sending email:`);
+  console.log(`  from: ${emailPayload.from}`);
+  console.log(`  to: ${emailPayload.to}`);
+  console.log(`  subject: ${emailPayload.subject}`);
+
   try {
     const result = await resend.emails.send({
-      from: "DigiTailors <onboarding@resend.dev>",
-      to: assignee.email,
-      subject: `משימה חדשה: ${taskTitle}${clientName ? ` — ${clientName}` : ""}`,
+      ...emailPayload,
       html: taskEmailTemplate({
         assigneeName: assignee.name,
         creatorName,
         taskTitle,
         taskDescription,
         clientName,
+        clientId: clientId ?? "",
         dueDate: dueDateFormatted,
         priority: priorityLabel,
         taskUrl,
       }),
     });
 
+    console.log(`[TaskNotify] Resend response:`, JSON.stringify(result, null, 2));
+
     if (result.error) {
-      console.error("[TaskNotify] Email error:", result.error);
+      console.error(`[TaskNotify] Email FAILED:`, result.error.message ?? JSON.stringify(result.error));
     } else {
-      console.log(`[TaskNotify] Email sent to ${assignee.email}, id=${result.data?.id}`);
+      console.log(`[TaskNotify] Email SENT to ${assignee.email}, id=${result.data?.id}`);
     }
   } catch (err) {
-    console.error("[TaskNotify] Email exception:", err);
+    console.error("[TaskNotify] Email EXCEPTION:", err);
   }
+
+  console.log(`=== [TaskNotify] END ===\n`);
 }
 
 function taskEmailTemplate(p: {
@@ -118,6 +149,7 @@ function taskEmailTemplate(p: {
   taskTitle: string;
   taskDescription: string;
   clientName: string;
+  clientId: string;
   dueDate: string;
   priority: string;
   taskUrl: string;
@@ -130,30 +162,32 @@ function taskEmailTemplate(p: {
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 0;">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;">
-        <!-- Header -->
         <tr><td style="background-color:#000000;padding:24px;text-align:center;">
           <h1 style="color:#eed89b;margin:0;font-size:22px;">DigiTailors</h1>
         </td></tr>
-        <!-- Body -->
         <tr><td style="padding:32px 28px;">
           <h2 style="color:#000000;margin:0 0 16px;font-size:18px;">שלום ${p.assigneeName},</h2>
           <p style="color:#666666;font-size:15px;line-height:1.6;margin:0 0 20px;">
             ${p.creatorName} הוסיף/ה לך משימה חדשה:
           </p>
-          <div style="background-color:#f5f5f5;border-radius:8px;padding:20px;margin:0 0 24px;border-right:4px solid #eed89b;">
-            <p style="color:#000000;font-size:16px;margin:0 0 12px;font-weight:bold;">${p.taskTitle}</p>
-            ${p.clientName ? `<p style="color:#666;font-size:14px;margin:0 0 8px;">לקוח: <strong style="color:#000;">${p.clientName}</strong></p>` : ""}
-            ${p.taskDescription ? `<p style="color:#666;font-size:14px;margin:0 0 8px;">תיאור: ${p.taskDescription}</p>` : ""}
-            <p style="color:#666;font-size:14px;margin:0 0 4px;">תאריך יעד: <strong style="color:#000;">${p.dueDate}</strong></p>
-            <p style="color:#666;font-size:14px;margin:0;">עדיפות: <strong style="color:#000;">${p.priority}</strong></p>
-          </div>
+          <table style="border-collapse:collapse;width:100%;margin:0 0 24px;border:1px solid #e0e0e0;border-radius:8px;">
+            <tr><td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;font-weight:bold;color:#000;font-size:14px;width:100px;">משימה</td>
+                <td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;color:#333;font-size:14px;">${p.taskTitle}</td></tr>
+            ${p.clientName ? `<tr><td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;font-weight:bold;color:#000;font-size:14px;">לקוח</td>
+                <td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;color:#333;font-size:14px;">${p.clientName}</td></tr>` : ""}
+            ${p.taskDescription ? `<tr><td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;font-weight:bold;color:#000;font-size:14px;">תיאור</td>
+                <td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;color:#333;font-size:14px;">${p.taskDescription}</td></tr>` : ""}
+            <tr><td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;font-weight:bold;color:#000;font-size:14px;">תאריך יעד</td>
+                <td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;color:#333;font-size:14px;">${p.dueDate}</td></tr>
+            <tr><td style="padding:10px 14px;font-weight:bold;color:#000;font-size:14px;">עדיפות</td>
+                <td style="padding:10px 14px;color:#333;font-size:14px;">${p.priority}</td></tr>
+          </table>
           <div style="text-align:center;margin:24px 0;">
             <a href="${p.taskUrl}" style="display:inline-block;background-color:#eed89b;color:#000000;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">
               צפייה במשימה
             </a>
           </div>
         </td></tr>
-        <!-- Footer -->
         <tr><td style="background-color:#f5f5f5;padding:16px 28px;text-align:center;">
           <p style="color:#999999;font-size:11px;margin:0;">DigiTailors Agency System</p>
         </td></tr>

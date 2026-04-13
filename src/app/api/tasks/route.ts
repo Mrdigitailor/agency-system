@@ -21,12 +21,15 @@ export async function POST(req: Request) {
 
   // חיפוש assigneeId מהשם אם לא סופק
   let assigneeId = body.assigneeId ?? null;
+  console.log(`[Tasks POST] Creating task "${body.title}" | assignee="${body.assignee}" | assigneeId=${assigneeId} | creator=${creator.name} (${creator.id})`);
+
   if (!assigneeId && body.assignee) {
     const user = await prisma.user.findFirst({
       where: { name: body.assignee, isActive: true },
       select: { id: true },
     });
     assigneeId = user?.id ?? null;
+    console.log(`[Tasks POST] Resolved assignee name "${body.assignee}" → id=${assigneeId}`);
   }
 
   const task = await prisma.task.create({
@@ -47,6 +50,7 @@ export async function POST(req: Request) {
   });
 
   // התראה + מייל לעובד שקיבל את המשימה (ברקע — לא חוסם)
+  console.log(`[Tasks POST] Task created: ${task.id} | assigneeId=${assigneeId} | will notify: ${!!assigneeId}`);
   if (assigneeId) {
     notifyTaskAssigned({
       taskId: task.id,
