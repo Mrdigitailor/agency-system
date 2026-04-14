@@ -103,7 +103,7 @@ export async function notifyTaskAssigned(params: TaskNotifyParams) {
   const taskUrl = `${baseUrl}${link}`;
 
   const emailPayload = {
-    from: "DigiTailors <noreply@mr-digitailor.co.il>",
+    from: "Mr.digitailor <noreply@mr-digitailor.co.il>",
     to: assignee.email,
     subject: `משימה חדשה: ${taskTitle}${clientName ? ` — ${clientName}` : ""}`,
   };
@@ -166,43 +166,123 @@ function taskEmailTemplate(p: {
   priority: string;
   taskUrl: string;
 }) {
+  const priorityColors: Record<string, string> = {
+    "נמוכה": "#666666",
+    "בינונית": "#3b82f6",
+    "גבוהה": "#f59e0b",
+    "דחוף": "#ef4444",
+  };
+  const priorityColor = priorityColors[p.priority] ?? "#666666";
+
   return `
 <!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background-color:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;">
-        <tr><td style="background-color:#000000;padding:24px;text-align:center;">
-          <h1 style="color:#eed89b;margin:0;font-size:22px;">DigiTailors</h1>
+      <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+        <!-- Header with logo -->
+        <tr><td style="background-color:#000000;padding:28px 32px;text-align:center;">
+          <img src="https://agency.mr-digitailor.co.il/images/logo-mrdigitailors.svg" height="36" alt="Mr.digitailor" style="display:inline-block;" />
         </td></tr>
-        <tr><td style="padding:32px 28px;">
-          <h2 style="color:#000000;margin:0 0 16px;font-size:18px;">שלום ${p.assigneeName},</h2>
-          <p style="color:#666666;font-size:15px;line-height:1.6;margin:0 0 20px;">
-            ${p.creatorName} הוסיף/ה לך משימה חדשה:
+
+        <!-- Gold accent line -->
+        <tr><td style="background-color:#eed89b;height:4px;font-size:0;line-height:0;">&nbsp;</td></tr>
+
+        <!-- Body -->
+        <tr><td style="padding:36px 32px 24px;">
+          <h2 style="color:#000000;margin:0 0 8px;font-size:20px;font-weight:700;">משימה חדשה</h2>
+          <p style="color:#666666;font-size:15px;line-height:1.6;margin:0 0 24px;">
+            שלום ${p.assigneeName}, ${p.creatorName} שייך/ה אליך משימה חדשה.
           </p>
-          <table style="border-collapse:collapse;width:100%;margin:0 0 24px;border:1px solid #e0e0e0;border-radius:8px;">
-            <tr><td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;font-weight:bold;color:#000;font-size:14px;width:100px;">משימה</td>
-                <td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;color:#333;font-size:14px;">${p.taskTitle}</td></tr>
-            ${p.clientName ? `<tr><td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;font-weight:bold;color:#000;font-size:14px;">לקוח</td>
-                <td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;color:#333;font-size:14px;">${p.clientName}</td></tr>` : ""}
-            ${p.taskDescription ? `<tr><td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;font-weight:bold;color:#000;font-size:14px;">תיאור</td>
-                <td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;color:#333;font-size:14px;">${p.taskDescription}</td></tr>` : ""}
-            <tr><td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;font-weight:bold;color:#000;font-size:14px;">תאריך יעד</td>
-                <td style="padding:10px 14px;border-bottom:1px solid #e0e0e0;color:#333;font-size:14px;">${p.dueDate}</td></tr>
-            <tr><td style="padding:10px 14px;font-weight:bold;color:#000;font-size:14px;">עדיפות</td>
-                <td style="padding:10px 14px;color:#333;font-size:14px;">${p.priority}</td></tr>
+
+          <!-- Task card -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fafafa;border:1px solid #e5e5e5;border-radius:10px;overflow:hidden;margin:0 0 24px;">
+            <!-- Task title row -->
+            <tr><td style="padding:16px 20px;background-color:#000000;">
+              <p style="color:#eed89b;font-size:16px;font-weight:700;margin:0;">${p.taskTitle}</p>
+            </td></tr>
+
+            <!-- Details -->
+            ${p.clientName ? `
+            <tr><td style="padding:14px 20px;border-bottom:1px solid #eeeeee;">
+              <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                <td width="28" style="vertical-align:top;padding-left:10px;">
+                  <span style="font-size:16px;">👤</span>
+                </td>
+                <td>
+                  <p style="color:#999999;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px;">לקוח</p>
+                  <p style="color:#000000;font-size:14px;font-weight:600;margin:0;">${p.clientName}</p>
+                </td>
+              </tr></table>
+            </td></tr>` : ""}
+
+            ${p.taskDescription ? `
+            <tr><td style="padding:14px 20px;border-bottom:1px solid #eeeeee;">
+              <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                <td width="28" style="vertical-align:top;padding-left:10px;">
+                  <span style="font-size:16px;">📝</span>
+                </td>
+                <td>
+                  <p style="color:#999999;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px;">תיאור</p>
+                  <p style="color:#333333;font-size:14px;line-height:1.5;margin:0;">${p.taskDescription}</p>
+                </td>
+              </tr></table>
+            </td></tr>` : ""}
+
+            <tr><td style="padding:14px 20px;border-bottom:1px solid #eeeeee;">
+              <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                <td width="28" style="vertical-align:top;padding-left:10px;">
+                  <span style="font-size:16px;">📅</span>
+                </td>
+                <td>
+                  <p style="color:#999999;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px;">תאריך יעד</p>
+                  <p style="color:#000000;font-size:14px;font-weight:600;margin:0;">${p.dueDate}</p>
+                </td>
+              </tr></table>
+            </td></tr>
+
+            <tr><td style="padding:14px 20px;border-bottom:1px solid #eeeeee;">
+              <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                <td width="28" style="vertical-align:top;padding-left:10px;">
+                  <span style="font-size:16px;">⚡</span>
+                </td>
+                <td>
+                  <p style="color:#999999;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px;">עדיפות</p>
+                  <p style="font-size:14px;font-weight:700;margin:0;color:${priorityColor};">${p.priority}</p>
+                </td>
+              </tr></table>
+            </td></tr>
+
+            <tr><td style="padding:14px 20px;">
+              <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                <td width="28" style="vertical-align:top;padding-left:10px;">
+                  <span style="font-size:16px;">👨‍💼</span>
+                </td>
+                <td>
+                  <p style="color:#999999;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px;">שויך על ידי</p>
+                  <p style="color:#000000;font-size:14px;font-weight:600;margin:0;">${p.creatorName}</p>
+                </td>
+              </tr></table>
+            </td></tr>
           </table>
-          <div style="text-align:center;margin:24px 0;">
-            <a href="${p.taskUrl}" style="display:inline-block;background-color:#eed89b;color:#000000;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">
+
+          <!-- CTA button -->
+          <div style="text-align:center;margin:0 0 8px;">
+            <a href="${p.taskUrl}" style="display:inline-block;background-color:#eed89b;color:#000000;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;letter-spacing:0.3px;">
               צפייה במשימה
             </a>
           </div>
         </td></tr>
-        <tr><td style="background-color:#f5f5f5;padding:16px 28px;text-align:center;">
-          <p style="color:#999999;font-size:11px;margin:0;">DigiTailors Agency System</p>
+
+        <!-- Footer -->
+        <tr><td style="background-color:#000000;padding:20px 32px;text-align:center;">
+          <p style="color:#eed89b;font-size:12px;margin:0 0 4px;font-weight:600;">Mr.digitailor</p>
+          <p style="color:#666666;font-size:11px;margin:0;">מערכת ניהול סוכנות פרסום דיגיטלי</p>
         </td></tr>
+
       </table>
     </td></tr>
   </table>

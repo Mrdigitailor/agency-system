@@ -27,7 +27,7 @@ export async function GET() {
     console.log("[Test Email] Sending test email to saar@digitailors.co.il...");
 
     const result = await resend.emails.send({
-      from: "DigiTailors <noreply@mr-digitailor.co.il>",
+      from: "Mr.digitailor <noreply@mr-digitailor.co.il>",
       to: "saar@digitailors.co.il",
       subject: "בדיקת מייל מהמערכת — DigiTailors",
       html: `
