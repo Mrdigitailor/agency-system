@@ -66,40 +66,39 @@ export async function GET(req: Request) {
     const topLevelIds = await listAccessibleCustomers({ accessToken: tokenData.access_token });
     console.log(`[GoogleAds Callback] Top-level accounts: ${topLevelIds.join(", ")}`);
 
-    // 4. For each top-level, check if MCC and list child accounts
+    // 4. For each top-level, try listing child accounts (MCC), then fall back to direct info
     const allAccounts: Array<{ id: string; name: string; currency: string; mccId: string }> = [];
 
     for (const custId of topLevelIds) {
+      // נסה קודם לשאוב children (עובד ל-MCC, נכשל לחשבון רגיל)
       try {
-        const info = await getCustomerInfo(custId, { accessToken: tokenData.access_token });
-        console.log(`[GoogleAds Callback] Customer ${custId}: ${info.name}`);
+        const children = await listMccChildAccounts(custId, { accessToken: tokenData.access_token });
+        const nonManagerChildren = children.filter((c) => !c.isManager);
 
-        // Try to list child accounts — if it works, this is an MCC
-        try {
-          const children = await listMccChildAccounts(custId, { accessToken: tokenData.access_token });
-          const nonManagerChildren = children.filter((c) => !c.isManager);
-
-          if (nonManagerChildren.length > 0) {
-            console.log(`[GoogleAds Callback] ${custId} is MCC with ${nonManagerChildren.length} child accounts`);
-            for (const child of nonManagerChildren) {
-              allAccounts.push({
-                id: child.id,
-                name: child.name,
-                currency: child.currencyCode,
-                mccId: custId,
-              });
-            }
-          } else {
-            // MCC with no non-manager children, or not an MCC — add self
-            allAccounts.push({ id: custId, name: info.name, currency: info.currencyCode, mccId: "" });
+        if (nonManagerChildren.length > 0) {
+          console.log(`[GoogleAds Callback] ${custId} is MCC with ${nonManagerChildren.length} child accounts`);
+          for (const child of nonManagerChildren) {
+            allAccounts.push({
+              id: child.id,
+              name: child.name,
+              currency: child.currencyCode,
+              mccId: custId,
+            });
           }
-        } catch (err) {
-          // Not an MCC or permission denied — add self as regular account
-          console.log(`[GoogleAds Callback] ${custId} is not MCC or cannot list children:`, (err as Error).message?.slice(0, 100));
-          allAccounts.push({ id: custId, name: info.name, currency: info.currencyCode, mccId: "" });
+          continue; // MCC processed — skip to next
         }
       } catch (err) {
-        console.warn(`[GoogleAds Callback] Could not process ${custId}:`, err);
+        console.log(`[GoogleAds Callback] ${custId} is not MCC: ${(err as Error).message?.slice(0, 80)}`);
+      }
+
+      // לא MCC — נסה לקבל פרטי חשבון רגיל
+      try {
+        const info = await getCustomerInfo(custId, { accessToken: tokenData.access_token });
+        allAccounts.push({ id: custId, name: info.name, currency: info.currencyCode, mccId: "" });
+      } catch (err) {
+        // גם getCustomerInfo נכשל (MCC שלא מחזיר children?) — שמור עם ID בלבד
+        console.warn(`[GoogleAds Callback] Could not get info for ${custId}: ${(err as Error).message?.slice(0, 80)}`);
+        allAccounts.push({ id: custId, name: custId, currency: "ILS", mccId: "" });
       }
     }
 
