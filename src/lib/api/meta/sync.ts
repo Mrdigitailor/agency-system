@@ -302,9 +302,21 @@ export async function syncClientMeta(clientId: string, daysBack = 30, forceAll =
         await syncInstagram(clientId, connection.accessToken, asset.id, asset.externalId, stats);
       }
     } catch (err) {
-      const msg = `${asset.assetType} ${asset.externalId}: ${err instanceof Error ? err.message : "unknown"}`;
+      const errMsg = err instanceof Error ? err.message : "unknown";
+      const msg = `${asset.assetType} ${asset.externalId}: ${errMsg}`;
       console.error(`[SyncMeta] ERROR: ${msg}`);
-      if (err instanceof Error) console.error(`[SyncMeta] Stack: ${err.stack}`);
+
+      // Token expired — mark connection as expired, stop processing this client
+      if (errMsg.startsWith("META_TOKEN_EXPIRED")) {
+        console.error(`[SyncMeta] Token expired for client ${clientId} — marking connection`);
+        await prisma.platformConnection.update({
+          where: { id: connection.id },
+          data: { accountName: `${connection.accountName} [TOKEN_EXPIRED]` },
+        });
+        stats.errors.push(`TOKEN_EXPIRED: ${errMsg}`);
+        break; // לא ממשיכים לנכסים נוספים — token פג
+      }
+
       stats.errors.push(msg);
       await prisma.syncLog.create({
         data: {

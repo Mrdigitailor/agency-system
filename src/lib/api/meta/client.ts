@@ -77,6 +77,11 @@ export async function metaApiGet<T>(path: string, opts: MetaApiOptions): Promise
       const errorMsg = errorBody?.error?.message ?? `HTTP ${res.status}`;
       const errorCode = errorBody?.error?.code ?? res.status;
 
+      // Token expired (code 190) — special error for UI handling
+      if (errorCode === 190) {
+        throw new Error(`META_TOKEN_EXPIRED: ${errorMsg}`);
+      }
+
       // Non-retryable 4xx (auth, permissions etc)
       if (res.status >= 400 && res.status < 500 && !isRetryableStatusCode(errorCode)) {
         throw new Error(`Meta API error: ${errorMsg} (code: ${errorCode})`);

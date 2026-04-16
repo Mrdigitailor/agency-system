@@ -34,10 +34,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const syncResult = await runSync(type, clientId);
     if (syncResult.error) {
       const msg = syncResult.error;
+      // Token expired
+      if (msg.includes("META_TOKEN_EXPIRED") || msg.includes("code: 190") || msg.includes("session has been invalidated")) {
+        return NextResponse.json({
+          data: [],
+          tokenExpired: true,
+          error: "חיבור Meta פג תוקף. יש לנתק ולחבר מחדש.",
+        });
+      }
       if (msg.startsWith("PERMISSION_MISSING:")) {
         return NextResponse.json({ data: [], permissionError: msg.split(":")[1] });
       }
-      // IG messages capability error
       if (msg.includes("capability") || msg.includes("does not have") || (msg.includes("code: 3") && type === "ig_messages")) {
         return NextResponse.json({
           data: [],
@@ -78,6 +85,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const syncResult = await runSync(type, clientId);
   if (syncResult.error) {
     const msg = syncResult.error;
+    if (msg.includes("META_TOKEN_EXPIRED") || msg.includes("code: 190") || msg.includes("session has been invalidated")) {
+      return NextResponse.json({ data: [], tokenExpired: true, error: "חיבור Meta פג תוקף. יש לנתק ולחבר מחדש." });
+    }
     if (msg.startsWith("PERMISSION_MISSING:")) {
       return NextResponse.json({ data: [], permissionError: msg.split(":")[1] });
     }

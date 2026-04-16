@@ -25,6 +25,7 @@ interface ApiResponse {
   data: any[];
   error?: string;
   permissionError?: string;
+  tokenExpired?: boolean;
   lastSyncAt?: string | null;
   reviewUrl?: string;
 }
@@ -63,6 +64,7 @@ export default function MessagesTab({ clientId }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [tokenExpired, setTokenExpired] = useState(false);
   const [expandedConversation, setExpandedConversation] = useState<string | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<"all" | "organic" | "ad">("all");
@@ -73,11 +75,13 @@ export default function MessagesTab({ clientId }: Props) {
     setError(null);
     setPermissionError(null);
     setReviewUrl(null);
+    setTokenExpired(false);
     setExpandedConversation(null);
     try {
       const res = await fetch(`/api/clients/${clientId}/messages?type=${apiType}`);
       const json: ApiResponse = await res.json();
-      if (json.permissionError) { setPermissionError(json.permissionError); setReviewUrl(json.reviewUrl ?? null); setData([]); }
+      if (json.tokenExpired) { setTokenExpired(true); setError(json.error ?? "חיבור Meta פג תוקף"); setData([]); }
+      else if (json.permissionError) { setPermissionError(json.permissionError); setReviewUrl(json.reviewUrl ?? null); setData([]); }
       else if (json.error) { setError(json.error); setData([]); }
       else { setData(json.data ?? []); setLastSyncAt(json.lastSyncAt ?? null); }
     } catch { setError("שגיאה בטעינת הנתונים"); setData([]); }
@@ -89,10 +93,12 @@ export default function MessagesTab({ clientId }: Props) {
     setError(null);
     setPermissionError(null);
     setReviewUrl(null);
+    setTokenExpired(false);
     try {
       const res = await fetch(`/api/clients/${clientId}/messages?type=${apiType}`, { method: "POST" });
       const json: ApiResponse = await res.json();
-      if (json.permissionError) { setPermissionError(json.permissionError); setReviewUrl(json.reviewUrl ?? null); }
+      if (json.tokenExpired) { setTokenExpired(true); setError(json.error ?? "חיבור Meta פג תוקף"); }
+      else if (json.permissionError) { setPermissionError(json.permissionError); setReviewUrl(json.reviewUrl ?? null); }
       else if (json.error) setError(json.error);
       else { setData(json.data ?? []); setLastSyncAt(json.lastSyncAt ?? new Date().toISOString()); }
     } catch { setError("שגיאה בסנכרון"); }
@@ -202,6 +208,16 @@ export default function MessagesTab({ clientId }: Props) {
           </span>
         )}
       </div>
+
+      {tokenExpired && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">חיבור Meta פג תוקף</p>
+            <p className="text-sm mt-1">יש לנתק את Meta ולחבר מחדש בכרטיס הלקוח → חיבורי פלטפורמות.</p>
+          </div>
+        </div>
+      )}
 
       {permissionError && (
         <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-4 text-yellow-800 flex items-start gap-3">
