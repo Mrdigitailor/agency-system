@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient } from "@/lib/utils/resolveManagers";
-import { FileText, CheckCircle2, AlertTriangle, Filter } from "lucide-react";
+import { FileText, CheckCircle2, AlertTriangle, Filter, Eye, Pencil, Copy, Sparkles, Loader2 } from "lucide-react";
+import Modal from "@/components/ui/Modal";
 
 // ==================== טיפוסים ====================
 
@@ -12,6 +13,10 @@ interface ReportTracker {
   clientId: string;
   weeklyLastSent: string;
   monthlyLastSent: string;
+  weeklyContent: string;
+  weeklyAuthor: string;
+  monthlyContent: string;
+  monthlyAuthor: string;
 }
 
 // ==================== עזר ====================
@@ -36,8 +41,7 @@ function isCurrentMonth(dateStr: string): boolean {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("he-IL");
+  return new Date(dateStr).toLocaleDateString("he-IL");
 }
 
 function getWeeklyPeriod(dateStr: string): string {
@@ -64,49 +68,55 @@ export default function ReportsPage() {
   const role = (session?.user as { role?: string; name?: string } | undefined)?.role ?? "";
   const userName = (session?.user as { role?: string; name?: string } | undefined)?.name ?? "";
 
-  const canMarkAsSent = role === "manager" || role === "campaignManager";
+  const canMarkAsSent = role === "admin" || role === "manager" || role === "campaignManager";
 
   const [trackers, setTrackers] = useState<ReportTracker[]>([]);
   const [statusFilter, setStatusFilter] = useState<"all" | "sent" | "not_sent">("all");
   const [managerFilter, setManagerFilter] = useState("all");
 
-  // טעינת trackers מה-DB
+  // מודל הזנת תוכן דוח
+  const [contentModal, setContentModal] = useState<{ clientId: string; clientName: string; type: "weekly" | "monthly" } | null>(null);
+  const [contentText, setContentText] = useState("");
+  const [contentSaving, setContentSaving] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  // מודל צפייה בדוח
+  const [viewModal, setViewModal] = useState<{ clientName: string; type: "weekly" | "monthly"; content: string; author: string; date: string; period: string } | null>(null);
+
+  // מודל עריכה בדיעבד
+  const [editModal, setEditModal] = useState<{ clientId: string; clientName: string; type: "weekly" | "monthly"; content: string } | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
+  // טעינת trackers
   useEffect(() => {
     fetch("/api/reports/trackers")
       .then((r) => r.json())
       .then((data: ReportTracker[]) => {
-        // וודא שיש tracker לכל לקוח (אם אין — ברירת מחדל ריקה)
         const map = new Map(data.map((t) => [t.clientId, t]));
-        const all = clients.map((c) => map.get(c.id) ?? { clientId: c.id, weeklyLastSent: "", monthlyLastSent: "" });
+        const all = clients.map((c) => map.get(c.id) ?? { clientId: c.id, weeklyLastSent: "", monthlyLastSent: "", weeklyContent: "", weeklyAuthor: "", monthlyContent: "", monthlyAuthor: "" });
         setTrackers(all);
       })
       .catch(() => {});
   }, [clients]);
 
-  // מנהלי קמפיינים
   const campaignManagers = useMemo(
     () => employees.filter((e) => e.role === "campaignManager"),
     [employees],
   );
 
-  // פונקציה שמשלפת מנהל קמפיינים מטבלת עובדים
   const getClientCM = (clientId: string) => getCampaignManagerForClient(clientId, employees);
 
-  // לקוחות מסוננים לפי תפקיד
   const roleFilteredTrackers = useMemo(() => {
     if (role === "campaignManager") {
-      // מנהל קמפיינים רואה רק לקוחות שמשויכים אליו בהגדרות
       const myClientIds = new Set(
-        employees
-          .filter((e) => e.name === userName && e.role === "campaignManager")
-          .flatMap((e) => e.assignedClientIds)
+        employees.filter((e) => e.name === userName && e.role === "campaignManager").flatMap((e) => e.assignedClientIds)
       );
       return trackers.filter((t) => myClientIds.has(t.clientId));
     }
     return trackers;
   }, [trackers, employees, role, userName]);
 
-  // KPI חישובים (מבוססים על לקוחות מסוננים לפי תפקיד)
   const kpis = useMemo(() => {
     const weeklySent = roleFilteredTrackers.filter((t) => isWithinLastDays(t.weeklyLastSent, 7)).length;
     const weeklyMissing = roleFilteredTrackers.length - weeklySent;
@@ -115,18 +125,15 @@ export default function ReportsPage() {
     return { weeklySent, weeklyMissing, monthlySent, monthlyMissing };
   }, [roleFilteredTrackers]);
 
-  // התראה על חסרים
   const alertCounts = useMemo(() => {
     const weeklyMissing = roleFilteredTrackers.filter((t) => !isWithinLastDays(t.weeklyLastSent, 7)).length;
     const monthlyMissing = roleFilteredTrackers.filter((t) => {
       if (!t.monthlyLastSent) return true;
-      const diff = new Date().getTime() - new Date(t.monthlyLastSent).getTime();
-      return diff > 30 * 24 * 60 * 60 * 1000;
+      return new Date().getTime() - new Date(t.monthlyLastSent).getTime() > 30 * 24 * 60 * 60 * 1000;
     }).length;
     return { weeklyMissing, monthlyMissing };
   }, [roleFilteredTrackers]);
 
-  // סינון טבלה
   const filteredRows = useMemo(() => {
     return roleFilteredTrackers
       .map((tracker) => {
@@ -136,139 +143,187 @@ export default function ReportsPage() {
       })
       .filter((row): row is NonNullable<typeof row> => {
         if (!row) return false;
-        const { tracker, client } = row;
-
-        // סינון מנהל קמפיינים — משליף מטבלת עובדים
-        if (managerFilter !== "all" && getClientCM(client.id) !== managerFilter) return false;
-
-        // סינון סטטוס
-        if (statusFilter === "sent") {
-          return isWithinLastDays(tracker.weeklyLastSent, 7) || isCurrentMonth(tracker.monthlyLastSent);
-        }
-        if (statusFilter === "not_sent") {
-          return !isWithinLastDays(tracker.weeklyLastSent, 7) || !isCurrentMonth(tracker.monthlyLastSent);
-        }
+        const { tracker } = row;
+        if (managerFilter !== "all" && getClientCM(row.client.id) !== managerFilter) return false;
+        if (statusFilter === "sent") return isWithinLastDays(tracker.weeklyLastSent, 7) || isCurrentMonth(tracker.monthlyLastSent);
+        if (statusFilter === "not_sent") return !isWithinLastDays(tracker.weeklyLastSent, 7) || !isCurrentMonth(tracker.monthlyLastSent);
         return true;
       });
   }, [roleFilteredTrackers, clients, statusFilter, managerFilter]);
 
-  // סימון כנשלח (שומר ב-DB)
-  async function markWeeklySent(clientId: string) {
+  // === פתיחת מודל תוכן (במקום סימון ישיר) ===
+  function openContentModal(clientId: string, type: "weekly" | "monthly") {
+    const client = clients.find((c) => c.id === clientId);
+    setContentModal({ clientId, clientName: client?.name ?? "", type });
+    setContentText("");
+  }
+
+  // === שמירת דוח עם תוכן ===
+  async function saveReportContent() {
+    if (!contentModal || !contentText.trim()) return;
+    setContentSaving(true);
     const today = new Date().toISOString().split("T")[0];
-    setTrackers((prev) =>
-      prev.map((t) => (t.clientId === clientId ? { ...t, weeklyLastSent: today } : t)),
-    );
     await fetch("/api/reports/trackers", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId, type: "weekly", date: today }),
+      body: JSON.stringify({
+        clientId: contentModal.clientId,
+        type: contentModal.type,
+        date: today,
+        content: contentText.trim(),
+        author: userName,
+      }),
     });
+    // עדכון מקומי
+    setTrackers((prev) =>
+      prev.map((t) =>
+        t.clientId === contentModal.clientId
+          ? {
+              ...t,
+              ...(contentModal.type === "weekly"
+                ? { weeklyLastSent: today, weeklyContent: contentText.trim(), weeklyAuthor: userName }
+                : { monthlyLastSent: today, monthlyContent: contentText.trim(), monthlyAuthor: userName }),
+            }
+          : t
+      )
+    );
+    setContentSaving(false);
+    setContentModal(null);
   }
 
-  async function markMonthlySent(clientId: string) {
-    const today = new Date().toISOString().split("T")[0];
-    setTrackers((prev) =>
-      prev.map((t) => (t.clientId === clientId ? { ...t, monthlyLastSent: today } : t)),
-    );
+  // === יצירת סיכום עם AI ===
+  async function generateAiSummary() {
+    if (!contentModal) return;
+    setAiLoading(true);
+    try {
+      const res = await fetch(`/api/clients/${contentModal.clientId}/performance`);
+      const perf = await res.json();
+      const prompt = `צור סיכום שבועי קצר בעברית עבור לקוח "${contentModal.clientName}". הנתונים: הוצאה ${Math.round(perf.totalSpend ?? 0)} ש"ח, ${Math.round(perf.totalConversions ?? 0)} המרות, עלות להמרה ${Math.round(perf.avgCostPerConv ?? 0)} ש"ח, ${perf.totalClicks ?? 0} קליקים, ${perf.totalImpressions ?? 0} חשיפות. כתוב 3-5 משפטים עם תובנות ומה עשינו השבוע.`;
+
+      const aiRes = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: prompt, clientId: contentModal.clientId }),
+      });
+
+      if (aiRes.ok) {
+        // SSE stream
+        const reader = aiRes.body?.getReader();
+        const decoder = new TextDecoder();
+        let text = "";
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value);
+            for (const line of chunk.split("\n")) {
+              if (line.startsWith("data: ")) {
+                const data = line.slice(6);
+                if (data === "[DONE]") break;
+                try { text += JSON.parse(data).text ?? ""; } catch {}
+              }
+            }
+          }
+        }
+        setContentText(text.trim());
+      }
+    } catch (err) {
+      console.error("AI summary failed:", err);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  // === צפייה בדוח ===
+  function openViewModal(tracker: ReportTracker, type: "weekly" | "monthly") {
+    const client = clients.find((c) => c.id === tracker.clientId);
+    const content = type === "weekly" ? tracker.weeklyContent : tracker.monthlyContent;
+    const author = type === "weekly" ? tracker.weeklyAuthor : tracker.monthlyAuthor;
+    const date = type === "weekly" ? tracker.weeklyLastSent : tracker.monthlyLastSent;
+    const period = type === "weekly" ? getWeeklyPeriod(date) : getMonthlyPeriod(date);
+    setViewModal({ clientName: client?.name ?? "", type, content, author, date, period });
+  }
+
+  // === עריכה בדיעבד ===
+  function openEditModal(tracker: ReportTracker, type: "weekly" | "monthly") {
+    const client = clients.find((c) => c.id === tracker.clientId);
+    const content = type === "weekly" ? tracker.weeklyContent : tracker.monthlyContent;
+    setEditModal({ clientId: tracker.clientId, clientName: client?.name ?? "", type, content });
+    setEditText(content);
+  }
+
+  async function saveEdit() {
+    if (!editModal) return;
+    setEditSaving(true);
+    const tracker = trackers.find((t) => t.clientId === editModal.clientId);
+    const date = editModal.type === "weekly" ? tracker?.weeklyLastSent : tracker?.monthlyLastSent;
     await fetch("/api/reports/trackers", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId, type: "monthly", date: today }),
+      body: JSON.stringify({
+        clientId: editModal.clientId,
+        type: editModal.type,
+        date,
+        content: editText.trim(),
+        author: userName,
+      }),
     });
+    setTrackers((prev) =>
+      prev.map((t) =>
+        t.clientId === editModal.clientId
+          ? { ...t, ...(editModal.type === "weekly" ? { weeklyContent: editText.trim() } : { monthlyContent: editText.trim() }) }
+          : t
+      )
+    );
+    setEditSaving(false);
+    setEditModal(null);
   }
 
-  // בדיקת אזהרה
   function weeklyWarning(dateStr: string): boolean {
     if (!dateStr) return true;
     return !isWithinLastDays(dateStr, 7);
   }
-
   function monthlyWarning(dateStr: string): boolean {
     if (!dateStr) return true;
-    const diff = new Date().getTime() - new Date(dateStr).getTime();
-    return diff > 30 * 24 * 60 * 60 * 1000;
+    return new Date().getTime() - new Date(dateStr).getTime() > 30 * 24 * 60 * 60 * 1000;
   }
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* כותרת */}
       <div className="flex items-center gap-3">
         <FileText className="h-7 w-7 text-brand-gold" />
         <h1 className="text-2xl font-semibold text-brand-dark">מעקב דוחות</h1>
       </div>
 
-      {/* באנר התראה */}
       {(alertCounts.weeklyMissing > 0 || alertCounts.monthlyMissing > 0) && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
           <AlertTriangle className="h-5 w-5 shrink-0 text-red-500" />
           <p className="text-sm font-medium text-red-700">
-            {alertCounts.weeklyMissing > 0 && (
-              <span>{alertCounts.weeklyMissing} לקוחות חסרים דוח שבועי</span>
-            )}
-            {alertCounts.weeklyMissing > 0 && alertCounts.monthlyMissing > 0 && <span>، </span>}
-            {alertCounts.monthlyMissing > 0 && (
-              <span>{alertCounts.monthlyMissing} חסרים דוח חודשי</span>
-            )}
+            {alertCounts.weeklyMissing > 0 && <span>{alertCounts.weeklyMissing} לקוחות חסרים דוח שבועי</span>}
+            {alertCounts.weeklyMissing > 0 && alertCounts.monthlyMissing > 0 && <span> · </span>}
+            {alertCounts.monthlyMissing > 0 && <span>{alertCounts.monthlyMissing} חסרים דוח חודשי</span>}
           </p>
         </div>
       )}
 
-      {/* KPI כרטיסים */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          title="דוחות שבועיים נשלחו השבוע"
-          value={kpis.weeklySent}
-          color="green"
-          icon={<CheckCircle2 className="h-5 w-5 text-green-500" />}
-        />
-        <KpiCard
-          title="דוחות שבועיים חסרים"
-          value={kpis.weeklyMissing}
-          color="red"
-          icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
-        />
-        <KpiCard
-          title="דוחות חודשיים נשלחו החודש"
-          value={kpis.monthlySent}
-          color="green"
-          icon={<CheckCircle2 className="h-5 w-5 text-green-500" />}
-        />
-        <KpiCard
-          title="דוחות חודשיים חסרים"
-          value={kpis.monthlyMissing}
-          color="red"
-          icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
-        />
+        <KpiCard title="שבועיים נשלחו" value={kpis.weeklySent} color="green" icon={<CheckCircle2 className="h-5 w-5 text-green-500" />} />
+        <KpiCard title="שבועיים חסרים" value={kpis.weeklyMissing} color="red" icon={<AlertTriangle className="h-5 w-5 text-red-500" />} />
+        <KpiCard title="חודשיים נשלחו" value={kpis.monthlySent} color="green" icon={<CheckCircle2 className="h-5 w-5 text-green-500" />} />
+        <KpiCard title="חודשיים חסרים" value={kpis.monthlyMissing} color="red" icon={<AlertTriangle className="h-5 w-5 text-red-500" />} />
       </div>
 
-      {/* פילטרים */}
       <div className="flex flex-wrap items-center gap-4 rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm">
         <Filter className="h-4 w-4 text-brand-muted" />
-        <div className="w-48">
-          <select
-            className={inputClass}
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as "all" | "sent" | "not_sent")}
-          >
-            <option value="all">סטטוס: הכל</option>
-            <option value="sent">נשלח</option>
-            <option value="not_sent">לא נשלח</option>
-          </select>
-        </div>
-        <div className="w-56">
-          <select
-            className={inputClass}
-            value={managerFilter}
-            onChange={(e) => setManagerFilter(e.target.value)}
-          >
-            <option value="all">מנהל קמפיינים: הכל</option>
-            {campaignManagers.map((m) => (
-              <option key={m.id} value={m.name}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <select className={`${inputClass} w-48`} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}>
+          <option value="all">סטטוס: הכל</option>
+          <option value="sent">נשלח</option>
+          <option value="not_sent">לא נשלח</option>
+        </select>
+        <select className={`${inputClass} w-56`} value={managerFilter} onChange={(e) => setManagerFilter(e.target.value)}>
+          <option value="all">מנהל קמפיינים: הכל</option>
+          {campaignManagers.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+        </select>
       </div>
 
       {/* טבלה */}
@@ -284,81 +339,59 @@ export default function ReportsPage() {
           </thead>
           <tbody>
             {filteredRows.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-brand-muted">
-                  אין לקוחות להצגה
-                </td>
-              </tr>
+              <tr><td colSpan={4} className="px-4 py-8 text-center text-brand-muted">אין לקוחות להצגה</td></tr>
             ) : (
               filteredRows.map(({ tracker, client }) => {
                 const weeklySent = isWithinLastDays(tracker.weeklyLastSent, 7);
                 const monthlySent = isCurrentMonth(tracker.monthlyLastSent);
-
                 return (
-                  <tr
-                    key={client.id}
-                    className="border-b border-brand-border transition-colors duration-200 hover:bg-brand-bg"
-                  >
+                  <tr key={client.id} className="border-b border-brand-border transition-colors hover:bg-brand-bg">
                     <td className="px-4 py-3 font-medium text-brand-dark">{client.name}</td>
                     <td className="px-4 py-3 text-brand-muted">{getClientCM(client.id) || "—"}</td>
 
-                    {/* דוח שבועי */}
+                    {/* שבועי */}
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
                         {weeklySent ? (
-                          <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
-                            נשלח
-                          </span>
+                          <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">נשלח</span>
                         ) : (
-                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">
-                            לא נשלח
-                          </span>
-                        )}
-                        {weeklySent && (
-                          <span className="text-xs text-brand-muted">{formatDate(tracker.weeklyLastSent)}</span>
+                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">לא נשלח</span>
                         )}
                         <span className="text-xs text-brand-muted">{getWeeklyPeriod(tracker.weeklyLastSent)}</span>
+                        {weeklySent && tracker.weeklyContent && (
+                          <button onClick={() => openViewModal(tracker, "weekly")} className="rounded p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark" title="צפה בדוח">
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         {canMarkAsSent && !weeklySent && (
-                          <button
-                            onClick={() => markWeeklySent(client.id)}
-                            className="rounded-lg border border-brand-border px-2 py-1 text-xs text-brand-muted transition-colors duration-200 hover:bg-brand-bg hover:text-brand-dark"
-                          >
+                          <button onClick={() => openContentModal(client.id, "weekly")} className="rounded-lg border border-brand-border px-2 py-1 text-xs text-brand-muted hover:bg-brand-bg hover:text-brand-dark">
                             סמן כנשלח
                           </button>
                         )}
-                        {weeklyWarning(tracker.weeklyLastSent) && (
-                          <AlertTriangle className="h-4 w-4 text-red-400" />
-                        )}
+                        {weeklyWarning(tracker.weeklyLastSent) && <AlertTriangle className="h-4 w-4 text-red-400" />}
                       </div>
                     </td>
 
-                    {/* דוח חודשי */}
+                    {/* חודשי */}
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
                         {monthlySent ? (
-                          <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
-                            נשלח
-                          </span>
+                          <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">נשלח</span>
                         ) : (
-                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">
-                            לא נשלח
-                          </span>
-                        )}
-                        {monthlySent && (
-                          <span className="text-xs text-brand-muted">{formatDate(tracker.monthlyLastSent)}</span>
+                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">לא נשלח</span>
                         )}
                         <span className="text-xs text-brand-muted">{getMonthlyPeriod(tracker.monthlyLastSent)}</span>
+                        {monthlySent && tracker.monthlyContent && (
+                          <button onClick={() => openViewModal(tracker, "monthly")} className="rounded p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark" title="צפה בדוח">
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         {canMarkAsSent && !monthlySent && (
-                          <button
-                            onClick={() => markMonthlySent(client.id)}
-                            className="rounded-lg border border-brand-border px-2 py-1 text-xs text-brand-muted transition-colors duration-200 hover:bg-brand-bg hover:text-brand-dark"
-                          >
+                          <button onClick={() => openContentModal(client.id, "monthly")} className="rounded-lg border border-brand-border px-2 py-1 text-xs text-brand-muted hover:bg-brand-bg hover:text-brand-dark">
                             סמן כנשלח
                           </button>
                         )}
-                        {monthlyWarning(tracker.monthlyLastSent) && (
-                          <AlertTriangle className="h-4 w-4 text-red-400" />
-                        )}
+                        {monthlyWarning(tracker.monthlyLastSent) && <AlertTriangle className="h-4 w-4 text-red-400" />}
                       </div>
                     </td>
                   </tr>
@@ -368,36 +401,128 @@ export default function ReportsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* ========== מודל הזנת תוכן דוח ========== */}
+      <Modal isOpen={!!contentModal} onClose={() => setContentModal(null)} title={`סיכום ${contentModal?.type === "weekly" ? "שבועי" : "חודשי"} — ${contentModal?.clientName ?? ""}`} size="lg">
+        {contentModal && (
+          <div className="space-y-4">
+            <p className="text-sm text-brand-muted">הזן את הסיכום שנשלח ללקוח. לא ניתן לסמן כנשלח ללא תוכן.</p>
+            <textarea
+              value={contentText}
+              onChange={(e) => setContentText(e.target.value)}
+              rows={8}
+              className={inputClass}
+              placeholder="הדבק כאן את הסיכום השבועי שנשלח ללקוח..."
+              dir="rtl"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-brand-border pt-4">
+              <button
+                onClick={generateAiSummary}
+                disabled={aiLoading}
+                className="flex items-center gap-2 rounded-lg border border-brand-gold bg-brand-gold/10 px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/20 disabled:opacity-50"
+              >
+                {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-brand-gold" />}
+                {aiLoading ? "מייצר סיכום..." : "צור סיכום עם AI"}
+              </button>
+              <div className="flex gap-3">
+                <button onClick={() => setContentModal(null)} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg">
+                  ביטול
+                </button>
+                <button
+                  onClick={saveReportContent}
+                  disabled={!contentText.trim() || contentSaving}
+                  className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
+                >
+                  {contentSaving ? "שומר..." : "שמור וסמן כנשלח"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ========== מודל צפייה בדוח ========== */}
+      <Modal isOpen={!!viewModal} onClose={() => setViewModal(null)} title={`דוח ${viewModal?.type === "weekly" ? "שבועי" : "חודשי"} — ${viewModal?.clientName ?? ""}`} size="lg">
+        {viewModal && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-brand-bg p-3">
+                <p className="text-xs text-brand-muted">תקופת דיווח</p>
+                <p className="text-sm font-medium text-brand-dark">{viewModal.period}</p>
+              </div>
+              <div className="rounded-lg bg-brand-bg p-3">
+                <p className="text-xs text-brand-muted">תאריך שליחה</p>
+                <p className="text-sm font-medium text-brand-dark">{formatDate(viewModal.date)}</p>
+              </div>
+              <div className="rounded-lg bg-brand-bg p-3">
+                <p className="text-xs text-brand-muted">נשלח על ידי</p>
+                <p className="text-sm font-medium text-brand-dark">{viewModal.author || "—"}</p>
+              </div>
+            </div>
+            <div className="rounded-lg border border-brand-border bg-brand-bg p-4">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-brand-dark">{viewModal.content || "אין תוכן"}</p>
+            </div>
+            <div className="flex gap-3 border-t border-brand-border pt-4">
+              <button
+                onClick={() => { navigator.clipboard.writeText(viewModal.content); }}
+                className="flex items-center gap-2 rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg"
+              >
+                <Copy className="h-4 w-4" />
+                העתק
+              </button>
+              <button
+                onClick={() => {
+                  const tracker = trackers.find((t) => {
+                    const c = clients.find((cl) => cl.name === viewModal.clientName);
+                    return c && t.clientId === c.id;
+                  });
+                  if (tracker) {
+                    setViewModal(null);
+                    openEditModal(tracker, viewModal.type);
+                  }
+                }}
+                className="flex items-center gap-2 rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg"
+              >
+                <Pencil className="h-4 w-4" />
+                ערוך
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ========== מודל עריכה בדיעבד ========== */}
+      <Modal isOpen={!!editModal} onClose={() => setEditModal(null)} title={`עריכת דוח — ${editModal?.clientName ?? ""}`} size="lg">
+        {editModal && (
+          <div className="space-y-4">
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              rows={8}
+              className={inputClass}
+              dir="rtl"
+            />
+            <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
+              <button onClick={() => setEditModal(null)} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg">ביטול</button>
+              <button onClick={saveEdit} disabled={editSaving} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">
+                {editSaving ? "שומר..." : "שמור"}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
 
-// ==================== KPI כרטיס ====================
-
-function KpiCard({
-  title,
-  value,
-  color,
-  icon,
-}: {
-  title: string;
-  value: number;
-  color: "green" | "red";
-  icon: React.ReactNode;
-}) {
+function KpiCard({ title, value, color, icon }: { title: string; value: number; color: "green" | "red"; icon: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-brand-border bg-brand-light p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <p className="text-sm text-brand-muted">{title}</p>
         {icon}
       </div>
-      <p
-        className={`mt-2 text-3xl font-semibold ${
-          color === "green" ? "text-green-600" : "text-red-600"
-        }`}
-      >
-        {value}
-      </p>
+      <p className={`mt-2 text-3xl font-semibold ${color === "green" ? "text-green-600" : "text-red-600"}`}>{value}</p>
     </div>
   );
 }

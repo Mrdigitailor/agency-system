@@ -334,6 +334,10 @@ model ReportTracker {
   clientId        String   @id
   weeklyLastSent  String   @default("") // YYYY-MM-DD
   monthlyLastSent String   @default("") // YYYY-MM-DD
+  weeklyContent   String   @default("") // תוכן הדוח השבועי האחרון שנשלח
+  weeklyAuthor    String   @default("") // שם מנהל הקמפיינים ששלח
+  monthlyContent  String   @default("")
+  monthlyAuthor   String   @default("")
   updatedAt       DateTime @updatedAt
 
   @@map("report_trackers")

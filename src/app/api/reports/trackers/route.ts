@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth } from "@/lib/auth/api-guard";
+import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
 
 /**
  * GET — רשימת trackers של כל הלקוחות
@@ -15,11 +15,12 @@ export async function GET() {
 
 /**
  * PATCH — עדכון tracker של לקוח
- * body: { clientId, type: "weekly"|"monthly", date: "YYYY-MM-DD" }
+ * body: { clientId, type: "weekly"|"monthly", date?, content?, author? }
  */
 export async function PATCH(req: Request) {
   const result = await requireAuth();
   if (result instanceof NextResponse) return result;
+  const user = result as AuthUser;
 
   const body = await req.json();
   if (!body.clientId || !body.type) {
@@ -28,19 +29,28 @@ export async function PATCH(req: Request) {
 
   const today = new Date().toISOString().split("T")[0];
   const date = body.date ?? today;
+  const content = body.content ?? "";
+  const author = body.author ?? user.name;
 
-  const updateData: Record<string, string> = {};
-  if (body.type === "weekly") updateData.weeklyLastSent = date;
-  else if (body.type === "monthly") updateData.monthlyLastSent = date;
-  else return NextResponse.json({ error: "סוג דוח לא תקין" }, { status: 400 });
+  if (body.type !== "weekly" && body.type !== "monthly") {
+    return NextResponse.json({ error: "סוג דוח לא תקין" }, { status: 400 });
+  }
+
+  const isWeekly = body.type === "weekly";
 
   const tracker = await prisma.reportTracker.upsert({
     where: { clientId: body.clientId },
-    update: updateData,
+    update: isWeekly
+      ? { weeklyLastSent: date, weeklyContent: content, weeklyAuthor: author }
+      : { monthlyLastSent: date, monthlyContent: content, monthlyAuthor: author },
     create: {
       clientId: body.clientId,
-      weeklyLastSent: body.type === "weekly" ? date : "",
-      monthlyLastSent: body.type === "monthly" ? date : "",
+      weeklyLastSent: isWeekly ? date : "",
+      monthlyLastSent: isWeekly ? "" : date,
+      weeklyContent: isWeekly ? content : "",
+      weeklyAuthor: isWeekly ? author : "",
+      monthlyContent: isWeekly ? "" : content,
+      monthlyAuthor: isWeekly ? "" : author,
     },
   });
 
