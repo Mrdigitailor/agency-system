@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Plus,
   Phone,
@@ -9,6 +9,10 @@ import {
   Calendar,
   FileText,
   PhoneCall,
+  Search,
+  Star,
+  X,
+  Pencil,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { useApp } from "@/lib/data/context";
@@ -20,8 +24,7 @@ import {
   type LeadCall,
 } from "@/lib/data/types";
 import { DndContext, DragEndEvent, closestCenter } from "@dnd-kit/core";
-import { useDroppable } from "@dnd-kit/core";
-import { useDraggable } from "@dnd-kit/core";
+import { useDroppable, useDraggable } from "@dnd-kit/core";
 
 /* ── עזר ── */
 
@@ -39,6 +42,13 @@ function formatDate(dateStr: string) {
     year: "numeric",
   });
 }
+function monthsBetween(start: string, end: string) {
+  if (!start) return 0;
+  const s = new Date(start);
+  const e = end ? new Date(end) : new Date();
+  const diff = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  return Math.max(0, diff);
+}
 
 /* ── סגנונות ── */
 
@@ -51,17 +61,61 @@ const btnSecondary =
 const cardClass =
   "rounded-lg border border-brand-border bg-brand-light p-6 shadow-sm";
 
-/* ── סטטוסים לקנבן ── */
+/* ── קבועים ── */
+
+const CHURN_REASONS = [
+  { value: "price", label: "מחיר" },
+  { value: "no_results", label: "לא ראה תוצאות" },
+  { value: "service", label: "שירות" },
+  { value: "competition", label: "תחרות" },
+  { value: "personal", label: "סיבה אישית" },
+  { value: "other", label: "אחר" },
+];
 
 const KANBAN_COLUMNS: { value: Lead["status"]; label: string }[] = [
-  { value: "new", label: "\u05D7\u05D3\u05E9" },
-  { value: "contacted", label: "\u05E0\u05D5\u05E6\u05E8 \u05E7\u05E9\u05E8" },
-  { value: "meeting_set", label: "\u05E0\u05E7\u05D1\u05E2\u05D4 \u05E4\u05D2\u05D9\u05E9\u05D4" },
-  { value: "proposal_sent", label: "\u05E0\u05E9\u05DC\u05D7\u05D4 \u05D4\u05E6\u05E2\u05D4" },
-  { value: "negotiation", label: "\u05DE\u05E9\u05D0 \u05D5\u05DE\u05EA\u05DF" },
-  { value: "won", label: "\u05E0\u05E1\u05D2\u05E8" },
-  { value: "lost", label: "\u05E0\u05E4\u05E1\u05DC" },
+  { value: "new", label: "חדש" },
+  { value: "contacted", label: "נוצר קשר" },
+  { value: "meeting_set", label: "נקבעה פגישה" },
+  { value: "proposal_sent", label: "נשלחה הצעה" },
+  { value: "negotiation", label: "משא ומתן" },
 ];
+
+const SOURCE_COLORS: Record<string, string> = {
+  website: "bg-brand-info/20 text-brand-info",
+  referral: "bg-brand-success/20 text-brand-success",
+  social: "bg-purple-100 text-purple-700",
+  cold_call: "bg-brand-warning/20 text-brand-warning",
+  event: "bg-pink-100 text-pink-700",
+  other: "bg-gray-100 text-brand-muted",
+};
+
+/* ── StarRating ── */
+
+function StarRating({
+  value,
+  onChange,
+  readonly = false,
+}: {
+  value: number;
+  onChange?: (v: number) => void;
+  readonly?: boolean;
+}) {
+  return (
+    <div className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          disabled={readonly || !onChange}
+          onClick={() => onChange?.(value === star ? 0 : star)}
+          className={`text-sm ${readonly ? "cursor-default" : "cursor-pointer hover:scale-110"} transition-transform`}
+        >
+          {star <= value ? "⭐" : "☆"}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /* ── Kanban Droppable Column ── */
 
@@ -85,15 +139,12 @@ function KanbanColumn({
         isOver ? "ring-2 ring-brand-gold" : ""
       }`}
     >
-      {/* כותרת עמודה */}
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-brand-dark">{label}</h3>
         <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-border px-1.5 text-xs font-medium text-brand-dark">
           {leads.length}
         </span>
       </div>
-
-      {/* כרטיסים */}
       <div className="flex flex-1 flex-col gap-2">
         {leads.map((lead) => (
           <KanbanCard key={lead.id} lead={lead} onClick={() => onCardClick(lead)} />
@@ -110,9 +161,7 @@ function KanbanCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
     useDraggable({ id: lead.id });
 
   const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-      }
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
 
   return (
@@ -126,20 +175,24 @@ function KanbanCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
         isDragging ? "opacity-50 shadow-lg" : ""
       }`}
     >
-      <p className="text-sm font-medium text-brand-dark">{lead.name}</p>
-      {lead.company && (
-        <p className="mt-0.5 text-xs text-brand-muted">{lead.company}</p>
+      <p className="mb-1 text-[11px] text-brand-muted">{formatDate(lead.createdAt)}</p>
+      <p className="text-sm font-semibold text-brand-dark">{lead.name}</p>
+      {lead.qualityRating > 0 && (
+        <StarRating value={lead.qualityRating} readonly />
       )}
-      {lead.value > 0 && (
-        <p className="mt-1 text-xs font-medium text-brand-dark">
-          {"\u20AA"} {lead.value.toLocaleString()}
+      <div className="mt-1">
+        <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${SOURCE_COLORS[lead.source] || SOURCE_COLORS.other}`}>
+          {getSourceLabel(lead.source)}
+        </span>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        {lead.phone && <Phone className="h-3 w-3 text-brand-muted" />}
+        {lead.email && <Mail className="h-3 w-3 text-brand-muted" />}
+      </div>
+      {(lead.dealValue > 0 || lead.value > 0) && (
+        <p className="mt-1 text-xs font-medium text-brand-success">
+          ₪ {(lead.dealValue || lead.value).toLocaleString()}
         </p>
-      )}
-      {lead.nextFollowUp && (
-        <div className="mt-1 flex items-center gap-1 text-xs text-brand-muted">
-          <Calendar className="h-3 w-3" />
-          {formatDate(lead.nextFollowUp)}
-        </div>
       )}
     </div>
   );
@@ -153,13 +206,44 @@ export default function CrmPage() {
   const { leads, addLead, updateLead, addLeadCall, employees, settings } =
     useApp();
 
+  /* ── State ── */
+  const [subTab, setSubTab] = useState<"leads" | "closings" | "churned">("leads");
+  const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isChurnModalOpen, setIsChurnModalOpen] = useState(false);
+  const [churnTarget, setChurnTarget] = useState<Lead | null>(null);
+
+  /* ── Filters ── */
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterSource, setFilterSource] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [activeTab, setActiveTab] = useState<"table" | "kanban">("table");
+  const [filterQuality, setFilterQuality] = useState("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterValueMin, setFilterValueMin] = useState("");
+  const [filterValueMax, setFilterValueMax] = useState("");
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setFilterSource("all");
+    setFilterStatus("all");
+    setFilterQuality("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setFilterValueMin("");
+    setFilterValueMax("");
+  };
+
+  /* ── Churn modal state ── */
+  const [churnForm, setChurnForm] = useState({
+    churnedAt: "",
+    churnReason: "",
+    churnDetails: "",
+  });
 
   /* ── טופס ליד חדש ── */
-
   const emptyForm = {
     name: "",
     company: "",
@@ -184,7 +268,6 @@ export default function CrmPage() {
   };
 
   const [form, setForm] = useState(emptyForm);
-
   const resetForm = () => setForm(emptyForm);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -197,6 +280,16 @@ export default function CrmPage() {
       proposalDate: "",
       proposalFileName: "",
       internalNotes: "",
+      qualityRating: 0,
+      dealValue: 0,
+      monthlyValue: 0,
+      serviceType: "",
+      proposalUrl: "",
+      closedAt: "",
+      endDate: "",
+      churnedAt: "",
+      churnReason: "",
+      churnDetails: "",
     });
     resetForm();
     setIsModalOpen(false);
@@ -211,13 +304,36 @@ export default function CrmPage() {
     }));
   };
 
-  /* ── טופס שיחה חדשה ── */
+  /* ── Edit form ── */
+  const [editForm, setEditForm] = useState<Partial<Lead>>({});
 
-  const [callForm, setCallForm] = useState({
-    date: "",
-    summary: "",
-    caller: "",
-  });
+  const openEditModal = (lead: Lead) => {
+    setEditForm({ ...lead });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editForm.id) return;
+    const { id, calls, ...rest } = editForm as Lead;
+    updateLead(id, rest);
+    setIsEditModalOpen(false);
+    if (selectedLead?.id === id) {
+      setSelectedLead({ ...selectedLead, ...rest });
+    }
+  };
+
+  const toggleEditService = (service: string) => {
+    setEditForm((p) => ({
+      ...p,
+      interestedServices: (p.interestedServices || []).includes(service)
+        ? (p.interestedServices || []).filter((s) => s !== service)
+        : [...(p.interestedServices || []), service],
+    }));
+  };
+
+  /* ── שיחה חדשה ── */
+  const [callForm, setCallForm] = useState({ date: "", summary: "", caller: "" });
 
   const handleAddCall = () => {
     if (!selectedLead || !callForm.date || !callForm.summary.trim()) return;
@@ -231,18 +347,15 @@ export default function CrmPage() {
     if (updated)
       setSelectedLead({
         ...updated,
-        calls: [...updated.calls, { id: `temp`, ...callForm }],
+        calls: [...updated.calls, { id: `temp-${Date.now()}`, ...callForm }],
       });
   };
 
   /* ── הצעה ופנימי ── */
-
   const handleProposalToggle = () => {
     if (!selectedLead) return;
     updateLead(selectedLead.id, { hasProposal: !selectedLead.hasProposal });
-    setSelectedLead((p) =>
-      p ? { ...p, hasProposal: !p.hasProposal } : null,
-    );
+    setSelectedLead((p) => (p ? { ...p, hasProposal: !p.hasProposal } : null));
   };
 
   const handleProposalDateChange = (date: string) => {
@@ -268,1007 +381,1173 @@ export default function CrmPage() {
   const handleSaveInternalNotes = () => {
     if (!selectedLead) return;
     updateLead(selectedLead.id, { internalNotes: internalNotesLocal });
-    setSelectedLead((p) =>
-      p ? { ...p, internalNotes: internalNotesLocal } : null,
-    );
+    setSelectedLead((p) => (p ? { ...p, internalNotes: internalNotesLocal } : null));
   };
 
-  const handleStatusChange = (status: Lead["status"]) => {
+  const handleStatusChange = (newStatus: Lead["status"]) => {
     if (!selectedLead) return;
-    updateLead(selectedLead.id, { status });
-    setSelectedLead((p) => (p ? { ...p, status } : null));
+    if (newStatus === "churned") {
+      setChurnTarget(selectedLead);
+      setChurnForm({ churnedAt: new Date().toISOString().split("T")[0], churnReason: "", churnDetails: "" });
+      setIsChurnModalOpen(true);
+      return;
+    }
+    const extra: Partial<Lead> = {};
+    if (newStatus === "won" && !selectedLead.closedAt) {
+      extra.closedAt = new Date().toISOString().split("T")[0];
+    }
+    updateLead(selectedLead.id, { status: newStatus, ...extra });
+    setSelectedLead((p) => (p ? { ...p, status: newStatus, ...extra } : null));
+  };
+
+  const handleChurnSubmit = () => {
+    if (!churnTarget || !churnForm.churnedAt || !churnForm.churnReason) return;
+    updateLead(churnTarget.id, {
+      status: "churned",
+      churnedAt: churnForm.churnedAt,
+      churnReason: churnForm.churnReason,
+      churnDetails: churnForm.churnDetails,
+    });
+    if (selectedLead?.id === churnTarget.id) {
+      setSelectedLead((p) =>
+        p ? { ...p, status: "churned", churnedAt: churnForm.churnedAt, churnReason: churnForm.churnReason, churnDetails: churnForm.churnDetails } : null,
+      );
+    }
+    setIsChurnModalOpen(false);
+    setChurnTarget(null);
   };
 
   /* ── Kanban drag-and-drop ── */
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) return;
-
     const leadId = active.id as string;
     const newStatus = over.id as Lead["status"];
-
     const lead = leads.find((l) => l.id === leadId);
     if (!lead || lead.status === newStatus) return;
-
-    updateLead(leadId, { status: newStatus });
+    if (newStatus === "churned") {
+      setChurnTarget(lead);
+      setChurnForm({ churnedAt: new Date().toISOString().split("T")[0], churnReason: "", churnDetails: "" });
+      setIsChurnModalOpen(true);
+      return;
+    }
+    const extra: Partial<Lead> = {};
+    if (newStatus === "won" && !lead.closedAt) {
+      extra.closedAt = new Date().toISOString().split("T")[0];
+    }
+    updateLead(leadId, { status: newStatus, ...extra });
   };
 
-  /* ── פילטר ו-KPI ── */
+  /* ── Quality rating inline update ── */
+  const handleQualityChange = (leadId: string, rating: number) => {
+    updateLead(leadId, { qualityRating: rating });
+  };
 
-  const filteredLeads =
-    filterStatus === "all"
-      ? leads
-      : leads.filter((l) => l.status === filterStatus);
+  /* ── Filtered data ── */
+  const activeLeads = useMemo(() => {
+    let result = leads.filter((l) => l.status !== "won" && l.status !== "churned");
 
-  const totalValue = leads
-    .filter((l) => l.status !== "lost")
-    .reduce((s, l) => s + l.value, 0);
-  const newLeads = leads.filter((l) => l.status === "new").length;
-  const wonLeads = leads.filter((l) => l.status === "won").length;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (l) =>
+          l.name.toLowerCase().includes(q) ||
+          l.phone.includes(q) ||
+          l.email.toLowerCase().includes(q),
+      );
+    }
+    if (filterSource !== "all") result = result.filter((l) => l.source === filterSource);
+    if (filterStatus !== "all") result = result.filter((l) => l.status === filterStatus);
+    if (filterQuality !== "all") result = result.filter((l) => l.qualityRating === Number(filterQuality));
+    if (filterDateFrom) result = result.filter((l) => l.createdAt >= filterDateFrom);
+    if (filterDateTo) result = result.filter((l) => l.createdAt <= filterDateTo);
+    if (filterValueMin) result = result.filter((l) => (l.dealValue || l.value) >= Number(filterValueMin));
+    if (filterValueMax) result = result.filter((l) => (l.dealValue || l.value) <= Number(filterValueMax));
 
-  // עדכון selectedLead כשה-leads משתנים
-  const currentSelectedLead = selectedLead
-    ? leads.find((l) => l.id === selectedLead.id) ?? selectedLead
-    : null;
+    return result.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  }, [leads, searchQuery, filterSource, filterStatus, filterQuality, filterDateFrom, filterDateTo, filterValueMin, filterValueMax]);
+
+  const wonLeads = useMemo(
+    () => leads.filter((l) => l.status === "won").sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || "")),
+    [leads],
+  );
+
+  const churnedLeads = useMemo(
+    () => leads.filter((l) => l.status === "churned").sort((a, b) => (b.churnedAt || "").localeCompare(a.churnedAt || "")),
+    [leads],
+  );
+
+  /* ── KPIs ── */
+  const leadsKpi = useMemo(() => {
+    const total = activeLeads.length;
+    const totalValue = activeLeads.reduce((sum, l) => sum + (l.dealValue || l.value || 0), 0);
+    const newCount = activeLeads.filter((l) => l.status === "new").length;
+    const proposalCount = activeLeads.filter((l) => l.hasProposal).length;
+    return { total, totalValue, newCount, proposalCount };
+  }, [activeLeads]);
+
+  const closingsKpi = useMemo(() => {
+    const total = wonLeads.length;
+    const totalDealValue = wonLeads.reduce((sum, l) => sum + (l.dealValue || 0), 0);
+    const activeClients = wonLeads.filter((l) => !l.endDate || new Date(l.endDate) > new Date()).length;
+    const avgDealValue = total > 0 ? Math.round(totalDealValue / total) : 0;
+    return { total, totalDealValue, activeClients, avgDealValue };
+  }, [wonLeads]);
+
+  const churnedKpi = useMemo(() => {
+    const total = churnedLeads.length;
+    const avgMonths =
+      total > 0
+        ? Math.round(churnedLeads.reduce((sum, l) => sum + monthsBetween(l.closedAt, l.churnedAt), 0) / total)
+        : 0;
+    const reasonCounts: Record<string, number> = {};
+    churnedLeads.forEach((l) => {
+      if (l.churnReason) reasonCounts[l.churnReason] = (reasonCounts[l.churnReason] || 0) + 1;
+    });
+    const topReasons = Object.entries(reasonCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([reason, count]) => ({
+        label: CHURN_REASONS.find((r) => r.value === reason)?.label || reason,
+        count,
+      }));
+    return { total, avgMonths, topReasons };
+  }, [churnedLeads]);
+
+  /* ══════════════════════════════════════════
+     RENDER
+     ══════════════════════════════════════════ */
 
   return (
     <div className="space-y-6">
-      {/* כותרת + כפתור */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-brand-dark">
-          CRM &mdash; לידים
-        </h1>
-        <button
-          onClick={() => {
-            resetForm();
-            setIsModalOpen(true);
-          }}
-          className={`flex items-center gap-2 ${btnPrimary}`}
-        >
-          <Plus className="h-4 w-4" />
-          ליד חדש
+      {/* ── כותרת + טאבים ── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-semibold text-brand-dark">CRM</h1>
+        <button onClick={() => setIsModalOpen(true)} className={btnPrimary}>
+          <span className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            ליד חדש
+          </span>
         </button>
       </div>
 
-      {/* KPI */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm">
-          <p className="text-sm text-brand-muted">סה״כ לידים</p>
-          <p className="mt-1 text-2xl font-semibold text-brand-dark">
-            {leads.length}
-          </p>
-        </div>
-        <div className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm">
-          <p className="text-sm text-brand-muted">חדשים</p>
-          <p className="mt-1 text-2xl font-semibold text-brand-info">
-            {newLeads}
-          </p>
-        </div>
-        <div className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm">
-          <p className="text-sm text-brand-muted">נסגרו</p>
-          <p className="mt-1 text-2xl font-semibold text-brand-success">
-            {wonLeads}
-          </p>
-        </div>
-        <div className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm">
-          <p className="text-sm text-brand-muted">ערך צפוי</p>
-          <p className="mt-1 text-2xl font-semibold text-brand-dark">
-            {"\u20AA"} {totalValue.toLocaleString()}
-          </p>
-        </div>
+      {/* ── Sub-tabs ── */}
+      <div className="flex gap-1 rounded-lg bg-brand-bg p-1">
+        {(
+          [
+            { key: "leads", label: "לידים" },
+            { key: "closings", label: "סגירות" },
+            { key: "churned", label: "לקוחות נוטשים" },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setSubTab(tab.key)}
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+              subTab === tab.key
+                ? "bg-brand-light text-brand-dark shadow-sm"
+                : "text-brand-muted hover:text-brand-dark"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* טאבים + פילטר */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* טאבים */}
-        <div className="flex items-center gap-1 rounded-full border border-brand-border bg-brand-bg p-1">
-          <button
-            onClick={() => setActiveTab("table")}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-200 ${
-              activeTab === "table"
-                ? "bg-brand-gold text-brand-dark"
-                : "bg-brand-bg text-brand-muted hover:text-brand-dark"
-            }`}
-          >
-            כל הלידים
-          </button>
-          <button
-            onClick={() => setActiveTab("kanban")}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-200 ${
-              activeTab === "kanban"
-                ? "bg-brand-gold text-brand-dark"
-                : "bg-brand-bg text-brand-muted hover:text-brand-dark"
-            }`}
-          >
-            Kanban
-          </button>
-        </div>
-
-        {/* פילטר סטטוס */}
-        {activeTab === "table" && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-brand-muted">סטטוס:</span>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none"
-            >
-              <option value="all">הכל</option>
-              {LEAD_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+      {/* ════════════════════════════════════════
+         LEADS TAB
+         ════════════════════════════════════════ */}
+      {subTab === "leads" && (
+        <>
+          {/* KPI */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className={cardClass}>
+              <p className="text-xs text-brand-muted">סה&quot;כ לידים</p>
+              <p className="mt-1 text-2xl font-semibold text-brand-dark">{leadsKpi.total}</p>
+            </div>
+            <div className={cardClass}>
+              <p className="text-xs text-brand-muted">שווי כולל</p>
+              <p className="mt-1 text-2xl font-semibold text-brand-dark">₪ {leadsKpi.totalValue.toLocaleString()}</p>
+            </div>
+            <div className={cardClass}>
+              <p className="text-xs text-brand-muted">לידים חדשים</p>
+              <p className="mt-1 text-2xl font-semibold text-brand-info">{leadsKpi.newCount}</p>
+            </div>
+            <div className={cardClass}>
+              <p className="text-xs text-brand-muted">הצעות נשלחו</p>
+              <p className="mt-1 text-2xl font-semibold text-brand-warning">{leadsKpi.proposalCount}</p>
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* ========== תצוגת טבלה ========== */}
-      {activeTab === "table" && (
-        <div className="rounded-lg border border-brand-border bg-brand-light shadow-sm">
-          <div className="overflow-x-auto">
+          {/* Filter bar */}
+          <div className={`${cardClass} space-y-3`}>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {/* Search */}
+              <div className="relative col-span-2 sm:col-span-1">
+                <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-muted" />
+                <input
+                  type="text"
+                  placeholder="חיפוש שם / טלפון / אימייל..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`${inputClass} pr-9`}
+                />
+              </div>
+              {/* Source */}
+              <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className={inputClass}>
+                <option value="all">כל המקורות</option>
+                {LEAD_SOURCES.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+              {/* Status */}
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={inputClass}>
+                <option value="all">כל הסטטוסים</option>
+                {KANBAN_COLUMNS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+                <option value="lost">אבד</option>
+              </select>
+              {/* Quality */}
+              <select value={filterQuality} onChange={(e) => setFilterQuality(e.target.value)} className={inputClass}>
+                <option value="all">כל הדירוגים</option>
+                {[1, 2, 3, 4, 5].map((q) => (
+                  <option key={q} value={q}>{q} כוכבים</option>
+                ))}
+                <option value="0">ללא דירוג</option>
+              </select>
+              {/* Date range */}
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                placeholder="מתאריך"
+                className={inputClass}
+              />
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                placeholder="עד תאריך"
+                className={inputClass}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Value range */}
+              <input
+                type="number"
+                value={filterValueMin}
+                onChange={(e) => setFilterValueMin(e.target.value)}
+                placeholder="שווי מינימלי"
+                className={`${inputClass} w-36`}
+              />
+              <input
+                type="number"
+                value={filterValueMax}
+                onChange={(e) => setFilterValueMax(e.target.value)}
+                placeholder="שווי מקסימלי"
+                className={`${inputClass} w-36`}
+              />
+              <button onClick={clearFilters} className={btnSecondary}>
+                <span className="flex items-center gap-1">
+                  <X className="h-3 w-3" />
+                  נקה פילטרים
+                </span>
+              </button>
+              {/* View toggle */}
+              <div className="mr-auto flex gap-1 rounded-lg bg-brand-bg p-1">
+                <button
+                  onClick={() => setViewMode("table")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors duration-200 ${viewMode === "table" ? "bg-brand-light shadow-sm text-brand-dark" : "text-brand-muted"}`}
+                >
+                  טבלה
+                </button>
+                <button
+                  onClick={() => setViewMode("kanban")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors duration-200 ${viewMode === "kanban" ? "bg-brand-light shadow-sm text-brand-dark" : "text-brand-muted"}`}
+                >
+                  קנבן
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Table view */}
+          {viewMode === "table" && (
+            <div className={`${cardClass} overflow-x-auto p-0`}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-brand-border bg-brand-bg text-brand-muted">
+                    <th className="px-4 py-3 text-right font-medium">תאריך כניסה</th>
+                    <th className="px-4 py-3 text-right font-medium">שם</th>
+                    <th className="px-4 py-3 text-right font-medium">חברה</th>
+                    <th className="px-4 py-3 text-right font-medium">מקור</th>
+                    <th className="px-4 py-3 text-right font-medium">ערך</th>
+                    <th className="px-4 py-3 text-right font-medium">איכות</th>
+                    <th className="px-4 py-3 text-right font-medium">סטטוס</th>
+                    <th className="px-4 py-3 text-right font-medium">מעקב הבא</th>
+                    <th className="px-4 py-3 text-right font-medium">פרטי קשר</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeLeads.map((lead) => {
+                    const statusInfo = getStatusInfo(lead.status);
+                    return (
+                      <tr
+                        key={lead.id}
+                        onClick={() => openDetailModal(lead)}
+                        className="cursor-pointer border-b border-brand-border transition-colors duration-200 hover:bg-brand-bg"
+                      >
+                        <td className="px-4 py-3 text-brand-muted">{formatDate(lead.createdAt)}</td>
+                        <td className="px-4 py-3 font-medium text-brand-dark">{lead.name}</td>
+                        <td className="px-4 py-3 text-brand-muted">{lead.company || "\u2014"}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${SOURCE_COLORS[lead.source] || SOURCE_COLORS.other}`}>
+                            {getSourceLabel(lead.source)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-brand-dark">
+                          {(lead.dealValue || lead.value) > 0 ? `₪ ${(lead.dealValue || lead.value).toLocaleString()}` : "\u2014"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <StarRating
+                            value={lead.qualityRating || 0}
+                            onChange={(v) => handleQualityChange(lead.id, v)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium text-brand-light ${statusInfo.color}`}>
+                            {statusInfo.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-brand-muted">
+                          {lead.nextFollowUp ? (
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {formatDate(lead.nextFollowUp)}
+                            </span>
+                          ) : (
+                            "\u2014"
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            {lead.phone && (
+                              <a href={`tel:${lead.phone}`} className="text-brand-muted hover:text-brand-dark">
+                                <Phone className="h-4 w-4" />
+                              </a>
+                            )}
+                            {lead.email && (
+                              <a href={`mailto:${lead.email}`} className="text-brand-muted hover:text-brand-dark">
+                                <Mail className="h-4 w-4" />
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {activeLeads.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-8 text-center text-brand-muted">
+                        אין לידים להצגה
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Kanban view */}
+          {viewMode === "kanban" && (
+            <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <div className="flex gap-4 overflow-x-auto pb-4">
+                {KANBAN_COLUMNS.map((col) => (
+                  <KanbanColumn
+                    key={col.value}
+                    status={col.value}
+                    label={col.label}
+                    leads={activeLeads.filter((l) => l.status === col.value)}
+                    onCardClick={openDetailModal}
+                  />
+                ))}
+              </div>
+            </DndContext>
+          )}
+        </>
+      )}
+
+      {/* ════════════════════════════════════════
+         CLOSINGS TAB
+         ════════════════════════════════════════ */}
+      {subTab === "closings" && (
+        <>
+          {/* KPI */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className={cardClass}>
+              <p className="text-xs text-brand-muted">סה&quot;כ סגירות</p>
+              <p className="mt-1 text-2xl font-semibold text-brand-dark">{closingsKpi.total}</p>
+            </div>
+            <div className={cardClass}>
+              <p className="text-xs text-brand-muted">שווי עסקאות כולל</p>
+              <p className="mt-1 text-2xl font-semibold text-brand-success">₪ {closingsKpi.totalDealValue.toLocaleString()}</p>
+            </div>
+            <div className={cardClass}>
+              <p className="text-xs text-brand-muted">לקוחות פעילים</p>
+              <p className="mt-1 text-2xl font-semibold text-brand-info">{closingsKpi.activeClients}</p>
+            </div>
+            <div className={cardClass}>
+              <p className="text-xs text-brand-muted">ממוצע שווי עסקה</p>
+              <p className="mt-1 text-2xl font-semibold text-brand-dark">₪ {closingsKpi.avgDealValue.toLocaleString()}</p>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className={`${cardClass} overflow-x-auto p-0`}>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-brand-border bg-brand-bg/50">
-                  <th className="px-4 py-3 text-right font-medium text-brand-muted">
-                    שם
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-brand-muted">
-                    חברה
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-brand-muted">
-                    מקור
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-brand-muted">
-                    ערך
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-brand-muted">
-                    סטטוס
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-brand-muted">
-                    מעקב הבא
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-brand-muted">
-                    פרטי קשר
-                  </th>
+                <tr className="border-b border-brand-border bg-brand-bg text-brand-muted">
+                  <th className="px-4 py-3 text-right font-medium">שם לקוח</th>
+                  <th className="px-4 py-3 text-right font-medium">תאריך סגירה</th>
+                  <th className="px-4 py-3 text-right font-medium">תאריך סיום</th>
+                  <th className="px-4 py-3 text-right font-medium">חודשי עבודה</th>
+                  <th className="px-4 py-3 text-right font-medium">שירות חודשי</th>
+                  <th className="px-4 py-3 text-right font-medium">הכנסה כוללת</th>
+                  <th className="px-4 py-3 text-right font-medium">סטטוס</th>
+                  <th className="px-4 py-3 text-right font-medium">מקור</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredLeads.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-6 py-12 text-center text-brand-muted"
-                    >
-                      אין לידים להצגה
-                    </td>
-                  </tr>
-                )}
-                {filteredLeads.map((lead) => {
-                  const statusInfo = getStatusInfo(lead.status);
+                {wonLeads.map((lead) => {
+                  const months = monthsBetween(lead.closedAt, lead.endDate);
+                  const totalRevenue = (lead.monthlyValue || 0) * months + (lead.dealValue || 0);
+                  const isActive = !lead.endDate || new Date(lead.endDate) > new Date();
                   return (
                     <tr
                       key={lead.id}
                       onClick={() => openDetailModal(lead)}
-                      className="cursor-pointer border-b border-brand-border transition-colors duration-200 hover:bg-brand-bg/30"
+                      className="cursor-pointer border-b border-brand-border transition-colors duration-200 hover:bg-brand-bg"
                     >
-                      <td className="px-4 py-4 font-medium text-brand-dark">
-                        {lead.name}
+                      <td className="px-4 py-3 font-medium text-brand-dark">{lead.name}</td>
+                      <td className="px-4 py-3 text-brand-muted">{formatDate(lead.closedAt)}</td>
+                      <td className="px-4 py-3 text-brand-muted">{formatDate(lead.endDate)}</td>
+                      <td className="px-4 py-3 text-brand-dark">{months}</td>
+                      <td className="px-4 py-3 text-brand-dark">
+                        {lead.monthlyValue ? `₪ ${lead.monthlyValue.toLocaleString()}` : "\u2014"}
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-1 text-brand-muted">
-                          <Building2 className="h-3.5 w-3.5" />
-                          {lead.company || "\u2014"}
-                        </div>
+                      <td className="px-4 py-3 font-medium text-brand-success">
+                        ₪ {totalRevenue.toLocaleString()}
                       </td>
-                      <td className="px-4 py-4 text-brand-muted">
-                        {getSourceLabel(lead.source)}
-                      </td>
-                      <td className="px-4 py-4 text-brand-dark">
-                        {lead.value > 0
-                          ? `\u20AA ${lead.value.toLocaleString()}`
-                          : "\u2014"}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-bg px-2.5 py-1 text-xs font-medium">
-                          <span
-                            className={`h-2 w-2 rounded-full ${statusInfo.color}`}
-                          />
-                          {statusInfo.label}
+                      <td className="px-4 py-3">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${isActive ? "bg-brand-success/20 text-brand-success" : "bg-gray-100 text-brand-muted"}`}>
+                          {isActive ? "פעיל" : "הסתיים"}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-1 text-xs text-brand-muted">
-                          <Calendar className="h-3.5 w-3.5" />
-                          {formatDate(lead.nextFollowUp)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div
-                          className="flex items-center gap-2"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {lead.phone && (
-                            <a
-                              href={`tel:${lead.phone}`}
-                              className="rounded-lg p-1 text-brand-muted transition-colors duration-200 hover:bg-brand-bg hover:text-brand-dark"
-                            >
-                              <Phone className="h-4 w-4" />
-                            </a>
-                          )}
-                          {lead.email && (
-                            <a
-                              href={`mailto:${lead.email}`}
-                              className="rounded-lg p-1 text-brand-muted transition-colors duration-200 hover:bg-brand-bg hover:text-brand-dark"
-                            >
-                              <Mail className="h-4 w-4" />
-                            </a>
-                          )}
-                        </div>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${SOURCE_COLORS[lead.source] || SOURCE_COLORS.other}`}>
+                          {getSourceLabel(lead.source)}
+                        </span>
                       </td>
                     </tr>
                   );
                 })}
+                {wonLeads.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-brand-muted">
+                      אין סגירות להצגה
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
-        </div>
+        </>
       )}
 
-      {/* ========== תצוגת Kanban ========== */}
-      {activeTab === "kanban" && (
-        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div className="flex gap-4 overflow-x-auto pb-4">
-            {KANBAN_COLUMNS.map((col) => {
-              const columnLeads = leads.filter((l) => l.status === col.value);
-              return (
-                <KanbanColumn
-                  key={col.value}
-                  status={col.value}
-                  label={col.label}
-                  leads={columnLeads}
-                  onCardClick={openDetailModal}
-                />
-              );
-            })}
+      {/* ════════════════════════════════════════
+         CHURNED TAB
+         ════════════════════════════════════════ */}
+      {subTab === "churned" && (
+        <>
+          {/* KPI */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+            <div className={cardClass}>
+              <p className="text-xs text-brand-muted">סה&quot;כ נוטשים</p>
+              <p className="mt-1 text-2xl font-semibold text-brand-danger">{churnedKpi.total}</p>
+            </div>
+            <div className={cardClass}>
+              <p className="text-xs text-brand-muted">ממוצע חודשים כלקוח</p>
+              <p className="mt-1 text-2xl font-semibold text-brand-dark">{churnedKpi.avgMonths}</p>
+            </div>
+            <div className={cardClass}>
+              <p className="text-xs text-brand-muted">סיבות נטישה עיקריות</p>
+              <div className="mt-1 space-y-1">
+                {churnedKpi.topReasons.length > 0 ? (
+                  churnedKpi.topReasons.map((r) => (
+                    <div key={r.label} className="flex items-center justify-between text-sm">
+                      <span className="text-brand-dark">{r.label}</span>
+                      <span className="text-brand-muted">{r.count}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-brand-muted">\u2014</p>
+                )}
+              </div>
+            </div>
           </div>
-        </DndContext>
+
+          {/* Table */}
+          <div className={`${cardClass} overflow-x-auto p-0`}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-brand-border bg-brand-bg text-brand-muted">
+                  <th className="px-4 py-3 text-right font-medium">שם</th>
+                  <th className="px-4 py-3 text-right font-medium">תאריך עזיבה</th>
+                  <th className="px-4 py-3 text-right font-medium">תאריך התחלה</th>
+                  <th className="px-4 py-3 text-right font-medium">חודשי עבודה</th>
+                  <th className="px-4 py-3 text-right font-medium">סיבת עזיבה</th>
+                  <th className="px-4 py-3 text-right font-medium">הכנסה כוללת</th>
+                </tr>
+              </thead>
+              <tbody>
+                {churnedLeads.map((lead) => {
+                  const months = monthsBetween(lead.closedAt, lead.churnedAt);
+                  const totalRevenue = (lead.monthlyValue || 0) * months + (lead.dealValue || 0);
+                  const reasonLabel = CHURN_REASONS.find((r) => r.value === lead.churnReason)?.label || lead.churnReason || "\u2014";
+                  return (
+                    <tr
+                      key={lead.id}
+                      onClick={() => openDetailModal(lead)}
+                      className="cursor-pointer border-b border-brand-border transition-colors duration-200 hover:bg-brand-bg"
+                    >
+                      <td className="px-4 py-3 font-medium text-brand-dark">{lead.name}</td>
+                      <td className="px-4 py-3 text-brand-muted">{formatDate(lead.churnedAt)}</td>
+                      <td className="px-4 py-3 text-brand-muted">{formatDate(lead.closedAt)}</td>
+                      <td className="px-4 py-3 text-brand-dark">{months}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-block rounded-full bg-brand-danger/20 px-2 py-0.5 text-xs font-medium text-brand-danger">
+                          {reasonLabel}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-medium text-brand-success">
+                        ₪ {totalRevenue.toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {churnedLeads.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-brand-muted">
+                      אין לקוחות נוטשים
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
-      {/* ========== מודל ליד חדש ========== */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="ליד חדש"
-        size="lg"
-      >
+      {/* ════════════════════════════════════════
+         NEW LEAD MODAL
+         ════════════════════════════════════════ */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="ליד חדש" size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {/* שם */}
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                שם
-              </label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, name: e.target.value }))
-                }
-                className={inputClass}
-                placeholder="שם איש הקשר"
-                required
-              />
+              <label className="mb-1 block text-xs font-medium text-brand-muted">שם *</label>
+              <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} className={inputClass} placeholder="שם הליד" />
             </div>
-            {/* חברה */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                חברה
-              </label>
-              <input
-                type="text"
-                value={form.company}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, company: e.target.value }))
-                }
-                className={inputClass}
-                placeholder="שם החברה"
-              />
+              <label className="mb-1 block text-xs font-medium text-brand-muted">חברה</label>
+              <input value={form.company} onChange={(e) => setForm((p) => ({ ...p, company: e.target.value }))} className={inputClass} placeholder="שם החברה" />
             </div>
-            {/* אימייל */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                אימייל
-              </label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, email: e.target.value }))
-                }
-                className={inputClass}
-                placeholder="email@example.com"
-              />
+              <label className="mb-1 block text-xs font-medium text-brand-muted">אימייל</label>
+              <input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} className={inputClass} placeholder="email@example.com" />
             </div>
-            {/* טלפון */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                טלפון
-              </label>
-              <input
-                type="tel"
-                value={form.phone}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, phone: e.target.value }))
-                }
-                className={inputClass}
-                placeholder="050-0000000"
-              />
+              <label className="mb-1 block text-xs font-medium text-brand-muted">טלפון</label>
+              <input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} className={inputClass} placeholder="050-0000000" />
             </div>
-            {/* אתר */}
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                אתר
-              </label>
-              <input
-                type="url"
-                value={form.website}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, website: e.target.value }))
-                }
-                className={inputClass}
-                placeholder="https://example.co.il"
-              />
-            </div>
-
-            {/* ── נכסים דיגיטליים ── */}
-            <div className="sm:col-span-2">
-              <p className="mb-2 text-sm font-semibold text-brand-dark">
-                נכסים דיגיטליים
-              </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {/* Facebook */}
-                <div>
-                  <label className="mb-1 block text-xs text-brand-muted">
-                    עמוד פייסבוק
-                  </label>
-                  <input
-                    type="url"
-                    value={form.leadFacebookPage}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        leadFacebookPage: e.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                    placeholder="https://facebook.com/..."
-                  />
-                </div>
-                {/* Instagram */}
-                <div>
-                  <label className="mb-1 block text-xs text-brand-muted">
-                    אינסטגרם
-                  </label>
-                  <input
-                    type="url"
-                    value={form.leadInstagram}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        leadInstagram: e.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                    placeholder="https://instagram.com/..."
-                  />
-                </div>
-                {/* LinkedIn */}
-                <div>
-                  <label className="mb-1 block text-xs text-brand-muted">
-                    לינקדאין
-                  </label>
-                  <input
-                    type="url"
-                    value={form.leadLinkedin}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        leadLinkedin: e.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                    placeholder="https://linkedin.com/company/..."
-                  />
-                </div>
-                {/* TikTok */}
-                <div>
-                  <label className="mb-1 block text-xs text-brand-muted">
-                    טיקטוק
-                  </label>
-                  <input
-                    type="url"
-                    value={form.leadTiktok}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        leadTiktok: e.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                    placeholder="https://tiktok.com/@..."
-                  />
-                </div>
-                {/* Google Ads */}
-                <div>
-                  <label className="mb-1 block text-xs text-brand-muted">
-                    Google Ads
-                  </label>
-                  <input
-                    type="text"
-                    value={form.leadGoogleAds}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        leadGoogleAds: e.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                    placeholder="מזהה חשבון Google Ads"
-                  />
-                </div>
-                {/* Meta Ads */}
-                <div>
-                  <label className="mb-1 block text-xs text-brand-muted">
-                    Meta Ads
-                  </label>
-                  <input
-                    type="text"
-                    value={form.leadMetaAds}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        leadMetaAds: e.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                    placeholder="מזהה חשבון Meta Ads"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* תקציב משוער */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                תקציב משוער
-              </label>
-              <input
-                type="text"
-                value={form.estimatedBudget}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, estimatedBudget: e.target.value }))
-                }
-                className={inputClass}
-                placeholder="10,000-20,000"
-              />
+              <label className="mb-1 block text-xs font-medium text-brand-muted">אתר</label>
+              <input value={form.website} onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))} className={inputClass} placeholder="https://..." />
             </div>
-            {/* איש מכירות */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                איש מכירות
-              </label>
-              <select
-                value={form.salesPerson}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, salesPerson: e.target.value }))
-                }
-                className={inputClass}
-              >
-                <option value="">בחר איש מכירות</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.name}>
-                    {emp.name}
-                  </option>
-                ))}
-              </select>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">נכסים דיגיטליים</label>
+              <input value={form.digitalAssets} onChange={(e) => setForm((p) => ({ ...p, digitalAssets: e.target.value }))} className={inputClass} />
             </div>
-            {/* שירותים מבוקשים */}
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                שירותים מבוקשים
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {INTERESTED_SERVICES.map((service) => (
-                  <button
-                    key={service}
-                    type="button"
-                    onClick={() => toggleService(service)}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-200 ${
-                      form.interestedServices.includes(service)
-                        ? "bg-brand-gold text-brand-dark"
-                        : "border border-brand-border bg-brand-bg text-brand-muted hover:bg-brand-bg/80"
-                    }`}
-                  >
-                    {service}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* מקור */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                מקור
-              </label>
-              <select
-                value={form.source}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    source: e.target.value as Lead["source"],
-                  }))
-                }
-                className={inputClass}
-              >
+              <label className="mb-1 block text-xs font-medium text-brand-muted">מקור</label>
+              <select value={form.source} onChange={(e) => setForm((p) => ({ ...p, source: e.target.value as Lead["source"] }))} className={inputClass}>
                 {LEAD_SOURCES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
+                  <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
             </div>
-            {/* סטטוס */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                סטטוס
-              </label>
-              <select
-                value={form.status}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    status: e.target.value as Lead["status"],
-                  }))
-                }
-                className={inputClass}
-              >
-                {LEAD_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">סטטוס</label>
+              <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as Lead["status"] }))} className={inputClass}>
+                {KANBAN_COLUMNS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
             </div>
-            {/* ערך עסקה */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                ערך עסקה משוער ({"\u20AA"})
-              </label>
-              <input
-                type="number"
-                value={form.value}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, value: e.target.value }))
-                }
-                className={inputClass}
-                placeholder="0"
-              />
+              <label className="mb-1 block text-xs font-medium text-brand-muted">שווי עסקה</label>
+              <input type="number" value={form.value} onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))} className={inputClass} placeholder="0" />
             </div>
-            {/* מעקב הבא */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                מעקב הבא
-              </label>
-              <input
-                type="date"
-                value={form.nextFollowUp}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, nextFollowUp: e.target.value }))
-                }
-                className={inputClass}
-              />
+              <label className="mb-1 block text-xs font-medium text-brand-muted">תקציב משוער</label>
+              <input value={form.estimatedBudget} onChange={(e) => setForm((p) => ({ ...p, estimatedBudget: e.target.value }))} className={inputClass} />
             </div>
-            {/* הערות */}
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-brand-dark">
-                הערות
-              </label>
-              <textarea
-                value={form.notes}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, notes: e.target.value }))
-                }
-                rows={3}
-                className={inputClass}
-                placeholder="פרטים נוספים על הליד..."
-              />
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">איש מכירות</label>
+              <select value={form.salesPerson} onChange={(e) => setForm((p) => ({ ...p, salesPerson: e.target.value }))} className={inputClass}>
+                <option value="">בחר...</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.name}>{emp.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">מעקב הבא</label>
+              <input type="date" value={form.nextFollowUp} onChange={(e) => setForm((p) => ({ ...p, nextFollowUp: e.target.value }))} className={inputClass} />
             </div>
           </div>
-          <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className={btnSecondary}
-            >
-              ביטול
-            </button>
-            <button type="submit" className={btnPrimary}>
-              שמור ליד
-            </button>
+
+          {/* Social */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">Facebook Page</label>
+              <input value={form.leadFacebookPage} onChange={(e) => setForm((p) => ({ ...p, leadFacebookPage: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">Instagram</label>
+              <input value={form.leadInstagram} onChange={(e) => setForm((p) => ({ ...p, leadInstagram: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">LinkedIn</label>
+              <input value={form.leadLinkedin} onChange={(e) => setForm((p) => ({ ...p, leadLinkedin: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">TikTok</label>
+              <input value={form.leadTiktok} onChange={(e) => setForm((p) => ({ ...p, leadTiktok: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">Google Ads</label>
+              <input value={form.leadGoogleAds} onChange={(e) => setForm((p) => ({ ...p, leadGoogleAds: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">Meta Ads</label>
+              <input value={form.leadMetaAds} onChange={(e) => setForm((p) => ({ ...p, leadMetaAds: e.target.value }))} className={inputClass} />
+            </div>
+          </div>
+
+          {/* Services */}
+          <div>
+            <label className="mb-2 block text-xs font-medium text-brand-muted">שירותים מעניינים</label>
+            <div className="flex flex-wrap gap-2">
+              {INTERESTED_SERVICES.map((service) => (
+                <button
+                  key={service}
+                  type="button"
+                  onClick={() => toggleService(service)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors duration-200 ${
+                    form.interestedServices.includes(service)
+                      ? "bg-brand-gold text-brand-dark"
+                      : "bg-brand-bg text-brand-muted hover:bg-brand-border"
+                  }`}
+                >
+                  {service}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-brand-muted">הערות</label>
+            <textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} className={`${inputClass} h-20`} placeholder="הערות..." />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setIsModalOpen(false)} className={btnSecondary}>ביטול</button>
+            <button type="submit" className={btnPrimary}>שמור ליד</button>
           </div>
         </form>
       </Modal>
 
-      {/* ========== מודל פרטי ליד ========== */}
+      {/* ════════════════════════════════════════
+         LEAD DETAIL MODAL
+         ════════════════════════════════════════ */}
       <Modal
-        isOpen={!!selectedLead}
+        isOpen={!!selectedLead && !isEditModalOpen}
         onClose={() => setSelectedLead(null)}
-        title={
-          currentSelectedLead
-            ? `${currentSelectedLead.name} \u2014 פרטי ליד`
-            : "פרטי ליד"
-        }
+        title={selectedLead?.name || "פרטי ליד"}
         size="lg"
       >
-        {currentSelectedLead && (
+        {selectedLead && (
           <div className="space-y-6">
-            {/* סיכום פרטים */}
-            <div className={cardClass}>
-              <h3 className="mb-3 text-sm font-semibold text-brand-dark">
-                פרטי ליד
-              </h3>
-              <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                <div>
-                  <span className="text-brand-muted">חברה: </span>
-                  <span className="text-brand-dark">
-                    {currentSelectedLead.company || "\u2014"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-brand-muted">אימייל: </span>
-                  <span className="text-brand-dark">
-                    {currentSelectedLead.email || "\u2014"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-brand-muted">טלפון: </span>
-                  <span className="text-brand-dark">
-                    {currentSelectedLead.phone || "\u2014"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-brand-muted">אתר: </span>
-                  <span className="text-brand-dark">
-                    {currentSelectedLead.website || "\u2014"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-brand-muted">תקציב משוער: </span>
-                  <span className="text-brand-dark">
-                    {currentSelectedLead.estimatedBudget || "\u2014"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-brand-muted">איש מכירות: </span>
-                  <span className="text-brand-dark">
-                    {currentSelectedLead.salesPerson || "\u2014"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-brand-muted">מקור: </span>
-                  <span className="text-brand-dark">
-                    {getSourceLabel(currentSelectedLead.source)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-brand-muted">ערך: </span>
-                  <span className="text-brand-dark">
-                    {currentSelectedLead.value > 0
-                      ? `\u20AA ${currentSelectedLead.value.toLocaleString()}`
-                      : "\u2014"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-brand-muted">מעקב הבא: </span>
-                  <span className="text-brand-dark">
-                    {formatDate(currentSelectedLead.nextFollowUp)}
-                  </span>
-                </div>
+            {/* Header with edit button */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium text-brand-light ${getStatusInfo(selectedLead.status).color}`}>
+                  {getStatusInfo(selectedLead.status).label}
+                </span>
+                <StarRating value={selectedLead.qualityRating || 0} onChange={(v) => {
+                  handleQualityChange(selectedLead.id, v);
+                  setSelectedLead((p) => p ? { ...p, qualityRating: v } : null);
+                }} />
+              </div>
+              <button onClick={() => openEditModal(selectedLead)} className={btnPrimary}>
+                <span className="flex items-center gap-1">
+                  <Pencil className="h-3 w-3" />
+                  עריכה
+                </span>
+              </button>
+            </div>
 
-                {/* נכסים דיגיטליים בפרטי ליד */}
-                {currentSelectedLead.leadFacebookPage && (
-                  <div>
-                    <span className="text-brand-muted">פייסבוק: </span>
-                    <a
-                      href={currentSelectedLead.leadFacebookPage}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-brand-info underline"
-                    >
-                      {currentSelectedLead.leadFacebookPage}
-                    </a>
-                  </div>
-                )}
-                {currentSelectedLead.leadInstagram && (
-                  <div>
-                    <span className="text-brand-muted">אינסטגרם: </span>
-                    <a
-                      href={currentSelectedLead.leadInstagram}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-brand-info underline"
-                    >
-                      {currentSelectedLead.leadInstagram}
-                    </a>
-                  </div>
-                )}
-                {currentSelectedLead.leadLinkedin && (
-                  <div>
-                    <span className="text-brand-muted">לינקדאין: </span>
-                    <a
-                      href={currentSelectedLead.leadLinkedin}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-brand-info underline"
-                    >
-                      {currentSelectedLead.leadLinkedin}
-                    </a>
-                  </div>
-                )}
-                {currentSelectedLead.leadTiktok && (
-                  <div>
-                    <span className="text-brand-muted">טיקטוק: </span>
-                    <a
-                      href={currentSelectedLead.leadTiktok}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-brand-info underline"
-                    >
-                      {currentSelectedLead.leadTiktok}
-                    </a>
-                  </div>
-                )}
-                {currentSelectedLead.leadGoogleAds && (
-                  <div>
-                    <span className="text-brand-muted">Google Ads: </span>
-                    <span className="text-brand-dark">
-                      {currentSelectedLead.leadGoogleAds}
-                    </span>
-                  </div>
-                )}
-                {currentSelectedLead.leadMetaAds && (
-                  <div>
-                    <span className="text-brand-muted">Meta Ads: </span>
-                    <span className="text-brand-dark">
-                      {currentSelectedLead.leadMetaAds}
-                    </span>
-                  </div>
-                )}
+            {/* Info grid */}
+            <div className="grid grid-cols-2 gap-4">
+              {selectedLead.company && (
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-brand-muted" />
+                  <span className="text-sm text-brand-dark">{selectedLead.company}</span>
+                </div>
+              )}
+              {selectedLead.phone && (
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-brand-muted" />
+                  <a href={`tel:${selectedLead.phone}`} className="text-sm text-brand-info hover:underline">{selectedLead.phone}</a>
+                </div>
+              )}
+              {selectedLead.email && (
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-brand-muted" />
+                  <a href={`mailto:${selectedLead.email}`} className="text-sm text-brand-info hover:underline">{selectedLead.email}</a>
+                </div>
+              )}
+              {selectedLead.website && (
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-brand-muted" />
+                  <a href={selectedLead.website} target="_blank" rel="noopener noreferrer" className="text-sm text-brand-info hover:underline">{selectedLead.website}</a>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-brand-muted" />
+                <span className="text-sm text-brand-muted">נוצר: {formatDate(selectedLead.createdAt)}</span>
+              </div>
+              <div>
+                <span className="text-xs text-brand-muted">מקור: </span>
+                <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${SOURCE_COLORS[selectedLead.source] || SOURCE_COLORS.other}`}>
+                  {getSourceLabel(selectedLead.source)}
+                </span>
+              </div>
+              {(selectedLead.dealValue > 0 || selectedLead.value > 0) && (
+                <div>
+                  <span className="text-xs text-brand-muted">שווי עסקה: </span>
+                  <span className="text-sm font-medium text-brand-success">₪ {(selectedLead.dealValue || selectedLead.value).toLocaleString()}</span>
+                </div>
+              )}
+              {selectedLead.monthlyValue > 0 && (
+                <div>
+                  <span className="text-xs text-brand-muted">שירות חודשי: </span>
+                  <span className="text-sm font-medium text-brand-dark">₪ {selectedLead.monthlyValue.toLocaleString()}</span>
+                </div>
+              )}
+              {selectedLead.estimatedBudget && (
+                <div>
+                  <span className="text-xs text-brand-muted">תקציב משוער: </span>
+                  <span className="text-sm text-brand-dark">{selectedLead.estimatedBudget}</span>
+                </div>
+              )}
+              {selectedLead.salesPerson && (
+                <div>
+                  <span className="text-xs text-brand-muted">איש מכירות: </span>
+                  <span className="text-sm text-brand-dark">{selectedLead.salesPerson}</span>
+                </div>
+              )}
+            </div>
 
-                {currentSelectedLead.interestedServices.length > 0 && (
-                  <div className="sm:col-span-2">
-                    <span className="text-brand-muted">שירותים מבוקשים: </span>
-                    <span className="text-brand-dark">
-                      {currentSelectedLead.interestedServices.join(", ")}
-                    </span>
-                  </div>
-                )}
-                {currentSelectedLead.notes && (
-                  <div className="sm:col-span-2">
-                    <span className="text-brand-muted">הערות: </span>
-                    <span className="text-brand-dark">
-                      {currentSelectedLead.notes}
-                    </span>
-                  </div>
-                )}
+            {/* Services */}
+            {selectedLead.interestedServices?.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium text-brand-muted">שירותים מעניינים</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedLead.interestedServices.map((s) => (
+                    <span key={s} className="rounded-full bg-brand-gold/20 px-3 py-1 text-xs font-medium text-brand-dark">{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            {selectedLead.notes && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-brand-muted">הערות</p>
+                <p className="rounded-lg bg-brand-bg p-3 text-sm text-brand-dark">{selectedLead.notes}</p>
+              </div>
+            )}
+
+            {/* Status change */}
+            <div>
+              <p className="mb-2 text-xs font-medium text-brand-muted">שנה סטטוס</p>
+              <div className="flex flex-wrap gap-2">
+                {LEAD_STATUSES.map((s) => (
+                  <button
+                    key={s.value}
+                    onClick={() => handleStatusChange(s.value)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors duration-200 ${
+                      selectedLead.status === s.value
+                        ? `${s.color} text-brand-light`
+                        : "bg-brand-bg text-brand-muted hover:bg-brand-border"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* עדכון סטטוס */}
-            <div className={cardClass}>
-              <h3 className="mb-3 text-sm font-semibold text-brand-dark">
-                עדכון סטטוס
-              </h3>
-              <select
-                value={currentSelectedLead.status}
-                onChange={(e) =>
-                  handleStatusChange(e.target.value as Lead["status"])
-                }
-                className={inputClass}
-              >
-                {LEAD_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+            {/* Proposal */}
+            <div className="rounded-lg border border-brand-border p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-brand-dark">הצעת מחיר</p>
+                <button onClick={handleProposalToggle} className={`rounded-full px-3 py-1 text-xs font-medium transition-colors duration-200 ${selectedLead.hasProposal ? "bg-brand-success/20 text-brand-success" : "bg-brand-bg text-brand-muted"}`}>
+                  {selectedLead.hasProposal ? "נשלחה ✓" : "לא נשלחה"}
+                </button>
+              </div>
+              {selectedLead.hasProposal && (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-brand-muted">תאריך שליחה</label>
+                    <input type="date" value={selectedLead.proposalDate || ""} onChange={(e) => handleProposalDateChange(e.target.value)} className={inputClass} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-brand-muted">שם קובץ</label>
+                    <input value={selectedLead.proposalFileName || ""} onChange={(e) => handleProposalFileChange(e.target.value)} className={inputClass} placeholder="proposal.pdf" />
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* היסטוריית שיחות */}
-            <div className={cardClass}>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-brand-dark">
-                <PhoneCall className="h-4 w-4" />
-                היסטוריית שיחות
-              </h3>
-              {currentSelectedLead.calls.length === 0 ? (
-                <p className="text-sm text-brand-muted">אין שיחות רשומות</p>
-              ) : (
-                <div className="mb-4 space-y-2">
-                  {currentSelectedLead.calls.map((call) => (
-                    <div
-                      key={call.id}
-                      className="rounded-lg border border-brand-border bg-brand-bg p-3 text-sm"
-                    >
+            {/* Internal notes */}
+            <div>
+              <p className="mb-2 text-xs font-medium text-brand-muted">הערות פנימיות</p>
+              <textarea
+                value={internalNotesLocal}
+                onChange={(e) => setInternalNotesLocal(e.target.value)}
+                className={`${inputClass} h-20`}
+                placeholder="הערות פנימיות..."
+              />
+              <button onClick={handleSaveInternalNotes} className={`${btnPrimary} mt-2`}>
+                שמור הערות
+              </button>
+            </div>
+
+            {/* Calls history */}
+            <div>
+              <p className="mb-2 text-sm font-medium text-brand-dark">
+                <PhoneCall className="ml-1 inline h-4 w-4" />
+                היסטוריית שיחות ({selectedLead.calls?.length || 0})
+              </p>
+              {selectedLead.calls?.length > 0 && (
+                <div className="mb-3 max-h-40 space-y-2 overflow-y-auto">
+                  {[...selectedLead.calls].reverse().map((call) => (
+                    <div key={call.id} className="rounded-lg bg-brand-bg p-3">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-brand-dark">
-                          {formatDate(call.date)}
-                        </span>
-                        <span className="text-xs text-brand-muted">
-                          {call.caller}
-                        </span>
+                        <span className="text-xs font-medium text-brand-dark">{call.caller || "לא ידוע"}</span>
+                        <span className="text-xs text-brand-muted">{formatDate(call.date)}</span>
                       </div>
-                      <p className="mt-1 text-brand-muted">{call.summary}</p>
+                      <p className="mt-1 text-sm text-brand-dark">{call.summary}</p>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* הוספת שיחה */}
-              <div className="border-t border-brand-border pt-3">
-                <h4 className="mb-2 text-xs font-medium text-brand-muted">
-                  הוסף שיחה חדשה
-                </h4>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <input
-                    type="date"
-                    value={callForm.date}
-                    onChange={(e) =>
-                      setCallForm((p) => ({ ...p, date: e.target.value }))
-                    }
-                    className={inputClass}
-                  />
-                  <select
-                    value={callForm.caller}
-                    onChange={(e) =>
-                      setCallForm((p) => ({ ...p, caller: e.target.value }))
-                    }
-                    className={inputClass}
-                  >
-                    <option value="">בחר מתקשר</option>
+              {/* Add call */}
+              <div className="rounded-lg border border-brand-border p-3">
+                <p className="mb-2 text-xs font-medium text-brand-muted">הוסף שיחה</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <input type="date" value={callForm.date} onChange={(e) => setCallForm((p) => ({ ...p, date: e.target.value }))} className={inputClass} />
+                  <select value={callForm.caller} onChange={(e) => setCallForm((p) => ({ ...p, caller: e.target.value }))} className={inputClass}>
+                    <option value="">מתקשר...</option>
                     {employees.map((emp) => (
-                      <option key={emp.id} value={emp.name}>
-                        {emp.name}
-                      </option>
+                      <option key={emp.id} value={emp.name}>{emp.name}</option>
                     ))}
                   </select>
-                  <div className="sm:col-span-2">
-                    <textarea
-                      value={callForm.summary}
-                      onChange={(e) =>
-                        setCallForm((p) => ({
-                          ...p,
-                          summary: e.target.value,
-                        }))
-                      }
-                      rows={2}
-                      className={inputClass}
-                      placeholder="תקציר השיחה..."
-                    />
-                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAddCall}
-                  disabled={!callForm.date || !callForm.summary.trim()}
-                  className={`mt-2 ${btnPrimary} disabled:cursor-not-allowed disabled:opacity-50`}
-                >
-                  הוסף שיחה
+                <textarea
+                  value={callForm.summary}
+                  onChange={(e) => setCallForm((p) => ({ ...p, summary: e.target.value }))}
+                  className={`${inputClass} mt-2 h-16`}
+                  placeholder="תקציר השיחה..."
+                />
+                <button onClick={handleAddCall} className={`${btnPrimary} mt-2`}>
+                  <span className="flex items-center gap-1">
+                    <Plus className="h-3 w-3" />
+                    הוסף שיחה
+                  </span>
                 </button>
               </div>
             </div>
-
-            {/* הצעת מחיר */}
-            <div className={cardClass}>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-brand-dark">
-                <FileText className="h-4 w-4" />
-                הצעת מחיר
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-brand-dark">
-                    נשלחה הצעה?
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleProposalToggle}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-                      currentSelectedLead.hasProposal
-                        ? "bg-brand-gold"
-                        : "bg-brand-border"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 rounded-full bg-white transition-transform duration-200 ${
-                        currentSelectedLead.hasProposal
-                          ? "translate-x-1.5"
-                          : "translate-x-6"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {currentSelectedLead.hasProposal && (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-xs text-brand-muted">
-                        תאריך הצעה
-                      </label>
-                      <input
-                        type="date"
-                        value={currentSelectedLead.proposalDate}
-                        onChange={(e) =>
-                          handleProposalDateChange(e.target.value)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-brand-muted">
-                        שם קובץ
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={currentSelectedLead.proposalFileName}
-                          onChange={(e) =>
-                            handleProposalFileChange(e.target.value)
-                          }
-                          className={inputClass}
-                          placeholder="proposal.pdf"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const name =
-                              currentSelectedLead.proposalFileName ||
-                              `הצעה_${currentSelectedLead.name}.pdf`;
-                            handleProposalFileChange(name);
-                          }}
-                          className={`shrink-0 ${btnPrimary}`}
-                        >
-                          העלאה
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* הערות פנימיות */}
-            <div className={cardClass}>
-              <h3 className="mb-3 text-sm font-semibold text-brand-dark">
-                הערות פנימיות
-              </h3>
-              <textarea
-                value={internalNotesLocal}
-                onChange={(e) => setInternalNotesLocal(e.target.value)}
-                rows={3}
-                className={inputClass}
-                placeholder="הערות פנימיות שלא נראות ללקוח..."
-              />
-              <button
-                type="button"
-                onClick={handleSaveInternalNotes}
-                className={`mt-2 ${btnPrimary}`}
-              >
-                שמור הערות
-              </button>
-            </div>
           </div>
         )}
+      </Modal>
+
+      {/* ════════════════════════════════════════
+         EDIT LEAD MODAL
+         ════════════════════════════════════════ */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="עריכת ליד"
+        size="lg"
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">שם</label>
+              <input value={editForm.name || ""} onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">חברה</label>
+              <input value={editForm.company || ""} onChange={(e) => setEditForm((p) => ({ ...p, company: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">אימייל</label>
+              <input type="email" value={editForm.email || ""} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">טלפון</label>
+              <input value={editForm.phone || ""} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">אתר</label>
+              <input value={editForm.website || ""} onChange={(e) => setEditForm((p) => ({ ...p, website: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">נכסים דיגיטליים</label>
+              <input value={editForm.digitalAssets || ""} onChange={(e) => setEditForm((p) => ({ ...p, digitalAssets: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">מקור</label>
+              <select value={editForm.source || "other"} onChange={(e) => setEditForm((p) => ({ ...p, source: e.target.value as Lead["source"] }))} className={inputClass}>
+                {LEAD_SOURCES.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">סטטוס</label>
+              <select value={editForm.status || "new"} onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value as Lead["status"] }))} className={inputClass}>
+                {LEAD_STATUSES.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">שווי עסקה (ערך)</label>
+              <input type="number" value={editForm.value || 0} onChange={(e) => setEditForm((p) => ({ ...p, value: Number(e.target.value) }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">שווי דיל</label>
+              <input type="number" value={editForm.dealValue || 0} onChange={(e) => setEditForm((p) => ({ ...p, dealValue: Number(e.target.value) }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">שירות חודשי</label>
+              <input type="number" value={editForm.monthlyValue || 0} onChange={(e) => setEditForm((p) => ({ ...p, monthlyValue: Number(e.target.value) }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">סוג שירות</label>
+              <input value={editForm.serviceType || ""} onChange={(e) => setEditForm((p) => ({ ...p, serviceType: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">תקציב משוער</label>
+              <input value={editForm.estimatedBudget || ""} onChange={(e) => setEditForm((p) => ({ ...p, estimatedBudget: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">איש מכירות</label>
+              <select value={editForm.salesPerson || ""} onChange={(e) => setEditForm((p) => ({ ...p, salesPerson: e.target.value }))} className={inputClass}>
+                <option value="">בחר...</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.name}>{emp.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">מעקב הבא</label>
+              <input type="date" value={editForm.nextFollowUp || ""} onChange={(e) => setEditForm((p) => ({ ...p, nextFollowUp: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">דירוג איכות</label>
+              <StarRating value={editForm.qualityRating || 0} onChange={(v) => setEditForm((p) => ({ ...p, qualityRating: v }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">תאריך סגירה</label>
+              <input type="date" value={editForm.closedAt || ""} onChange={(e) => setEditForm((p) => ({ ...p, closedAt: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">תאריך סיום</label>
+              <input type="date" value={editForm.endDate || ""} onChange={(e) => setEditForm((p) => ({ ...p, endDate: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">URL הצעה</label>
+              <input value={editForm.proposalUrl || ""} onChange={(e) => setEditForm((p) => ({ ...p, proposalUrl: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">תאריך הצעה</label>
+              <input type="date" value={editForm.proposalDate || ""} onChange={(e) => setEditForm((p) => ({ ...p, proposalDate: e.target.value }))} className={inputClass} />
+            </div>
+          </div>
+
+          {/* Social fields */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">Facebook Page</label>
+              <input value={editForm.leadFacebookPage || ""} onChange={(e) => setEditForm((p) => ({ ...p, leadFacebookPage: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">Instagram</label>
+              <input value={editForm.leadInstagram || ""} onChange={(e) => setEditForm((p) => ({ ...p, leadInstagram: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">LinkedIn</label>
+              <input value={editForm.leadLinkedin || ""} onChange={(e) => setEditForm((p) => ({ ...p, leadLinkedin: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">TikTok</label>
+              <input value={editForm.leadTiktok || ""} onChange={(e) => setEditForm((p) => ({ ...p, leadTiktok: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">Google Ads</label>
+              <input value={editForm.leadGoogleAds || ""} onChange={(e) => setEditForm((p) => ({ ...p, leadGoogleAds: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">Meta Ads</label>
+              <input value={editForm.leadMetaAds || ""} onChange={(e) => setEditForm((p) => ({ ...p, leadMetaAds: e.target.value }))} className={inputClass} />
+            </div>
+          </div>
+
+          {/* Services */}
+          <div>
+            <label className="mb-2 block text-xs font-medium text-brand-muted">שירותים מעניינים</label>
+            <div className="flex flex-wrap gap-2">
+              {INTERESTED_SERVICES.map((service) => (
+                <button
+                  key={service}
+                  type="button"
+                  onClick={() => toggleEditService(service)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors duration-200 ${
+                    (editForm.interestedServices || []).includes(service)
+                      ? "bg-brand-gold text-brand-dark"
+                      : "bg-brand-bg text-brand-muted hover:bg-brand-border"
+                  }`}
+                >
+                  {service}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-brand-muted">הערות</label>
+            <textarea value={editForm.notes || ""} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} className={`${inputClass} h-20`} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-brand-muted">הערות פנימיות</label>
+            <textarea value={editForm.internalNotes || ""} onChange={(e) => setEditForm((p) => ({ ...p, internalNotes: e.target.value }))} className={`${inputClass} h-20`} />
+          </div>
+
+          {/* Churn fields (if churned) */}
+          {editForm.status === "churned" && (
+            <div className="grid grid-cols-2 gap-4 rounded-lg border border-brand-danger/30 bg-brand-danger/5 p-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brand-danger">תאריך עזיבה</label>
+                <input type="date" value={editForm.churnedAt || ""} onChange={(e) => setEditForm((p) => ({ ...p, churnedAt: e.target.value }))} className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brand-danger">סיבת עזיבה</label>
+                <select value={editForm.churnReason || ""} onChange={(e) => setEditForm((p) => ({ ...p, churnReason: e.target.value }))} className={inputClass}>
+                  <option value="">בחר...</option>
+                  {CHURN_REASONS.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="mb-1 block text-xs font-medium text-brand-danger">פרטים נוספים</label>
+                <textarea value={editForm.churnDetails || ""} onChange={(e) => setEditForm((p) => ({ ...p, churnDetails: e.target.value }))} className={`${inputClass} h-16`} />
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setIsEditModalOpen(false)} className={btnSecondary}>ביטול</button>
+            <button type="submit" className={btnPrimary}>שמור שינויים</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ════════════════════════════════════════
+         CHURN MODAL
+         ════════════════════════════════════════ */}
+      <Modal
+        isOpen={isChurnModalOpen}
+        onClose={() => { setIsChurnModalOpen(false); setChurnTarget(null); }}
+        title="סימון לקוח כנוטש"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-brand-muted">
+            האם לסמן את <span className="font-medium text-brand-dark">{churnTarget?.name}</span> כלקוח נוטש?
+          </p>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-brand-muted">תאריך עזיבה *</label>
+            <input
+              type="date"
+              value={churnForm.churnedAt}
+              onChange={(e) => setChurnForm((p) => ({ ...p, churnedAt: e.target.value }))}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-brand-muted">סיבת עזיבה *</label>
+            <select
+              value={churnForm.churnReason}
+              onChange={(e) => setChurnForm((p) => ({ ...p, churnReason: e.target.value }))}
+              className={inputClass}
+            >
+              <option value="">בחר סיבה...</option>
+              {CHURN_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-brand-muted">פרטים נוספים</label>
+            <textarea
+              value={churnForm.churnDetails}
+              onChange={(e) => setChurnForm((p) => ({ ...p, churnDetails: e.target.value }))}
+              className={`${inputClass} h-20`}
+              placeholder="פרטים נוספים על סיבת העזיבה..."
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button onClick={() => { setIsChurnModalOpen(false); setChurnTarget(null); }} className={btnSecondary}>ביטול</button>
+            <button
+              onClick={handleChurnSubmit}
+              disabled={!churnForm.churnedAt || !churnForm.churnReason}
+              className={`${btnPrimary} disabled:opacity-50 disabled:cursor-not-allowed bg-brand-danger hover:bg-brand-danger/80`}
+            >
+              אשר נטישה
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

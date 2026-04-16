@@ -119,7 +119,7 @@ export interface Lead {
   salesPerson: string;
   interestedServices: string[];
   source: "website" | "referral" | "social" | "cold_call" | "event" | "other";
-  status: "new" | "contacted" | "meeting_set" | "proposal_sent" | "negotiation" | "won" | "lost";
+  status: "new" | "contacted" | "meeting_set" | "proposal_sent" | "negotiation" | "won" | "lost" | "churned";
   value: number;
   notes: string;
   nextFollowUp: string;
@@ -127,6 +127,16 @@ export interface Lead {
   proposalDate: string;
   proposalFileName: string;
   internalNotes: string;
+  qualityRating: number;
+  dealValue: number;
+  monthlyValue: number;
+  serviceType: string;
+  proposalUrl: string;
+  closedAt: string;
+  endDate: string;
+  churnedAt: string;
+  churnReason: string;
+  churnDetails: string;
   createdAt: string;
   calls: LeadCall[];
 }
@@ -209,6 +219,7 @@ export const LEAD_STATUSES = [
   { value: "negotiation" as const, label: "משא ומתן", color: "bg-brand-gold" },
   { value: "won" as const, label: "נסגר", color: "bg-brand-success" },
   { value: "lost" as const, label: "אבד", color: "bg-brand-danger" },
+  { value: "churned" as const, label: "נוטש", color: "bg-gray-500" },
 ];
 
 // Monday stages — for CRM Kanban columns

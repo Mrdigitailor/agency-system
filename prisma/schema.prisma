@@ -255,6 +255,10 @@ model Lead {
   dealType           String   @default("")
   lifetimeValue      Float    @default(0)
   minMonths          Int      @default(0)
+  qualityRating      Int      @default(0) // 0-5 כוכבים
+  churnedAt          String   @default("")
+  churnReason        String   @default("") // price | no_results | service | competition | personal | other
+  churnDetails       String   @default("")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
