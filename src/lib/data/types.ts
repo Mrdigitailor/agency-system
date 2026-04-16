@@ -137,6 +137,7 @@ export interface Lead {
   churnedAt: string;
   churnReason: string;
   churnDetails: string;
+  proposalDetails: string;
   createdAt: string;
   calls: LeadCall[];
 }
@@ -203,11 +204,17 @@ export const TASK_TYPES = [
 ];
 
 export const LEAD_SOURCES = [
+  { value: "lead_form" as const, label: "טופס לידים" },
+  { value: "referral" as const, label: "ממליץ / הפניה" },
+  { value: "instagram" as const, label: "אינסטגרם" },
+  { value: "facebook" as const, label: "פייסבוק" },
+  { value: "linkedin" as const, label: "לינקדאין" },
+  { value: "google" as const, label: "גוגל" },
   { value: "website" as const, label: "אתר" },
-  { value: "referral" as const, label: "הפניה" },
+  { value: "direct" as const, label: "פנייה אישית (טלפון/ווטסאפ)" },
+  { value: "event" as const, label: "אירוע / כנס" },
   { value: "social" as const, label: "רשתות חברתיות" },
   { value: "cold_call" as const, label: "שיחה קרה" },
-  { value: "event" as const, label: "אירוע" },
   { value: "other" as const, label: "אחר" },
 ];
 
@@ -234,11 +241,18 @@ export const LEAD_STAGES = [
 ] as const;
 
 export const INTERESTED_SERVICES = [
-  "ניהול קמפיינים",
+  "ניהול קמפיינים Meta",
+  "ניהול קמפיינים Google",
+  "ניהול קמפיינים TikTok",
   "SEO",
   "ברנדינג",
-  "סושיאל",
-  "אתרים",
+  "עיצוב גרפי",
+  "בניית אתרים",
+  "ניוזלטרים",
+  "דפי נחיתה",
+  "ניהול סושיאל מדיה",
+  "ייעוץ שיווקי",
+  "אחר",
 ] as const;
 
 // MANAGERS הוסר — משתמשים ב-employees מה-context

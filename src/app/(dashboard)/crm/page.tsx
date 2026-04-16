@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Plus,
   Phone,
@@ -206,6 +206,64 @@ export default function CrmPage() {
   const { leads, addLead, updateLead, addLeadCall, employees, settings } =
     useApp();
 
+  /* ── Lead Sources (dynamic) ── */
+  const [dynamicSources, setDynamicSources] = useState<{ value: string; label: string }[]>([]);
+  const [sourcesLoaded, setSourcesLoaded] = useState(false);
+  const [newSourceMode, setNewSourceMode] = useState(false);
+  const [newSourceInput, setNewSourceInput] = useState("");
+  const [editNewSourceMode, setEditNewSourceMode] = useState(false);
+  const [editNewSourceInput, setEditNewSourceInput] = useState("");
+
+  const allSources = useMemo(() => {
+    if (sourcesLoaded && dynamicSources.length > 0) return dynamicSources;
+    return LEAD_SOURCES as unknown as { value: string; label: string }[];
+  }, [sourcesLoaded, dynamicSources]);
+
+  const fetchSources = useCallback(async () => {
+    try {
+      const res = await fetch("/api/lead-sources");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setDynamicSources(data);
+        }
+      }
+    } catch {
+      // fallback to LEAD_SOURCES
+    } finally {
+      setSourcesLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSources();
+  }, [fetchSources]);
+
+  const handleAddCustomSource = async (
+    sourceLabel: string,
+    onSelect: (value: string) => void,
+    resetMode: () => void,
+  ) => {
+    if (!sourceLabel.trim()) return;
+    const value = sourceLabel.trim().toLowerCase().replace(/\s+/g, "_");
+    try {
+      const res = await fetch("/api/lead-sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value, label: sourceLabel.trim() }),
+      });
+      if (res.ok) {
+        await fetchSources();
+      } else {
+        setDynamicSources((prev) => [...prev, { value, label: sourceLabel.trim() }]);
+      }
+    } catch {
+      setDynamicSources((prev) => [...prev, { value, label: sourceLabel.trim() }]);
+    }
+    onSelect(value);
+    resetMode();
+  };
+
   /* ── State ── */
   const [subTab, setSubTab] = useState<"leads" | "closings" | "churned">("leads");
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
@@ -234,6 +292,40 @@ export default function CrmPage() {
     setFilterDateTo("");
     setFilterValueMin("");
     setFilterValueMax("");
+  };
+
+  /* ── Closings tab filters ── */
+  const [closingsSearch, setClosingsSearch] = useState("");
+  const [closingsSource, setClosingsSource] = useState("all");
+  const [closingsDateFrom, setClosingsDateFrom] = useState("");
+  const [closingsDateTo, setClosingsDateTo] = useState("");
+  const [closingsValueMin, setClosingsValueMin] = useState("");
+  const [closingsValueMax, setClosingsValueMax] = useState("");
+  const [closingsStatus, setClosingsStatus] = useState("all");
+
+  const clearClosingsFilters = () => {
+    setClosingsSearch("");
+    setClosingsSource("all");
+    setClosingsDateFrom("");
+    setClosingsDateTo("");
+    setClosingsValueMin("");
+    setClosingsValueMax("");
+    setClosingsStatus("all");
+  };
+
+  /* ── Churned tab filters ── */
+  const [churnedSearch, setChurnedSearch] = useState("");
+  const [churnedReasonFilter, setChurnedReasonFilter] = useState("all");
+  const [churnedSource, setChurnedSource] = useState("all");
+  const [churnedDateFrom, setChurnedDateFrom] = useState("");
+  const [churnedDateTo, setChurnedDateTo] = useState("");
+
+  const clearChurnedFilters = () => {
+    setChurnedSearch("");
+    setChurnedReasonFilter("all");
+    setChurnedSource("all");
+    setChurnedDateFrom("");
+    setChurnedDateTo("");
   };
 
   /* ── Churn modal state ── */
@@ -290,6 +382,7 @@ export default function CrmPage() {
       churnedAt: "",
       churnReason: "",
       churnDetails: "",
+      proposalDetails: "",
     });
     resetForm();
     setIsModalOpen(false);
@@ -467,15 +560,39 @@ export default function CrmPage() {
     return result.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   }, [leads, searchQuery, filterSource, filterStatus, filterQuality, filterDateFrom, filterDateTo, filterValueMin, filterValueMax]);
 
-  const wonLeads = useMemo(
-    () => leads.filter((l) => l.status === "won").sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || "")),
-    [leads],
-  );
+  const wonLeads = useMemo(() => {
+    let result = leads.filter((l) => l.status === "won");
+    if (closingsSearch) {
+      const q = closingsSearch.toLowerCase();
+      result = result.filter((l) => l.name.toLowerCase().includes(q));
+    }
+    if (closingsSource !== "all") result = result.filter((l) => l.source === closingsSource);
+    if (closingsDateFrom) result = result.filter((l) => (l.closedAt || "") >= closingsDateFrom);
+    if (closingsDateTo) result = result.filter((l) => (l.closedAt || "") <= closingsDateTo);
+    if (closingsValueMin) result = result.filter((l) => (l.dealValue || l.value || 0) >= Number(closingsValueMin));
+    if (closingsValueMax) result = result.filter((l) => (l.dealValue || l.value || 0) <= Number(closingsValueMax));
+    if (closingsStatus !== "all") {
+      if (closingsStatus === "active") {
+        result = result.filter((l) => !l.endDate || new Date(l.endDate) > new Date());
+      } else {
+        result = result.filter((l) => l.endDate && new Date(l.endDate) <= new Date());
+      }
+    }
+    return result.sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || ""));
+  }, [leads, closingsSearch, closingsSource, closingsDateFrom, closingsDateTo, closingsValueMin, closingsValueMax, closingsStatus]);
 
-  const churnedLeads = useMemo(
-    () => leads.filter((l) => l.status === "churned").sort((a, b) => (b.churnedAt || "").localeCompare(a.churnedAt || "")),
-    [leads],
-  );
+  const churnedLeads = useMemo(() => {
+    let result = leads.filter((l) => l.status === "churned");
+    if (churnedSearch) {
+      const q = churnedSearch.toLowerCase();
+      result = result.filter((l) => l.name.toLowerCase().includes(q));
+    }
+    if (churnedReasonFilter !== "all") result = result.filter((l) => l.churnReason === churnedReasonFilter);
+    if (churnedSource !== "all") result = result.filter((l) => l.source === churnedSource);
+    if (churnedDateFrom) result = result.filter((l) => (l.churnedAt || "") >= churnedDateFrom);
+    if (churnedDateTo) result = result.filter((l) => (l.churnedAt || "") <= churnedDateTo);
+    return result.sort((a, b) => (b.churnedAt || "").localeCompare(a.churnedAt || ""));
+  }, [leads, churnedSearch, churnedReasonFilter, churnedSource, churnedDateFrom, churnedDateTo]);
 
   /* ── KPIs ── */
   const leadsKpi = useMemo(() => {
@@ -803,6 +920,45 @@ export default function CrmPage() {
             </div>
           </div>
 
+          {/* Closings Filter bar */}
+          <div className={`${cardClass} space-y-3`}>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="relative col-span-2 sm:col-span-1">
+                <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-muted" />
+                <input
+                  type="text"
+                  placeholder="חיפוש שם..."
+                  value={closingsSearch}
+                  onChange={(e) => setClosingsSearch(e.target.value)}
+                  className={`${inputClass} pr-9`}
+                />
+              </div>
+              <select value={closingsSource} onChange={(e) => setClosingsSource(e.target.value)} className={inputClass}>
+                <option value="all">כל המקורות</option>
+                {allSources.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+              <input type="date" value={closingsDateFrom} onChange={(e) => setClosingsDateFrom(e.target.value)} placeholder="סגירה מתאריך" className={inputClass} />
+              <input type="date" value={closingsDateTo} onChange={(e) => setClosingsDateTo(e.target.value)} placeholder="סגירה עד תאריך" className={inputClass} />
+              <input type="number" value={closingsValueMin} onChange={(e) => setClosingsValueMin(e.target.value)} placeholder="שווי מינימלי" className={inputClass} />
+              <input type="number" value={closingsValueMax} onChange={(e) => setClosingsValueMax(e.target.value)} placeholder="שווי מקסימלי" className={inputClass} />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <select value={closingsStatus} onChange={(e) => setClosingsStatus(e.target.value)} className={`${inputClass} w-36`}>
+                <option value="all">כל הסטטוסים</option>
+                <option value="active">פעיל</option>
+                <option value="ended">סיים</option>
+              </select>
+              <button onClick={clearClosingsFilters} className={btnSecondary}>
+                <span className="flex items-center gap-1">
+                  <X className="h-3 w-3" />
+                  נקה פילטרים
+                </span>
+              </button>
+            </div>
+          </div>
+
           {/* Table */}
           <div className={`${cardClass} overflow-x-auto p-0`}>
             <table className="w-full text-sm">
@@ -897,6 +1053,44 @@ export default function CrmPage() {
             </div>
           </div>
 
+          {/* Churned Filter bar */}
+          <div className={`${cardClass} space-y-3`}>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="relative col-span-2 sm:col-span-1">
+                <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-muted" />
+                <input
+                  type="text"
+                  placeholder="חיפוש שם..."
+                  value={churnedSearch}
+                  onChange={(e) => setChurnedSearch(e.target.value)}
+                  className={`${inputClass} pr-9`}
+                />
+              </div>
+              <select value={churnedReasonFilter} onChange={(e) => setChurnedReasonFilter(e.target.value)} className={inputClass}>
+                <option value="all">כל הסיבות</option>
+                {CHURN_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+              <select value={churnedSource} onChange={(e) => setChurnedSource(e.target.value)} className={inputClass}>
+                <option value="all">כל המקורות</option>
+                {allSources.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+              <input type="date" value={churnedDateFrom} onChange={(e) => setChurnedDateFrom(e.target.value)} placeholder="עזיבה מתאריך" className={inputClass} />
+              <input type="date" value={churnedDateTo} onChange={(e) => setChurnedDateTo(e.target.value)} placeholder="עזיבה עד תאריך" className={inputClass} />
+            </div>
+            <div className="flex items-center">
+              <button onClick={clearChurnedFilters} className={btnSecondary}>
+                <span className="flex items-center gap-1">
+                  <X className="h-3 w-3" />
+                  נקה פילטרים
+                </span>
+              </button>
+            </div>
+          </div>
+
           {/* Table */}
           <div className={`${cardClass} overflow-x-auto p-0`}>
             <table className="w-full text-sm">
@@ -981,11 +1175,42 @@ export default function CrmPage() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">מקור</label>
-              <select value={form.source} onChange={(e) => setForm((p) => ({ ...p, source: e.target.value as Lead["source"] }))} className={inputClass}>
-                {LEAD_SOURCES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
+              {newSourceMode ? (
+                <div className="flex gap-2">
+                  <input
+                    value={newSourceInput}
+                    onChange={(e) => setNewSourceInput(e.target.value)}
+                    className={inputClass}
+                    placeholder="שם מקור חדש..."
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddCustomSource(newSourceInput, (v) => setForm((p) => ({ ...p, source: v as Lead["source"] })), () => { setNewSourceMode(false); setNewSourceInput(""); })}
+                    className={btnPrimary}
+                  >
+                    הוסף
+                  </button>
+                  <button type="button" onClick={() => { setNewSourceMode(false); setNewSourceInput(""); }} className={btnSecondary}>X</button>
+                </div>
+              ) : (
+                <select
+                  value={form.source}
+                  onChange={(e) => {
+                    if (e.target.value === "__add_custom__") {
+                      setNewSourceMode(true);
+                      return;
+                    }
+                    setForm((p) => ({ ...p, source: e.target.value as Lead["source"] }));
+                  }}
+                  className={inputClass}
+                >
+                  {allSources.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                  <option value="__add_custom__">הוסף מקור חדש...</option>
+                </select>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">סטטוס</label>
@@ -1049,20 +1274,17 @@ export default function CrmPage() {
           {/* Services */}
           <div>
             <label className="mb-2 block text-xs font-medium text-brand-muted">שירותים מעניינים</label>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {INTERESTED_SERVICES.map((service) => (
-                <button
-                  key={service}
-                  type="button"
-                  onClick={() => toggleService(service)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors duration-200 ${
-                    form.interestedServices.includes(service)
-                      ? "bg-brand-gold text-brand-dark"
-                      : "bg-brand-bg text-brand-muted hover:bg-brand-border"
-                  }`}
-                >
-                  {service}
-                </button>
+                <label key={service} className="flex cursor-pointer items-center gap-2 rounded-lg border border-brand-border px-3 py-2 text-xs transition-colors duration-200 hover:bg-brand-bg">
+                  <input
+                    type="checkbox"
+                    checked={form.interestedServices.includes(service)}
+                    onChange={() => toggleService(service)}
+                    className="h-4 w-4 rounded border-brand-border text-brand-gold accent-brand-gold"
+                  />
+                  <span className={form.interestedServices.includes(service) ? "font-medium text-brand-dark" : "text-brand-muted"}>{service}</span>
+                </label>
               ))}
             </div>
           </div>
@@ -1189,6 +1411,14 @@ export default function CrmPage() {
               <div>
                 <p className="mb-1 text-xs font-medium text-brand-muted">הערות</p>
                 <p className="rounded-lg bg-brand-bg p-3 text-sm text-brand-dark">{selectedLead.notes}</p>
+              </div>
+            )}
+
+            {/* Proposal details */}
+            {selectedLead.proposalDetails && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-brand-muted">פרטים על השיחה והצעה</p>
+                <p className="rounded-lg bg-brand-bg p-3 text-sm text-brand-dark whitespace-pre-wrap">{selectedLead.proposalDetails}</p>
               </div>
             )}
 
@@ -1335,11 +1565,42 @@ export default function CrmPage() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">מקור</label>
-              <select value={editForm.source || "other"} onChange={(e) => setEditForm((p) => ({ ...p, source: e.target.value as Lead["source"] }))} className={inputClass}>
-                {LEAD_SOURCES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
+              {editNewSourceMode ? (
+                <div className="flex gap-2">
+                  <input
+                    value={editNewSourceInput}
+                    onChange={(e) => setEditNewSourceInput(e.target.value)}
+                    className={inputClass}
+                    placeholder="שם מקור חדש..."
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddCustomSource(editNewSourceInput, (v) => setEditForm((p) => ({ ...p, source: v as Lead["source"] })), () => { setEditNewSourceMode(false); setEditNewSourceInput(""); })}
+                    className={btnPrimary}
+                  >
+                    הוסף
+                  </button>
+                  <button type="button" onClick={() => { setEditNewSourceMode(false); setEditNewSourceInput(""); }} className={btnSecondary}>X</button>
+                </div>
+              ) : (
+                <select
+                  value={editForm.source || "other"}
+                  onChange={(e) => {
+                    if (e.target.value === "__add_custom__") {
+                      setEditNewSourceMode(true);
+                      return;
+                    }
+                    setEditForm((p) => ({ ...p, source: e.target.value as Lead["source"] }));
+                  }}
+                  className={inputClass}
+                >
+                  {allSources.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                  <option value="__add_custom__">הוסף מקור חדש...</option>
+                </select>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">סטטוס</label>
@@ -1435,20 +1696,17 @@ export default function CrmPage() {
           {/* Services */}
           <div>
             <label className="mb-2 block text-xs font-medium text-brand-muted">שירותים מעניינים</label>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {INTERESTED_SERVICES.map((service) => (
-                <button
-                  key={service}
-                  type="button"
-                  onClick={() => toggleEditService(service)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors duration-200 ${
-                    (editForm.interestedServices || []).includes(service)
-                      ? "bg-brand-gold text-brand-dark"
-                      : "bg-brand-bg text-brand-muted hover:bg-brand-border"
-                  }`}
-                >
-                  {service}
-                </button>
+                <label key={service} className="flex cursor-pointer items-center gap-2 rounded-lg border border-brand-border px-3 py-2 text-xs transition-colors duration-200 hover:bg-brand-bg">
+                  <input
+                    type="checkbox"
+                    checked={(editForm.interestedServices || []).includes(service)}
+                    onChange={() => toggleEditService(service)}
+                    className="h-4 w-4 rounded border-brand-border text-brand-gold accent-brand-gold"
+                  />
+                  <span className={(editForm.interestedServices || []).includes(service) ? "font-medium text-brand-dark" : "text-brand-muted"}>{service}</span>
+                </label>
               ))}
             </div>
           </div>
@@ -1461,6 +1719,12 @@ export default function CrmPage() {
           <div>
             <label className="mb-1 block text-xs font-medium text-brand-muted">הערות פנימיות</label>
             <textarea value={editForm.internalNotes || ""} onChange={(e) => setEditForm((p) => ({ ...p, internalNotes: e.target.value }))} className={`${inputClass} h-20`} />
+          </div>
+
+          {/* Proposal details */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-brand-muted">פרטים על השיחה והצעה</label>
+            <textarea value={editForm.proposalDetails || ""} onChange={(e) => setEditForm((p) => ({ ...p, proposalDetails: e.target.value }))} className={`${inputClass} h-20`} placeholder="פרטים על השיחה וההצעה שהוגשה..." />
           </div>
 
           {/* Churn fields (if churned) */}
@@ -1498,7 +1762,13 @@ export default function CrmPage() {
          ════════════════════════════════════════ */}
       <Modal
         isOpen={isChurnModalOpen}
-        onClose={() => { setIsChurnModalOpen(false); setChurnTarget(null); }}
+        onClose={() => {
+          if (!churnForm.churnReason) {
+            alert("יש למלא סיבת עזיבה לפני סגירת החלון");
+            return;
+          }
+          handleChurnSubmit();
+        }}
         title="סימון לקוח כנוטש"
         size="sm"
       >
@@ -1538,7 +1808,18 @@ export default function CrmPage() {
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button onClick={() => { setIsChurnModalOpen(false); setChurnTarget(null); }} className={btnSecondary}>ביטול</button>
+            <button
+              onClick={() => {
+                if (!churnForm.churnReason) {
+                  alert("יש למלא סיבת עזיבה לפני סגירת החלון");
+                  return;
+                }
+                handleChurnSubmit();
+              }}
+              className={btnSecondary}
+            >
+              ביטול
+            </button>
             <button
               onClick={handleChurnSubmit}
               disabled={!churnForm.churnedAt || !churnForm.churnReason}

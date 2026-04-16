@@ -158,6 +158,7 @@ function mapLead(l: Record<string, unknown>): Lead {
     churnedAt: (l.churnedAt as string) ?? "",
     churnReason: (l.churnReason as string) ?? "",
     churnDetails: (l.churnDetails as string) ?? "",
+    proposalDetails: (l.proposalDetails as string) ?? "",
     createdAt: (l.createdAt as string) ?? "",
     calls: ((l.calls as Record<string, unknown>[]) ?? []).map((c) => ({
       id: c.id as string,

@@ -259,6 +259,7 @@ model Lead {
   churnedAt          String   @default("")
   churnReason        String   @default("") // price | no_results | service | competition | personal | other
   churnDetails       String   @default("")
+  proposalDetails    String   @default("") // פרטים על השיחה והצעה
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -281,6 +282,16 @@ model LeadCall {
   createdAt DateTime @default(now())
 
   @@map("lead_calls")
+}
+
+// ==================== מקורות לידים (דינאמי) ====================
+
+model LeadSource {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("lead_sources")
 }
 
 // ==================== התראות ====================
