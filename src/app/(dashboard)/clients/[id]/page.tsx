@@ -44,6 +44,7 @@ import QuickProfileCard from "@/components/ui/QuickProfileCard";
 import AiChatTab from "@/components/ui/AiChatTab";
 import MonthPerformanceKpis from "@/components/ui/MonthPerformanceKpis";
 import OptimizationsTab from "@/components/ui/OptimizationsTab";
+import CreativesTab from "@/components/ui/CreativesTab";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
@@ -77,6 +78,7 @@ const tabs = [
   { id: "campaigns", label: "קמפיינים", icon: Monitor },
   { id: "performance", label: "ביצועים", icon: TrendingUp },
   { id: "optimizations", label: "אופטימיזציות", icon: Zap },
+  { id: "creatives", label: "קריאייטיבים", icon: Monitor },
   { id: "reports", label: "דוחות", icon: FileText },
   { id: "messages", label: "הודעות", icon: MessageSquare },
   { id: "analytics", label: "אנליטיקס", icon: BarChart3 },
@@ -668,6 +670,9 @@ export default function ClientDetailPage() {
 
       {/* ===== טאב 4 — אופטימיזציות ===== */}
       {activeTab === "optimizations" && <OptimizationsTab clientId={client.id} />}
+
+      {/* ===== טאב קריאייטיבים ===== */}
+      {activeTab === "creatives" && <CreativesTab clientId={client.id} currency={client.currency ?? "ILS"} />}
 
       {/* ===== טאב דוחות ===== */}
       {activeTab === "reports" && (

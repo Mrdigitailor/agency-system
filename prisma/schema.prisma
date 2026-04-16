@@ -652,6 +652,35 @@ model MessageSyncStatus {
   @@map("message_sync_status")
 }
 
+// ==================== קריאייטיבים Meta ====================
+
+model MetaCreative {
+  id            String   @id @default(cuid())
+  clientId      String
+  adId          String   // Meta ad ID
+  adName        String   @default("")
+  creativeName  String   @default("")
+  status        String   @default("") // ACTIVE | PAUSED | CAMPAIGN_PAUSED | ADSET_PAUSED
+  body          String   @default("") // טקסט המודעה
+  title         String   @default("")
+  linkUrl       String   @default("")
+  ctaType       String   @default("") // LEARN_MORE | SHOP_NOW etc
+  imageUrl      String   @default("")
+  videoId       String   @default("")
+  videoUrl      String   @default("")
+  thumbnailUrl  String   @default("")
+  previewHtml   String   @default("")
+  campaignName  String   @default("")
+  adsetName     String   @default("")
+  insightsJson  String   @default("{}") // JSON with all metrics
+  lastSyncAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@unique([clientId, adId])
+  @@index([clientId, status])
+  @@map("meta_creatives")
+}
+
 // ==================== נתוני Google Ads ====================
 
 model GoogleAdsInsightDaily {
