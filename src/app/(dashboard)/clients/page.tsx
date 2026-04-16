@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, MoreHorizontal, Trash2, PauseCircle, AlertTriangle } from "lucide-react";
+import { Plus, MoreHorizontal, Trash2, PauseCircle, AlertTriangle, Search, ChevronUp, ChevronDown, ChevronsUpDown, X } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
 import DateRangePicker, { getPresetRange, type DateRange } from "@/components/ui/DateRangePicker";
@@ -36,6 +36,76 @@ export default function ClientsPage() {
   const campaigners = employees.filter((e) => e.role === "campaignManager" || e.role === "admin");
   const managers = employees.filter((e) => e.role === "manager" || e.role === "admin");
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // סינונים
+  const [searchText, setSearchText] = useState("");
+  const [filterCM, setFilterCM] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  // מיון
+  type SortCol = "name" | "cm" | "budget" | "spend" | "conversions" | "cpa" | "status";
+  type SortDir = "asc" | "desc" | null;
+  const [sortCol, setSortCol] = useState<SortCol | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>(null);
+
+  function toggleSort(col: SortCol) {
+    if (sortCol !== col) { setSortCol(col); setSortDir("desc"); }
+    else if (sortDir === "desc") setSortDir("asc");
+    else { setSortCol(null); setSortDir(null); }
+  }
+
+  const remaining = daysLeftInMonth();
+
+  const filteredAndSorted = useMemo(() => {
+    let result = [...clients];
+
+    // סינון חיפוש
+    if (searchText.trim()) {
+      const q = searchText.trim().toLowerCase();
+      result = result.filter((c) => c.name.toLowerCase().includes(q));
+    }
+
+    // סינון מנהל קמפיינים
+    if (filterCM !== "all") {
+      result = result.filter((c) => getCampaignManagerForClient(c.id, employees) === filterCM);
+    }
+
+    // סינון סטטוס
+    if (filterStatus !== "all") {
+      result = result.filter((c) => c.status === filterStatus);
+    }
+
+    // מיון
+    if (sortCol && sortDir) {
+      result.sort((a, b) => {
+        let va: number | string = 0;
+        let vb: number | string = 0;
+        switch (sortCol) {
+          case "name": va = a.name; vb = b.name; break;
+          case "cm": va = getCampaignManagerForClient(a.id, employees) ?? ""; vb = getCampaignManagerForClient(b.id, employees) ?? ""; break;
+          case "budget": va = a.monthlyBudget; vb = b.monthlyBudget; break;
+          case "spend": va = a.currentMonthSpend ?? a.performance.budgetUsed ?? 0; vb = b.currentMonthSpend ?? b.performance.budgetUsed ?? 0; break;
+          case "conversions": va = a.currentMonthConversions ?? a.performance.conversionsThisMonth ?? 0; vb = b.currentMonthConversions ?? b.performance.conversionsThisMonth ?? 0; break;
+          case "cpa": va = a.currentMonthCostPerConv ?? a.performance.avgCostPerConversion ?? 0; vb = b.currentMonthCostPerConv ?? b.performance.avgCostPerConversion ?? 0; break;
+          case "status": va = a.status; vb = b.status; break;
+        }
+        if (typeof va === "string" && typeof vb === "string") {
+          return sortDir === "asc" ? va.localeCompare(vb, "he") : vb.localeCompare(va, "he");
+        }
+        return sortDir === "asc" ? (va as number) - (vb as number) : (vb as number) - (va as number);
+      });
+    }
+
+    return result;
+  }, [clients, searchText, filterCM, filterStatus, sortCol, sortDir, employees]);
+
+  const hasFilters = searchText || filterCM !== "all" || filterStatus !== "all";
+
+  function SortIcon({ col }: { col: SortCol }) {
+    if (sortCol !== col) return <ChevronsUpDown className="inline h-3 w-3 text-brand-muted" />;
+    if (sortDir === "desc") return <ChevronDown className="inline h-3 w-3 text-brand-gold" />;
+    return <ChevronUp className="inline h-3 w-3 text-brand-gold" />;
+  }
 
   // תפריט 3 נקודות
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -101,7 +171,6 @@ export default function ClientsPage() {
   };
 
   const inputClass = "w-full rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-sm text-brand-dark placeholder:text-brand-muted focus:border-brand-gold focus:bg-brand-light focus:outline-none focus:ring-1 focus:ring-brand-gold";
-  const remaining = daysLeftInMonth();
 
   return (
     <div className="space-y-6">
@@ -116,27 +185,56 @@ export default function ClientsPage() {
         </div>
       </div>
 
+      {/* סרגל סינון */}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-brand-border bg-brand-light p-3 shadow-sm">
+        <div className="relative flex-1 min-w-[180px] max-w-[300px]">
+          <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-muted" />
+          <input
+            type="text"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="חיפוש לפי שם..."
+            className="w-full rounded-lg border border-brand-border bg-brand-bg pr-9 pl-3 py-1.5 text-sm text-brand-dark placeholder:text-brand-muted focus:border-brand-gold focus:outline-none"
+          />
+        </div>
+        <select value={filterCM} onChange={(e) => setFilterCM(e.target.value)} className="rounded-lg border border-brand-border bg-brand-bg px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none">
+          <option value="all">מנהל קמפיינים: הכל</option>
+          {campaigners.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}
+        </select>
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-lg border border-brand-border bg-brand-bg px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none">
+          <option value="all">סטטוס: הכל</option>
+          {CLIENT_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+        {hasFilters && (
+          <button onClick={() => { setSearchText(""); setFilterCM("all"); setFilterStatus("all"); setSortCol(null); setSortDir(null); }} className="flex items-center gap-1 rounded-lg border border-brand-border px-3 py-1.5 text-xs text-brand-muted hover:bg-brand-bg">
+            <X className="h-3 w-3" />
+            נקה
+          </button>
+        )}
+        <span className="text-xs text-brand-muted">{filteredAndSorted.length} לקוחות</span>
+      </div>
+
       <div className="rounded-lg border border-brand-border bg-brand-light shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-brand-border bg-brand-bg/50">
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">שם</th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">מנהל קמפיינים</th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("name")}>שם <SortIcon col="name" /></th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("cm")}>מנהל קמפיינים <SortIcon col="cm" /></th>
                 <th className="px-4 py-3 text-right font-medium text-brand-muted">מנהל תיקים</th>
-                <th className="min-w-[180px] px-4 py-3 text-right font-medium text-brand-muted">תקציב</th>
-                <th className="min-w-[160px] px-4 py-3 text-right font-medium text-brand-muted">עלות להמרה</th>
-                <th className="min-w-[160px] px-4 py-3 text-right font-medium text-brand-muted">המרות</th>
+                <th className="min-w-[180px] px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("budget")}>תקציב <SortIcon col="budget" /></th>
+                <th className="min-w-[160px] px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("cpa")}>עלות להמרה <SortIcon col="cpa" /></th>
+                <th className="min-w-[160px] px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("conversions")}>המרות <SortIcon col="conversions" /></th>
                 <th className="px-4 py-3 text-right font-medium text-brand-muted">אופטימיזציה</th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">סטטוס</th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("status")}>סטטוס <SortIcon col="status" /></th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {clients.length === 0 && (
-                <tr><td colSpan={9} className="px-6 py-12 text-center text-brand-muted">אין לקוחות עדיין</td></tr>
+              {filteredAndSorted.length === 0 && (
+                <tr><td colSpan={9} className="px-6 py-12 text-center text-brand-muted">{hasFilters ? "אין לקוחות תואמים לסינון" : "אין לקוחות עדיין"}</td></tr>
               )}
-              {clients.map((client) => {
+              {filteredAndSorted.map((client) => {
                 const statusInfo = getStatusInfo(client.status);
                 const { performance: p } = client;
                 // spend אמיתי מ-Meta (אם יש), אחרת הערך הידני
