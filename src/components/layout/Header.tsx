@@ -1,9 +1,10 @@
 "use client";
 
-import { Bell, Search, ChevronDown } from "lucide-react";
+import { Bell, Search, ChevronDown, Globe } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface Alert {
   id: string;
@@ -91,19 +92,24 @@ export default function Header() {
     if (alert.link) router.push(alert.link);
   };
 
+  const { t } = useLanguage();
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-brand-border bg-brand-light px-6">
       <div className="relative w-96">
         <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-muted" />
         <input
           type="text"
-          placeholder="חיפוש לקוחות, משימות, דוחות..."
+          placeholder={t("search") + "..."}
           className="w-full rounded-lg border border-brand-border bg-brand-bg py-2 pe-4 ps-10 text-sm text-brand-dark placeholder:text-brand-muted focus:border-brand-gold focus:bg-brand-light focus:outline-none focus:ring-1 focus:ring-brand-gold"
           dir="rtl"
         />
       </div>
 
       <div className="flex items-center gap-4">
+        {/* שפה */}
+        <LanguageToggle />
+
         {/* התראות */}
         <div className="relative" ref={dropdownRef}>
           <button
@@ -162,10 +168,24 @@ export default function Header() {
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-gold text-sm font-semibold text-brand-dark">
             {userInitial}
           </div>
-          <span className="text-sm font-medium">{userName || "טוען..."}</span>
+          <span className="text-sm font-medium">{userName || t("loading")}</span>
           <ChevronDown className="h-4 w-4 text-brand-muted" />
         </button>
       </div>
     </header>
+  );
+}
+
+function LanguageToggle() {
+  const { lang, toggleLanguage } = useLanguage();
+  return (
+    <button
+      onClick={toggleLanguage}
+      className="flex items-center gap-1.5 rounded-lg border border-brand-border px-2.5 py-1.5 text-xs font-medium text-brand-muted transition-colors hover:bg-brand-bg hover:text-brand-dark"
+      title={lang === "he" ? "Switch to English" : "עבור לעברית"}
+    >
+      <Globe className="h-3.5 w-3.5" />
+      {lang === "he" ? "EN" : "עב"}
+    </button>
   );
 }

@@ -49,6 +49,7 @@ import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
 import { CURRENCIES, getCurrencySymbol } from "@/lib/utils/currency";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 /* ==================== עזרים ==================== */
 
@@ -72,19 +73,22 @@ function formatDate(dateStr: string) {
 
 /* ==================== קבועים ==================== */
 
-const tabs = [
-  { id: "overview", label: "סקירה כללית", icon: Target },
-  { id: "identity", label: "תעודת זהות", icon: FileText },
-  { id: "campaigns", label: "קמפיינים", icon: Monitor },
-  { id: "performance", label: "ביצועים", icon: TrendingUp },
-  { id: "optimizations", label: "אופטימיזציות", icon: Zap },
-  { id: "creatives", label: "קריאייטיבים", icon: Monitor },
-  { id: "reports", label: "דוחות", icon: FileText },
-  { id: "messages", label: "הודעות", icon: MessageSquare },
-  { id: "analytics", label: "אנליטיקס", icon: BarChart3 },
-  { id: "tasks", label: "משימות", icon: ListTodo },
-  { id: "ai", label: "צ׳אט AI", icon: BarChart3 },
+const TAB_DEFS = [
+  { id: "overview", heLabel: "סקירה כללית", tKey: "overview", icon: Target },
+  { id: "identity", heLabel: "תעודת זהות", tKey: "identity", icon: FileText },
+  { id: "campaigns", heLabel: "קמפיינים", tKey: "campaigns", icon: Monitor },
+  { id: "performance", heLabel: "ביצועים", tKey: "performance", icon: TrendingUp },
+  { id: "optimizations", heLabel: "אופטימיזציות", tKey: "optimizations", icon: Zap },
+  { id: "creatives", heLabel: "קריאייטיבים", tKey: "creatives", icon: Monitor },
+  { id: "reports", heLabel: "דוחות", tKey: "reportsList", icon: FileText },
+  { id: "messages", heLabel: "הודעות", tKey: "messages", icon: MessageSquare },
+  { id: "analytics", heLabel: "אנליטיקס", tKey: "analytics", icon: BarChart3 },
+  { id: "tasks", heLabel: "משימות", tKey: "tasksList", icon: ListTodo },
+  { id: "ai", heLabel: "צ׳אט AI", tKey: "aiChat", icon: BarChart3 },
 ] as const;
+
+// keep tabs type for backward compat
+const tabs = TAB_DEFS;
 
 type TabId = (typeof tabs)[number]["id"];
 
@@ -157,6 +161,7 @@ export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { data: session } = useSession();
+  const { t, lang } = useLanguage();
   const { getClient, tasks, addTask, addTaskNote, clients, employees, settings, updateClient } = useApp();
   const client = getClient(params.id as string);
 
@@ -447,7 +452,7 @@ export default function ClientDetailPage() {
               }`}
             >
               <Icon className="h-4 w-4" />
-              {tab.label}
+              {lang === "he" ? tab.heLabel : t(tab.tKey)}
             </button>
           );
         })}

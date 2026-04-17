@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { navigationItems } from "@/lib/auth/navigation";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 const iconMap: Record<string, LucideIcon> = {
   LayoutDashboard,
@@ -33,9 +34,26 @@ const iconMap: Record<string, LucideIcon> = {
   MessageCircle,
 };
 
+// מיפוי href → מפתח תרגום
+const NAV_KEYS: Record<string, string> = {
+  "/dashboard": "dashboard",
+  "/clients": "clients",
+  "/tasks": "tasks",
+  "/calendar": "calendar",
+  "/chat": "chat",
+  "/crm": "crm",
+  "/reports": "reports",
+  "/recruitment": "recruitment",
+  "/suppliers": "suppliers",
+  "/settings": "settings",
+  "/profile": "profile",
+  "/client-portal": "clientPortal",
+};
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
+  const { t, lang } = useLanguage();
   const [unreadChat, setUnreadChat] = useState(0);
 
   const userRole = session?.user?.role ?? "";
@@ -102,7 +120,7 @@ export default function Sidebar() {
                   )}
                 />
               )}
-              <span className="flex-1">{item.label}</span>
+              <span className="flex-1">{lang === "he" ? item.label : (t(NAV_KEYS[item.href] ?? "") || item.label)}</span>
               {item.href === "/chat" && unreadChat > 0 && (
                 <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-gold text-[10px] font-bold text-brand-dark">
                   {unreadChat > 99 ? "99+" : unreadChat}
@@ -117,7 +135,7 @@ export default function Sidebar() {
       <div className="border-t border-white/10 p-3">
         {userName && (
           <div className="mb-2 px-3 py-1">
-            <p className="text-xs text-white/50">מחובר כ:</p>
+            <p className="text-xs text-white/50">{t("connectedAs")}</p>
             <p className="text-sm font-medium text-white/90">{userName}</p>
           </div>
         )}
@@ -126,7 +144,7 @@ export default function Sidebar() {
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/70 transition-colors duration-200 hover:bg-white/5 hover:text-white"
         >
           <LogOut className="h-5 w-5 shrink-0 text-white/50" />
-          <span>יציאה</span>
+          <span>{t("logout")}</span>
         </button>
       </div>
     </aside>
