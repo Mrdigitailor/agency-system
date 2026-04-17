@@ -2,6 +2,7 @@
 
 import { TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/currency";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface Props {
   currency?: string;
@@ -59,6 +60,7 @@ export default function MonthPerformanceKpis({
   gadsSpend,
   gadsConversions,
 }: Props) {
+  const { t } = useLanguage();
   const hasBreakdown = (metaSpend ?? 0) > 0 || (gadsSpend ?? 0) > 0;
   const { totalDays, daysElapsed, daysRemaining, monthPct } = getMonthProgress();
 
@@ -90,22 +92,22 @@ export default function MonthPerformanceKpis({
       <div className="mb-4 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-brand-dark">
           <TrendingUp className="h-5 w-5 text-brand-muted" />
-          ביצועי החודש
+          {t('monthPerformance')}
         </h2>
         <p className="text-xs text-brand-muted">
-          יום {daysElapsed} מתוך {totalDays} · {Math.round(monthPct)}% מהחודש עבר
+          {t('day')} {daysElapsed} {t('outOf')} {totalDays} · {Math.round(monthPct)}% {t('ofMonthPassed')}
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* ============ קוביית תקציב ============ */}
         <div className={`rounded-lg border ${budgetClasses.border} ${budgetClasses.bg} p-4`}>
-          <p className="text-xs font-medium text-brand-muted">תקציב שנוצל</p>
+          <p className="text-xs font-medium text-brand-muted">{t('budgetUsed')}</p>
           <p className="mt-1 text-2xl font-semibold text-brand-dark">
             {formatCurrency(spent, currency)}
             <span className="text-sm font-normal text-brand-muted"> / {formatCurrency(monthlyBudget, currency)}</span>
           </p>
-          <p className={`text-xs font-medium ${budgetClasses.text}`}>{Math.round(budgetPct)}% ניצול</p>
+          <p className={`text-xs font-medium ${budgetClasses.text}`}>{Math.round(budgetPct)}% {t('utilization')}</p>
 
           <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-brand-border/60">
             <div
@@ -115,10 +117,10 @@ export default function MonthPerformanceKpis({
           </div>
 
           <div className="mt-3 border-t border-brand-border/60 pt-2">
-            <p className="text-xs text-brand-muted">תקציב יומי נדרש</p>
+            <p className="text-xs text-brand-muted">{t('dailyBudgetNeeded')}</p>
             <p className="text-sm font-semibold text-brand-dark">
               {formatCurrency(dailyBudgetNeeded, currency)}
-              <span className="text-xs font-normal text-brand-muted"> · {daysRemaining} ימים נותרו</span>
+              <span className="text-xs font-normal text-brand-muted"> · {daysRemaining} {t('daysRemaining')}</span>
             </p>
           </div>
           {hasBreakdown && (
@@ -132,17 +134,17 @@ export default function MonthPerformanceKpis({
 
         {/* ============ קוביית עלות להמרה ============ */}
         <div className={`rounded-lg border p-4 ${cpcGood ? COLOR_CLASSES.success.border + " " + COLOR_CLASSES.success.bg : cpcBad ? COLOR_CLASSES.danger.border + " " + COLOR_CLASSES.danger.bg : "border-brand-border bg-brand-bg"}`}>
-          <p className="text-xs font-medium text-brand-muted">עלות להמרה</p>
+          <p className="text-xs font-medium text-brand-muted">{t('costPerConversion')}</p>
           <p className="mt-1 text-2xl font-semibold text-brand-dark">
             {formatCurrency(costPerConversion, currency)}
           </p>
           {targetCostPerConversion > 0 && costPerConversion > 0 && (
             <p className={`text-xs font-medium ${cpcGood ? COLOR_CLASSES.success.text : COLOR_CLASSES.danger.text}`}>
-              {formatCurrency(Math.abs(cpcDiff), currency)} {cpcGood ? "מתחת ליעד" : "מעל היעד"}
+              {formatCurrency(Math.abs(cpcDiff), currency)} {cpcGood ? t('belowTarget') : t('aboveTarget')}
             </p>
           )}
           {(targetCostPerConversion === 0 || costPerConversion === 0) && (
-            <p className="text-xs text-brand-muted">יעד: {formatCurrency(targetCostPerConversion, currency)}</p>
+            <p className="text-xs text-brand-muted">{t('target')}: {formatCurrency(targetCostPerConversion, currency)}</p>
           )}
 
           {/* בר עם שתי נקודות */}
@@ -165,7 +167,7 @@ export default function MonthPerformanceKpis({
             </div>
             <div className="mt-2 flex justify-between text-[10px] text-brand-muted">
               <span>0</span>
-              <span className="font-semibold text-brand-dark">יעד {formatCurrency(targetCostPerConversion, currency)}</span>
+              <span className="font-semibold text-brand-dark">{t('target')} {formatCurrency(targetCostPerConversion, currency)}</span>
               <span>{formatCurrency(cpcMaxScale, currency)}</span>
             </div>
           </div>
@@ -173,12 +175,12 @@ export default function MonthPerformanceKpis({
 
         {/* ============ קוביית המרות ============ */}
         <div className={`rounded-lg border ${convClasses.border} ${convClasses.bg} p-4`}>
-          <p className="text-xs font-medium text-brand-muted">המרות החודש</p>
+          <p className="text-xs font-medium text-brand-muted">{t('conversionsThisMonth')}</p>
           <p className="mt-1 text-2xl font-semibold text-brand-dark">
             {conversions.toLocaleString()}
             <span className="text-sm font-normal text-brand-muted"> / {targetConversions.toLocaleString()}</span>
           </p>
-          <p className={`text-xs font-medium ${convClasses.text}`}>{Math.round(convPct)}% מהיעד</p>
+          <p className={`text-xs font-medium ${convClasses.text}`}>{Math.round(convPct)}% {t('ofTarget')}</p>
 
           <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-brand-border/60">
             <div
@@ -188,10 +190,10 @@ export default function MonthPerformanceKpis({
           </div>
 
           <div className="mt-3 border-t border-brand-border/60 pt-2">
-            <p className="text-xs text-brand-muted">נדרש ליום עד סוף החודש</p>
+            <p className="text-xs text-brand-muted">{t('convNeededPerDay')}</p>
             <p className="text-sm font-semibold text-brand-dark">
-              {dailyConversionsNeeded.toLocaleString()} המרות
-              <span className="text-xs font-normal text-brand-muted"> · {daysRemaining} ימים נותרו</span>
+              {dailyConversionsNeeded.toLocaleString()} {t('conversions')}
+              <span className="text-xs font-normal text-brand-muted"> · {daysRemaining} {t('daysRemaining')}</span>
             </p>
           </div>
         </div>

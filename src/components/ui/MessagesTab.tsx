@@ -12,6 +12,7 @@ import {
   Send,
   Loader2,
 } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface Props {
   clientId: string;
@@ -51,6 +52,7 @@ function truncate(text: string | undefined | null, max = 60): string {
 }
 
 export default function MessagesTab({ clientId }: Props) {
+  const { t, lang } = useLanguage();
   const { data: session } = useSession();
   const userRole = (session?.user as { role?: string })?.role ?? "";
   const canReply = REPLY_ALLOWED_ROLES.has(userRole);
@@ -80,11 +82,11 @@ export default function MessagesTab({ clientId }: Props) {
     try {
       const res = await fetch(`/api/clients/${clientId}/messages?type=${apiType}`);
       const json: ApiResponse = await res.json();
-      if (json.tokenExpired) { setTokenExpired(true); setError(json.error ?? "חיבור Meta פג תוקף"); setData([]); }
+      if (json.tokenExpired) { setTokenExpired(true); setError(json.error ?? t('metaTokenExpired')); setData([]); }
       else if (json.permissionError) { setPermissionError(json.permissionError); setReviewUrl(json.reviewUrl ?? null); setData([]); }
       else if (json.error) { setError(json.error); setData([]); }
       else { setData(json.data ?? []); setLastSyncAt(json.lastSyncAt ?? null); }
-    } catch { setError("שגיאה בטעינת הנתונים"); setData([]); }
+    } catch { setError(t('sendError')); setData([]); }
     finally { setLoading(false); }
   }, [clientId, apiType]);
 
@@ -97,11 +99,11 @@ export default function MessagesTab({ clientId }: Props) {
     try {
       const res = await fetch(`/api/clients/${clientId}/messages?type=${apiType}`, { method: "POST" });
       const json: ApiResponse = await res.json();
-      if (json.tokenExpired) { setTokenExpired(true); setError(json.error ?? "חיבור Meta פג תוקף"); }
+      if (json.tokenExpired) { setTokenExpired(true); setError(json.error ?? t('metaTokenExpired')); }
       else if (json.permissionError) { setPermissionError(json.permissionError); setReviewUrl(json.reviewUrl ?? null); }
       else if (json.error) setError(json.error);
       else { setData(json.data ?? []); setLastSyncAt(json.lastSyncAt ?? new Date().toISOString()); }
-    } catch { setError("שגיאה בסנכרון"); }
+    } catch { setError(t('sendError')); }
     finally { setSyncing(false); }
   }, [clientId, apiType]);
 
@@ -120,9 +122,9 @@ export default function MessagesTab({ clientId }: Props) {
         body: JSON.stringify({ type: replyType, targetId, message }),
       });
       const json = await res.json();
-      if (!res.ok || json.error) { alert(`שגיאה: ${json.error ?? "נכשלה השליחה"}`); return false; }
+      if (!res.ok || json.error) { alert(`${t('sendError')}: ${json.error ?? t('sendError')}`); return false; }
       return true;
-    } catch { alert("שגיאה ברשת"); return false; }
+    } catch { alert(t('sendError')); return false; }
   }
 
   function appendOptimisticReply(type: ApiType, targetId: string, message: string) {
@@ -130,19 +132,19 @@ export default function MessagesTab({ clientId }: Props) {
     if (type === "fb_comments") {
       setData((prev) => prev.map((c: any) =>
         c.id === targetId
-          ? { ...c, replies: [...(c.replies ?? []), { id: `opt_${Date.now()}`, message, from: { name: "אתם" }, created_time: now, _own: true }] }
+          ? { ...c, replies: [...(c.replies ?? []), { id: `opt_${Date.now()}`, message, from: { name: lang === "he" ? "אתם" : "You" }, created_time: now, _own: true }] }
           : c
       ));
     } else if (type === "fb_messages" || type === "ig_messages") {
       setData((prev) => prev.map((conv: any) =>
         conv.id === targetId
-          ? { ...conv, messages: { data: [{ id: `opt_${Date.now()}`, message, from: { name: "אתם", username: "אתם" }, created_time: now, _own: true }, ...(conv.messages?.data ?? [])] } }
+          ? { ...conv, messages: { data: [{ id: `opt_${Date.now()}`, message, from: { name: lang === "he" ? "אתם" : "You", username: lang === "he" ? "אתם" : "You" }, created_time: now, _own: true }, ...(conv.messages?.data ?? [])] } }
           : conv
       ));
     } else if (type === "ig_comments") {
       setData((prev) => prev.map((c: any) =>
         c.id === targetId
-          ? { ...c, replies: [...(c.replies ?? []), { id: `opt_${Date.now()}`, text: message, from: { username: "אתם" }, timestamp: now, _own: true }] }
+          ? { ...c, replies: [...(c.replies ?? []), { id: `opt_${Date.now()}`, text: message, from: { username: lang === "he" ? "אתם" : "You" }, timestamp: now, _own: true }] }
           : c
       ));
     }
@@ -166,7 +168,7 @@ export default function MessagesTab({ clientId }: Props) {
               onClick={() => { setPlatform(p); setSubTab("messages"); setSourceFilter("all"); }}
               className={`px-4 py-2 text-sm font-medium transition-colors ${platform === p ? "bg-brand-gold text-brand-dark" : "bg-brand-light text-brand-muted hover:bg-brand-bg"}`}
             >
-              {p === "facebook" ? "פייסבוק" : "אינסטגרם"}
+              {p === "facebook" ? t('facebook') : t('instagram')}
             </button>
           ))}
         </div>
@@ -177,7 +179,7 @@ export default function MessagesTab({ clientId }: Props) {
               onClick={() => { setSubTab(s); setSourceFilter("all"); }}
               className={`px-3 py-1.5 text-xs font-medium transition-colors ${subTab === s ? "bg-brand-dark text-brand-light" : "bg-brand-light text-brand-muted hover:bg-brand-bg"}`}
             >
-              {s === "messages" ? "הודעות" : "תגובות"}
+              {s === "messages" ? t('fbMessages') : t('fbComments')}
             </button>
           ))}
         </div>
@@ -188,9 +190,9 @@ export default function MessagesTab({ clientId }: Props) {
             onChange={(e) => setSourceFilter(e.target.value as "all" | "organic" | "ad")}
             className="rounded-lg bg-brand-bg px-3 py-1.5 text-xs text-brand-dark border border-brand-border focus:border-brand-gold focus:outline-none"
           >
-            <option value="all">הכל</option>
-            <option value="organic">אורגני</option>
-            <option value="ad">מודעות</option>
+            <option value="all">{t('all')}</option>
+            <option value="organic">{t('organic')}</option>
+            <option value="ad">{t('ad')}</option>
           </select>
         )}
 
@@ -198,13 +200,13 @@ export default function MessagesTab({ clientId }: Props) {
           onClick={refreshFromApi}
           disabled={syncing || loading}
           className="p-2 rounded-full bg-brand-bg text-brand-muted hover:text-brand-dark transition-colors disabled:opacity-50"
-          title="סנכרן מ-Meta"
+          title={`${t('syncNow')} Meta`}
         >
           <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
         </button>
         {lastSyncAt && (
           <span className="text-xs text-brand-muted">
-            סנכרון: {new Date(lastSyncAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            {t('lastSyncLabel')} {new Date(lastSyncAt).toLocaleString(lang === "he" ? "he-IL" : "en-US", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
           </span>
         )}
       </div>
@@ -213,8 +215,8 @@ export default function MessagesTab({ clientId }: Props) {
         <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-800 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
           <div>
-            <p className="font-medium">חיבור Meta פג תוקף</p>
-            <p className="text-sm mt-1">יש לנתק את Meta ולחבר מחדש בכרטיס הלקוח → חיבורי פלטפורמות.</p>
+            <p className="font-medium">{t('metaTokenExpired')}</p>
+            <p className="text-sm mt-1">{t('reconnectInstructions')}</p>
           </div>
         </div>
       )}
@@ -231,11 +233,11 @@ export default function MessagesTab({ clientId }: Props) {
                 rel="noopener noreferrer"
                 className="mt-2 inline-block rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80"
               >
-                בקש הרשאה ב-Meta →
+                {t('requestPermission')} →
               </a>
             )}
             {!reviewUrl && (
-              <p className="text-sm mt-1">התנתק וחבר מחדש את Meta כדי לקבל את ההרשאה.</p>
+              <p className="text-sm mt-1">{t('reconnectMeta')}</p>
             )}
           </div>
         </div>
@@ -246,11 +248,11 @@ export default function MessagesTab({ clientId }: Props) {
           <p>{error}</p>
         </div>
       )}
-      {loading && <p className="text-center text-brand-muted py-8">טוען...</p>}
+      {loading && <p className="text-center text-brand-muted py-8">{t('loading')}</p>}
       {!loading && !error && !permissionError && filteredData.length === 0 && (
         <div className="text-center text-brand-muted py-12 space-y-2">
           <MessageSquare className="w-10 h-10 mx-auto opacity-40" />
-          <p>אין {isMessages ? "הודעות" : "תגובות"}</p>
+          <p>{isMessages ? t('noMessages') : t('noComments')}</p>
         </div>
       )}
 
@@ -298,7 +300,9 @@ export default function MessagesTab({ clientId }: Props) {
 
 /* ─── ReplyForm ─── */
 
-function ReplyForm({ onSend, placeholder = "כתוב תגובה..." }: { onSend: (msg: string) => Promise<boolean>; placeholder?: string }) {
+function ReplyForm({ onSend, placeholder }: { onSend: (msg: string) => Promise<boolean>; placeholder?: string }) {
+  const { t } = useLanguage();
+  const resolvedPlaceholder = placeholder ?? t('writeReply');
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   async function handleSend() {
@@ -315,7 +319,7 @@ function ReplyForm({ onSend, placeholder = "כתוב תגובה..." }: { onSend:
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         disabled={sending}
         className="flex-1 rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-sm text-brand-dark placeholder:text-brand-muted focus:border-brand-gold focus:outline-none focus:ring-1 focus:ring-brand-gold disabled:opacity-50"
       />
@@ -325,7 +329,7 @@ function ReplyForm({ onSend, placeholder = "כתוב תגובה..." }: { onSend:
         className="inline-flex items-center gap-1 rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark transition-colors hover:bg-brand-gold/80 disabled:opacity-50"
       >
         {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-        {sending ? "שולח..." : "שלח"}
+        {sending ? t('sending') : t('send')}
       </button>
     </div>
   );
@@ -343,6 +347,7 @@ function ConversationsView({
   onReply: (convId: string, msg: string) => Promise<boolean>;
   platform: Platform;
 }) {
+  const { t, lang } = useLanguage();
   return (
     <div className="divide-y divide-brand-border">
       {data.map((conv: any) => {
@@ -360,7 +365,7 @@ function ConversationsView({
                 <p className="text-sm text-brand-muted truncate">{truncate(snippet, 80)}</p>
               </div>
               <div className="flex items-center gap-4 shrink-0 text-sm text-brand-muted">
-                {conv.message_count != null && <span>{conv.message_count} הודעות</span>}
+                {conv.message_count != null && <span>{conv.message_count} {t('fbMessages')}</span>}
                 {conv.updated_time && <span>{formatDate(conv.updated_time)}</span>}
                 {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </div>
@@ -372,7 +377,7 @@ function ConversationsView({
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-medium text-brand-dark">
                         {msg.from?.username ?? msg.from?.name ?? "—"}
-                        {msg._own && <span className="mr-2 text-xs text-brand-gold">(אתם)</span>}
+                        {msg._own && <span className="mr-2 text-xs text-brand-gold">{lang === "he" ? "(אתם)" : "(You)"}</span>}
                       </span>
                       {(msg.created_time ?? msg.timestamp) && (
                         <span className="text-xs text-brand-muted">{formatDate(msg.created_time ?? msg.timestamp)}</span>
@@ -385,7 +390,7 @@ function ConversationsView({
                   <div className="pt-2 border-t border-brand-border">
                     <ReplyForm
                       onSend={(msg) => onReply(conv.id, msg)}
-                      placeholder={platform === "facebook" ? "הגב לשיחה זו..." : "הגב בדם אינסטגרם..."}
+                      placeholder={t('replyToConversation')}
                     />
                   </div>
                 )}
@@ -407,6 +412,7 @@ function FbCommentsList({
   canReply: boolean;
   onReply: (commentId: string, msg: string) => Promise<boolean>;
 }) {
+  const { t, lang } = useLanguage();
   const [openReplyId, setOpenReplyId] = useState<string | null>(null);
 
   return (
@@ -418,9 +424,9 @@ function FbCommentsList({
             {/* מקור + פוסט/מודעה */}
             <div className="mb-2 flex items-center gap-2 text-xs text-brand-muted">
               {comment.source === "ad" ? (
-                <span className="shrink-0 rounded-full bg-brand-info/15 px-2 py-0.5 text-[10px] font-semibold text-brand-info">מודעה</span>
+                <span className="shrink-0 rounded-full bg-brand-info/15 px-2 py-0.5 text-[10px] font-semibold text-brand-info">{t('ad')}</span>
               ) : (
-                <span className="shrink-0 rounded-full bg-brand-success/15 px-2 py-0.5 text-[10px] font-semibold text-brand-success">אורגני</span>
+                <span className="shrink-0 rounded-full bg-brand-success/15 px-2 py-0.5 text-[10px] font-semibold text-brand-success">{t('organic')}</span>
               )}
               {comment.source === "ad" && comment.ad_name ? (
                 <span className="truncate font-medium">{truncate(comment.ad_name, 60)}</span>
@@ -462,7 +468,7 @@ function FbCommentsList({
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="text-xs font-medium text-brand-dark">
                         {reply.from?.name ?? "—"}
-                        {reply._own && <span className="mr-1 text-brand-gold">(אתם)</span>}
+                        {reply._own && <span className="mr-1 text-brand-gold">{lang === "he" ? "(אתם)" : "(You)"}</span>}
                       </span>
                       <span className="text-xs text-brand-muted">{formatDate(reply.created_time)}</span>
                     </div>
@@ -500,6 +506,7 @@ function IgCommentsList({
   canReply: boolean;
   onReply: (commentId: string, msg: string) => Promise<boolean>;
 }) {
+  const { t, lang } = useLanguage();
   const [openReplyId, setOpenReplyId] = useState<string | null>(null);
 
   return (
@@ -510,7 +517,7 @@ function IgCommentsList({
           <div key={comment.id} className="px-4 py-3 hover:bg-brand-bg/50 transition-colors">
             {comment.media_caption && (
               <div className="mb-2 flex items-center gap-2 text-xs text-brand-muted">
-                <span className="font-medium">פוסט:</span>
+                <span className="font-medium">{lang === "he" ? "פוסט:" : "Post:"}</span>
                 <span className="truncate">{truncate(comment.media_caption, 80)}</span>
               </div>
             )}
@@ -537,7 +544,7 @@ function IgCommentsList({
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="text-xs font-medium text-brand-dark">
                         {reply.from?.username ?? "—"}
-                        {reply._own && <span className="mr-1 text-brand-gold">(אתם)</span>}
+                        {reply._own && <span className="mr-1 text-brand-gold">{lang === "he" ? "(אתם)" : "(You)"}</span>}
                       </span>
                       <span className="text-xs text-brand-muted">{formatDate(reply.timestamp)}</span>
                     </div>

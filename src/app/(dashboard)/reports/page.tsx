@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useApp } from "@/lib/data/context";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { getCampaignManagerForClient } from "@/lib/utils/resolveManagers";
 import { FileText, CheckCircle2, AlertTriangle, Filter, Eye, Pencil, Copy, Sparkles, Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
@@ -62,6 +63,7 @@ function getMonthlyPeriod(dateStr: string): string {
 // ==================== קומפוננטה ראשית ====================
 
 export default function ReportsPage() {
+  const { t } = useLanguage();
   const { data: session } = useSession();
   const { clients, employees } = useApp();
 
@@ -292,36 +294,36 @@ export default function ReportsPage() {
     <div className="space-y-6" dir="rtl">
       <div className="flex items-center gap-3">
         <FileText className="h-7 w-7 text-brand-gold" />
-        <h1 className="text-2xl font-semibold text-brand-dark">מעקב דוחות</h1>
+        <h1 className="text-2xl font-semibold text-brand-dark">{t('reportTracking')}</h1>
       </div>
 
       {(alertCounts.weeklyMissing > 0 || alertCounts.monthlyMissing > 0) && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
           <AlertTriangle className="h-5 w-5 shrink-0 text-red-500" />
           <p className="text-sm font-medium text-red-700">
-            {alertCounts.weeklyMissing > 0 && <span>{alertCounts.weeklyMissing} לקוחות חסרים דוח שבועי</span>}
+            {alertCounts.weeklyMissing > 0 && <span>{alertCounts.weeklyMissing} {t('weeklyMissing')}</span>}
             {alertCounts.weeklyMissing > 0 && alertCounts.monthlyMissing > 0 && <span> · </span>}
-            {alertCounts.monthlyMissing > 0 && <span>{alertCounts.monthlyMissing} חסרים דוח חודשי</span>}
+            {alertCounts.monthlyMissing > 0 && <span>{alertCounts.monthlyMissing} {t('monthlyMissing')}</span>}
           </p>
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard title="שבועיים נשלחו" value={kpis.weeklySent} color="green" icon={<CheckCircle2 className="h-5 w-5 text-green-500" />} />
-        <KpiCard title="שבועיים חסרים" value={kpis.weeklyMissing} color="red" icon={<AlertTriangle className="h-5 w-5 text-red-500" />} />
-        <KpiCard title="חודשיים נשלחו" value={kpis.monthlySent} color="green" icon={<CheckCircle2 className="h-5 w-5 text-green-500" />} />
-        <KpiCard title="חודשיים חסרים" value={kpis.monthlyMissing} color="red" icon={<AlertTriangle className="h-5 w-5 text-red-500" />} />
+        <KpiCard title="{t('weeklySent')}" value={kpis.weeklySent} color="green" icon={<CheckCircle2 className="h-5 w-5 text-green-500" />} />
+        <KpiCard title="{t('weeklyMissing')}" value={kpis.weeklyMissing} color="red" icon={<AlertTriangle className="h-5 w-5 text-red-500" />} />
+        <KpiCard title="{t('monthlySent')}" value={kpis.monthlySent} color="green" icon={<CheckCircle2 className="h-5 w-5 text-green-500" />} />
+        <KpiCard title="{t('monthlyMissing')}" value={kpis.monthlyMissing} color="red" icon={<AlertTriangle className="h-5 w-5 text-red-500" />} />
       </div>
 
       <div className="flex flex-wrap items-center gap-4 rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm">
         <Filter className="h-4 w-4 text-brand-muted" />
         <select className={`${inputClass} w-48`} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}>
-          <option value="all">סטטוס: הכל</option>
-          <option value="sent">נשלח</option>
-          <option value="not_sent">לא נשלח</option>
+          <option value="all">{t('status')}: {t('all')}</option>
+          <option value="sent">{t('sent')}</option>
+          <option value="not_sent">{t('notSent')}</option>
         </select>
         <select className={`${inputClass} w-56`} value={managerFilter} onChange={(e) => setManagerFilter(e.target.value)}>
-          <option value="all">מנהל קמפיינים: הכל</option>
+          <option value="all">{t('campaignManager')}: {t('all')}</option>
           {campaignManagers.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
         </select>
       </div>
@@ -331,15 +333,15 @@ export default function ReportsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-brand-border bg-brand-bg text-brand-dark">
-              <th className="px-4 py-3 text-right font-medium">שם לקוח</th>
-              <th className="px-4 py-3 text-right font-medium">מנהל קמפיינים</th>
-              <th className="px-4 py-3 text-right font-medium">דוח שבועי</th>
-              <th className="px-4 py-3 text-right font-medium">דוח חודשי</th>
+              <th className="px-4 py-3 text-right font-medium">{t('name')}</th>
+              <th className="px-4 py-3 text-right font-medium">{t('campaignManager')}</th>
+              <th className="px-4 py-3 text-right font-medium">{t('weeklyReport')}</th>
+              <th className="px-4 py-3 text-right font-medium">{t('monthlyReport')}</th>
             </tr>
           </thead>
           <tbody>
             {filteredRows.length === 0 ? (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-brand-muted">אין לקוחות להצגה</td></tr>
+              <tr><td colSpan={4} className="px-4 py-8 text-center text-brand-muted">{t('noResults')}</td></tr>
             ) : (
               filteredRows.map(({ tracker, client }) => {
                 const weeklySent = isWithinLastDays(tracker.weeklyLastSent, 7);
@@ -353,9 +355,9 @@ export default function ReportsPage() {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
                         {weeklySent ? (
-                          <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">נשלח</span>
+                          <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">{t('sent')}</span>
                         ) : (
-                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">לא נשלח</span>
+                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">לא {t('sent')}</span>
                         )}
                         <span className="text-xs text-brand-muted">{getWeeklyPeriod(tracker.weeklyLastSent)}</span>
                         {weeklySent && tracker.weeklyContent && (
@@ -365,7 +367,7 @@ export default function ReportsPage() {
                         )}
                         {canMarkAsSent && !weeklySent && (
                           <button onClick={() => openContentModal(client.id, "weekly")} className="rounded-lg border border-brand-border px-2 py-1 text-xs text-brand-muted hover:bg-brand-bg hover:text-brand-dark">
-                            סמן כנשלח
+                            {t('markAsSent')}
                           </button>
                         )}
                         {weeklyWarning(tracker.weeklyLastSent) && <AlertTriangle className="h-4 w-4 text-red-400" />}
@@ -376,9 +378,9 @@ export default function ReportsPage() {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
                         {monthlySent ? (
-                          <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">נשלח</span>
+                          <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">{t('sent')}</span>
                         ) : (
-                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">לא נשלח</span>
+                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">לא {t('sent')}</span>
                         )}
                         <span className="text-xs text-brand-muted">{getMonthlyPeriod(tracker.monthlyLastSent)}</span>
                         {monthlySent && tracker.monthlyContent && (
@@ -388,7 +390,7 @@ export default function ReportsPage() {
                         )}
                         {canMarkAsSent && !monthlySent && (
                           <button onClick={() => openContentModal(client.id, "monthly")} className="rounded-lg border border-brand-border px-2 py-1 text-xs text-brand-muted hover:bg-brand-bg hover:text-brand-dark">
-                            סמן כנשלח
+                            {t('markAsSent')}
                           </button>
                         )}
                         {monthlyWarning(tracker.monthlyLastSent) && <AlertTriangle className="h-4 w-4 text-red-400" />}
@@ -403,16 +405,16 @@ export default function ReportsPage() {
       </div>
 
       {/* ========== מודל הזנת תוכן דוח ========== */}
-      <Modal isOpen={!!contentModal} onClose={() => setContentModal(null)} title={`סיכום ${contentModal?.type === "weekly" ? "שבועי" : "חודשי"} — ${contentModal?.clientName ?? ""}`} size="lg">
+      <Modal isOpen={!!contentModal} onClose={() => setContentModal(null)} title={`${t('enterSummary')} ${contentModal?.type === "weekly" ? t('weeklyReportLabel') : t('monthlyReportLabel')} — ${contentModal?.clientName ?? ""}`} size="lg">
         {contentModal && (
           <div className="space-y-4">
-            <p className="text-sm text-brand-muted">הזן את הסיכום שנשלח ללקוח. לא ניתן לסמן כנשלח ללא תוכן.</p>
+            <p className="text-sm text-brand-muted">הזן את הסיכום ש{t('sent')} ללקוח. לא ניתן לסמן כ{t('sent')} ללא תוכן.</p>
             <textarea
               value={contentText}
               onChange={(e) => setContentText(e.target.value)}
               rows={8}
               className={inputClass}
-              placeholder="הדבק כאן את הסיכום השבועי שנשלח ללקוח..."
+              placeholder={t('pasteHere')}
               dir="rtl"
             />
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-brand-border pt-4">
@@ -422,18 +424,18 @@ export default function ReportsPage() {
                 className="flex items-center gap-2 rounded-lg border border-brand-gold bg-brand-gold/10 px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/20 disabled:opacity-50"
               >
                 {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-brand-gold" />}
-                {aiLoading ? "מייצר סיכום..." : "צור סיכום עם AI"}
+                {aiLoading ? t('loading') : t('generateWithAi')}
               </button>
               <div className="flex gap-3">
                 <button onClick={() => setContentModal(null)} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg">
-                  ביטול
+                  {t('cancel')}
                 </button>
                 <button
                   onClick={saveReportContent}
                   disabled={!contentText.trim() || contentSaving}
                   className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
                 >
-                  {contentSaving ? "שומר..." : "שמור וסמן כנשלח"}
+                  {contentSaving ? t('loading') : t('saveAndMark')}
                 </button>
               </div>
             </div>
@@ -442,7 +444,7 @@ export default function ReportsPage() {
       </Modal>
 
       {/* ========== מודל צפייה בדוח ========== */}
-      <Modal isOpen={!!viewModal} onClose={() => setViewModal(null)} title={`דוח ${viewModal?.type === "weekly" ? "שבועי" : "חודשי"} — ${viewModal?.clientName ?? ""}`} size="lg">
+      <Modal isOpen={!!viewModal} onClose={() => setViewModal(null)} title={`${viewModal?.type === "weekly" ? t('weeklyReportLabel') : t('monthlyReportLabel')} — ${viewModal?.clientName ?? ""}`} size="lg">
         {viewModal && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -455,7 +457,7 @@ export default function ReportsPage() {
                 <p className="text-sm font-medium text-brand-dark">{formatDate(viewModal.date)}</p>
               </div>
               <div className="rounded-lg bg-brand-bg p-3">
-                <p className="text-xs text-brand-muted">נשלח על ידי</p>
+                <p className="text-xs text-brand-muted">{t('sent')} על ידי</p>
                 <p className="text-sm font-medium text-brand-dark">{viewModal.author || "—"}</p>
               </div>
             </div>
@@ -468,7 +470,7 @@ export default function ReportsPage() {
                 className="flex items-center gap-2 rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg"
               >
                 <Copy className="h-4 w-4" />
-                העתק
+                {t('copy')}
               </button>
               <button
                 onClick={() => {
@@ -484,7 +486,7 @@ export default function ReportsPage() {
                 className="flex items-center gap-2 rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg"
               >
                 <Pencil className="h-4 w-4" />
-                ערוך
+                {t('edit')}
               </button>
             </div>
           </div>
@@ -492,7 +494,7 @@ export default function ReportsPage() {
       </Modal>
 
       {/* ========== מודל עריכה בדיעבד ========== */}
-      <Modal isOpen={!!editModal} onClose={() => setEditModal(null)} title={`עריכת דוח — ${editModal?.clientName ?? ""}`} size="lg">
+      <Modal isOpen={!!editModal} onClose={() => setEditModal(null)} title={`${t('editReport')} — ${editModal?.clientName ?? ""}`} size="lg">
         {editModal && (
           <div className="space-y-4">
             <textarea
@@ -505,7 +507,7 @@ export default function ReportsPage() {
             <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
               <button onClick={() => setEditModal(null)} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg">ביטול</button>
               <button onClick={saveEdit} disabled={editSaving} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">
-                {editSaving ? "שומר..." : "שמור"}
+                {editSaving ? t('loading') : t('save')}
               </button>
             </div>
           </div>

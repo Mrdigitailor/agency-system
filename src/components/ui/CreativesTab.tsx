@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw, BarChart3, Image as ImageIcon } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { getCurrencySymbol } from "@/lib/utils/currency";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 /* ───────── Types ───────── */
 
@@ -79,12 +80,12 @@ function getVideoValue(actions?: VideoAction[]): number {
   return Number(actions[0].value) || 0;
 }
 
-function statusLabel(status: string): string {
+function statusLabel(status: string, t: (key: string) => string): string {
   switch (status) {
     case "ACTIVE":
-      return "פעיל";
+      return t('active');
     case "PAUSED":
-      return "מושהה";
+      return t('paused');
     default:
       return status;
   }
@@ -117,6 +118,7 @@ function getSortValue(c: Creative, field: SortField): number {
 /* ───────── Component ───────── */
 
 export default function CreativesTab({ clientId, currency }: Props) {
+  const { t } = useLanguage();
   const sym = getCurrencySymbol(currency);
 
   const [creatives, setCreatives] = useState<Creative[]>([]);
@@ -263,7 +265,7 @@ export default function CreativesTab({ clientId, currency }: Props) {
           className="inline-flex items-center gap-2 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:opacity-90 disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
-          {syncing ? "מסנכרן..." : "סנכרון קריאייטיבים"}
+          {syncing ? t('syncing') : t('syncCreatives')}
         </button>
 
         {compareIds.size >= 2 && (
@@ -272,7 +274,7 @@ export default function CreativesTab({ clientId, currency }: Props) {
             className="inline-flex items-center gap-2 rounded-lg border border-brand-gold bg-brand-light px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/10"
           >
             <BarChart3 className="h-4 w-4" />
-            השוואה ({compareIds.size})
+            {t('comparison')} ({compareIds.size})
           </button>
         )}
       </div>
@@ -285,9 +287,9 @@ export default function CreativesTab({ clientId, currency }: Props) {
           onChange={(e) => setStatusFilter(e.target.value)}
           className={inputClass}
         >
-          <option value="all">כל הסטטוסים</option>
-          <option value="ACTIVE">פעיל</option>
-          <option value="PAUSED">מושהה</option>
+          <option value="all">{t('allStatuses')}</option>
+          <option value="ACTIVE">{t('active')}</option>
+          <option value="PAUSED">{t('paused')}</option>
         </select>
 
         {/* קמפיין */}
@@ -296,7 +298,7 @@ export default function CreativesTab({ clientId, currency }: Props) {
           onChange={(e) => setCampaignFilter(e.target.value)}
           className={inputClass}
         >
-          <option value="all">כל הקמפיינים</option>
+          <option value="all">{t('all')} {t('campaigns')}</option>
           {campaigns.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -310,9 +312,9 @@ export default function CreativesTab({ clientId, currency }: Props) {
           onChange={(e) => setSortField(e.target.value as SortField)}
           className={inputClass}
         >
-          <option value="spend">הוצאה</option>
-          <option value="conversions">המרות</option>
-          <option value="cpa">עלות להמרה</option>
+          <option value="spend">{t('spend')}</option>
+          <option value="conversions">{t('conversions')}</option>
+          <option value="cpa">{t('costPerConversion')}</option>
           <option value="ctr">CTR</option>
         </select>
 
@@ -322,15 +324,15 @@ export default function CreativesTab({ clientId, currency }: Props) {
           onChange={(e) => setSortDir(e.target.value as SortDir)}
           className={inputClass}
         >
-          <option value="desc">מהגבוה לנמוך</option>
-          <option value="asc">מהנמוך לגבוה</option>
+          <option value="desc">{t('highToLow')}</option>
+          <option value="asc">{t('lowToHigh')}</option>
         </select>
       </div>
 
       {/* ── Grid ── */}
       {filtered.length === 0 ? (
         <div className="py-12 text-center text-brand-muted">
-          לא נמצאו קריאייטיבים
+          {t('noCreatives')}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -379,7 +381,7 @@ export default function CreativesTab({ clientId, currency }: Props) {
                   <span
                     className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${statusClasses(c.status)}`}
                   >
-                    {statusLabel(c.status)}
+                    {statusLabel(c.status, t)}
                   </span>
                 </div>
 
@@ -392,10 +394,10 @@ export default function CreativesTab({ clientId, currency }: Props) {
 
                 {/* KPIs */}
                 <div className="grid grid-cols-4 gap-1 border-t border-brand-border pt-2">
-                  <KpiCell label="הוצאה" value={fmtMoney(c.insights.spend, sym)} />
-                  <KpiCell label="המרות" value={fmtNumber(c.insights.conversions)} />
+                  <KpiCell label={t('spend')} value={fmtMoney(c.insights.spend, sym)} />
+                  <KpiCell label={t('conversions')} value={fmtNumber(c.insights.conversions)} />
                   <KpiCell
-                    label="עלות/המרה"
+                    label={t('costPerConversion')}
                     value={fmtMoney(c.insights.cost_per_conversion, sym)}
                   />
                   <KpiCell label="CTR" value={fmtPercent(c.insights.ctr)} />
@@ -422,7 +424,7 @@ export default function CreativesTab({ clientId, currency }: Props) {
       <Modal
         isOpen={showCompare}
         onClose={() => setShowCompare(false)}
-        title="השוואת קריאייטיבים"
+        title={t('comparison')}
         size="lg"
       >
         <CompareTable creatives={compareCreatives} sym={sym} />
@@ -445,6 +447,7 @@ function KpiCell({ label, value }: { label: string; value: string }) {
 /* ── Detail modal content ── */
 
 function DetailContent({ creative: c, sym }: { creative: Creative; sym: string }) {
+  const { t } = useLanguage();
   const isVideo = !!(
     c.insights.video_p25_watched_actions?.length ||
     c.insights.video_p50_watched_actions?.length ||
@@ -467,13 +470,13 @@ function DetailContent({ creative: c, sym }: { creative: Creative; sym: string }
       <div className="space-y-2">
         {c.title && (
           <div>
-            <span className="text-xs text-brand-muted">כותרת:</span>
+            <span className="text-xs text-brand-muted">{t('headline')}:</span>
             <p className="text-sm font-medium text-brand-dark">{c.title}</p>
           </div>
         )}
         {c.body && (
           <div>
-            <span className="text-xs text-brand-muted">טקסט מודעה:</span>
+            <span className="text-xs text-brand-muted">{t('adText')}:</span>
             <p className="text-sm text-brand-dark whitespace-pre-line">{c.body}</p>
           </div>
         )}
@@ -487,7 +490,7 @@ function DetailContent({ creative: c, sym }: { creative: Creative; sym: string }
         )}
         {c.linkUrl && (
           <div>
-            <span className="text-xs text-brand-muted">קישור:</span>
+            <span className="text-xs text-brand-muted">{t('destinationLink')}:</span>
             <a
               href={c.linkUrl}
               target="_blank"
@@ -500,13 +503,13 @@ function DetailContent({ creative: c, sym }: { creative: Creative; sym: string }
         )}
         {c.campaignName && (
           <div>
-            <span className="text-xs text-brand-muted">קמפיין:</span>
+            <span className="text-xs text-brand-muted">{t('campaign')}:</span>
             <span className="mr-2 text-sm text-brand-dark">{c.campaignName}</span>
           </div>
         )}
         {c.adsetName && (
           <div>
-            <span className="text-xs text-brand-muted">קבוצת מודעות:</span>
+            <span className="text-xs text-brand-muted">{t('adSet')}:</span>
             <span className="mr-2 text-sm text-brand-dark">{c.adsetName}</span>
           </div>
         )}
@@ -514,18 +517,18 @@ function DetailContent({ creative: c, sym }: { creative: Creative; sym: string }
 
       {/* Metrics grid */}
       <div>
-        <h4 className="mb-2 text-sm font-semibold text-brand-dark">מדדים</h4>
+        <h4 className="mb-2 text-sm font-semibold text-brand-dark">{t('metrics')}</h4>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <MetricCard label="הוצאה" value={fmtMoney(c.insights.spend, sym)} />
-          <MetricCard label="הופעות" value={fmtNumber(c.insights.impressions)} />
-          <MetricCard label="חשיפה" value={fmtNumber(c.insights.reach)} />
-          <MetricCard label="קליקים" value={fmtNumber(c.insights.clicks)} />
-          <MetricCard label="קליקים על קישור" value={fmtNumber(c.insights.inline_link_clicks)} />
+          <MetricCard label={t('spend')} value={fmtMoney(c.insights.spend, sym)} />
+          <MetricCard label={t('impressions')} value={fmtNumber(c.insights.impressions)} />
+          <MetricCard label={t('reach')} value={fmtNumber(c.insights.reach)} />
+          <MetricCard label={t('clicks')} value={fmtNumber(c.insights.clicks)} />
+          <MetricCard label={t('linkClicks')} value={fmtNumber(c.insights.inline_link_clicks)} />
           <MetricCard label="CTR" value={fmtPercent(c.insights.ctr)} />
           <MetricCard label="CPC" value={fmtMoney(c.insights.cpc, sym)} />
           <MetricCard label="CPM" value={fmtMoney(c.insights.cpm, sym)} />
-          <MetricCard label="המרות" value={fmtNumber(c.insights.conversions)} />
-          <MetricCard label="עלות להמרה" value={fmtMoney(c.insights.cost_per_conversion, sym)} />
+          <MetricCard label={t('conversions')} value={fmtNumber(c.insights.conversions)} />
+          <MetricCard label={t('costPerConversion')} value={fmtMoney(c.insights.cost_per_conversion, sym)} />
         </div>
       </div>
 
@@ -533,7 +536,7 @@ function DetailContent({ creative: c, sym }: { creative: Creative; sym: string }
       {isVideo && (
         <div>
           <h4 className="mb-2 text-sm font-semibold text-brand-dark">
-            משפך צפייה בוידאו
+            {t('videoFunnel')}
           </h4>
           <VideoFunnel insights={c.insights} />
         </div>
@@ -599,25 +602,27 @@ function CompareTable({
   creatives: Creative[];
   sym: string;
 }) {
+  const { t } = useLanguage();
+
   if (creatives.length === 0) {
     return (
-      <p className="text-center text-brand-muted">לא נבחרו קריאייטיבים להשוואה</p>
+      <p className="text-center text-brand-muted">{t('noCreatives')}</p>
     );
   }
 
   const rows: { label: string; getValue: (c: Creative) => string }[] = [
-    { label: "סטטוס", getValue: (c) => statusLabel(c.status) },
-    { label: "קמפיין", getValue: (c) => c.campaignName || "-" },
-    { label: "הוצאה", getValue: (c) => fmtMoney(c.insights.spend, sym) },
-    { label: "הופעות", getValue: (c) => fmtNumber(c.insights.impressions) },
-    { label: "חשיפה", getValue: (c) => fmtNumber(c.insights.reach) },
-    { label: "קליקים", getValue: (c) => fmtNumber(c.insights.clicks) },
+    { label: t('status'), getValue: (c) => statusLabel(c.status, t) },
+    { label: t('campaign'), getValue: (c) => c.campaignName || "-" },
+    { label: t('spend'), getValue: (c) => fmtMoney(c.insights.spend, sym) },
+    { label: t('impressions'), getValue: (c) => fmtNumber(c.insights.impressions) },
+    { label: t('reach'), getValue: (c) => fmtNumber(c.insights.reach) },
+    { label: t('clicks'), getValue: (c) => fmtNumber(c.insights.clicks) },
     { label: "CTR", getValue: (c) => fmtPercent(c.insights.ctr) },
     { label: "CPC", getValue: (c) => fmtMoney(c.insights.cpc, sym) },
     { label: "CPM", getValue: (c) => fmtMoney(c.insights.cpm, sym) },
-    { label: "המרות", getValue: (c) => fmtNumber(c.insights.conversions) },
+    { label: t('conversions'), getValue: (c) => fmtNumber(c.insights.conversions) },
     {
-      label: "עלות להמרה",
+      label: t('costPerConversion'),
       getValue: (c) => fmtMoney(c.insights.cost_per_conversion, sym),
     },
   ];
@@ -628,7 +633,7 @@ function CompareTable({
         <thead>
           <tr className="border-b border-brand-border">
             <th className="px-3 py-2 text-right text-xs font-medium text-brand-muted">
-              מדד
+              {t('metric')}
             </th>
             {creatives.map((c) => (
               <th

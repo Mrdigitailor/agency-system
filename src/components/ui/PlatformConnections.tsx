@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link2, Unlink, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface Asset {
   id: string;
@@ -30,15 +31,17 @@ const PLATFORMS = [
   { id: "tiktok", label: "TikTok Ads", color: "#000000", icon: "T" },
 ];
 
-const ASSET_TYPE_LABELS: Record<string, string> = {
-  ad_account: "חשבון מודעות",
-  facebook_page: "עמוד פייסבוק",
-  instagram: "אינסטגרם",
-  pixel: "פיקסל / Dataset",
-  google_ads_account: "Google Ads",
-  ga4_property: "Google Analytics",
-  tiktok_account: "TikTok",
-};
+function getAssetTypeLabels(t: (key: string) => string): Record<string, string> {
+  return {
+    ad_account: t('adAccount'),
+    facebook_page: t('facebookPage'),
+    instagram: t('instagram'),
+    pixel: t('pixelDataset'),
+    google_ads_account: "Google Ads",
+    ga4_property: "Google Analytics",
+    tiktok_account: "TikTok",
+  };
+}
 
 function formatDate(d: string | null) {
   if (!d) return "—";
@@ -46,6 +49,8 @@ function formatDate(d: string | null) {
 }
 
 export default function PlatformConnections({ clientId }: { clientId: string }) {
+  const { t, lang } = useLanguage();
+  const ASSET_TYPE_LABELS = getAssetTypeLabels(t);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
@@ -125,7 +130,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
   };
 
   const handleDisconnect = async (platform: string) => {
-    if (!confirm("האם לנתק את החיבור? תצטרך להתחבר מחדש.")) return;
+    if (!confirm(t('disconnectConfirm'))) return;
     if (platform === "meta") {
       await fetch(`/api/platforms/meta/disconnect/${clientId}`, { method: "DELETE" });
     } else {
@@ -138,7 +143,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
 
   const handleRefreshAssets = async (force = false) => {
     setRefreshingAssets(true);
-    setLoadingMessage("טוען חשבונות מודעות, דפים, אינסטגרם ופיקסלים...");
+    setLoadingMessage(t('loading'));
     try {
       await fetch(`/api/platforms/meta/refresh-assets/${clientId}`, {
         method: "POST",
@@ -185,7 +190,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
     setSaving(true);
 
     // שלב 1: שמירת בחירות (כל הנכסים — כולל פיקסלים — במכה אחת)
-    setSavingStep("שומר בחירות...");
+    setSavingStep(t('loading'));
     await fetch(`/api/clients/${clientId}/connections/${assetsModalPlatform}/assets`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -194,7 +199,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
 
     // שלב 2: סנכרון נתונים אוטומטי ברקע (Meta בלבד)
     if (assetsModalPlatform === "meta") {
-      setSavingStep("מתחיל סנכרון נתונים ברקע...");
+      setSavingStep(t('syncing'));
       fetch(`/api/platforms/meta/sync/${clientId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -211,7 +216,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
   const connectedPlatforms = new Set(connections.map((c) => c.platform));
   const activeModalConnection = connections.find((c) => c.platform === assetsModalPlatform);
 
-  if (loading) return <p className="text-sm text-brand-muted">טוען חיבורים...</p>;
+  if (loading) return <p className="text-sm text-brand-muted">{t('loading')}</p>;
 
   return (
     <div className="space-y-4">
@@ -237,11 +242,11 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                         <CheckCircle2 className="h-4 w-4 text-brand-success" />
                       </p>
                       <p className="text-xs text-brand-muted">
-                        {conn.accountName} · מחובר מ-{formatDate(conn.connectedAt)}
+                        {conn.accountName} · {t('connectedFrom')}{formatDate(conn.connectedAt)}
                       </p>
                       <p className="mt-0.5 text-xs text-brand-muted">
-                        {selectedCount} נכסים נבחרו מתוך {conn.assets.length}
-                        {conn.lastSyncAt && ` · סנכרון אחרון: ${formatDate(conn.lastSyncAt)}`}
+                        {selectedCount} {t('assetsSelected')} {conn.assets.length}
+                        {conn.lastSyncAt && ` · ${t('lastSync')} ${formatDate(conn.lastSyncAt)}`}
                       </p>
                     </div>
                   </div>
@@ -253,7 +258,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                         className="flex items-center gap-1 rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
                       >
                         <RefreshCw className={`h-3.5 w-3.5 ${syncingPlatform === conn.platform ? "animate-spin" : ""}`} />
-                        {syncingPlatform === conn.platform ? "מסנכרן..." : "סנכרן עכשיו"}
+                        {syncingPlatform === conn.platform ? t('syncing') : t('syncNow')}
                       </button>
                     )}
                     <button
@@ -266,14 +271,14 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                       className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-bg disabled:opacity-50"
                     >
                       <RefreshCw className={`h-3 w-3 ${refreshingAssets ? "animate-spin" : ""}`} />
-                      {refreshingAssets ? (loadingMessage || "טוען...") : "ניהול נכסים"}
+                      {refreshingAssets ? (loadingMessage || t('loading')) : t('manageAssets')}
                     </button>
                     <button
                       onClick={() => handleDisconnect(conn.platform)}
                       className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-xs font-medium text-brand-danger hover:bg-red-50"
                     >
                       <Unlink className="h-3.5 w-3.5" />
-                      נתק
+                      {t('disconnect')}
                     </button>
                   </div>
                 </div>
@@ -285,7 +290,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
 
       {/* כפתורי חיבור */}
       <div className="space-y-2">
-        <p className="text-xs font-medium text-brand-muted">חבר פלטפורמה חדשה:</p>
+        <p className="text-xs font-medium text-brand-muted">{t('connectNewPlatform')}</p>
         <div className="flex flex-wrap gap-2">
           {PLATFORMS.filter((p) => !connectedPlatforms.has(p.id)).map((platform) => (
             <button
@@ -304,13 +309,13 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                   {platform.icon}
                 </div>
               )}
-              חבר {platform.label.split(" ")[0]}
+              {t('connect')} {platform.label.split(" ")[0]}
               <Link2 className="h-3.5 w-3.5" />
             </button>
           ))}
         </div>
         {PLATFORMS.every((p) => connectedPlatforms.has(p.id)) && (
-          <p className="text-xs text-brand-muted">כל הפלטפורמות מחוברות ✓</p>
+          <p className="text-xs text-brand-muted">{t('allPlatformsConnected')} ✓</p>
         )}
       </div>
 
@@ -318,13 +323,13 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
       <Modal
         isOpen={!!assetsModalPlatform}
         onClose={() => setAssetsModalPlatform(null)}
-        title={`ניהול נכסים — ${PLATFORMS.find((p) => p.id === assetsModalPlatform)?.label ?? ""}`}
+        title={`${t('manageAssets')} — ${PLATFORMS.find((p) => p.id === assetsModalPlatform)?.label ?? ""}`}
         size="lg"
       >
         {activeModalConnection && (
           <div className="space-y-4">
             <p className="text-sm text-brand-muted">
-              בחר אילו נכסים רלוונטיים ללקוח הזה. רק הנכסים הנבחרים יופיעו בדוחות ובביצועים.
+              {t('selectAssetsDescription')}
             </p>
 
             <div className="space-y-3">
@@ -371,14 +376,14 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                 onClick={() => setAssetsModalPlatform(null)}
                 className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg"
               >
-                ביטול
+                {t('cancel')}
               </button>
               <button
                 onClick={saveAssetSelections}
                 disabled={saving}
                 className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
               >
-                {saving ? (savingStep || "שומר...") : "שמור וסנכרן"}
+                {saving ? (savingStep || t('loading')) : t('saveAndSync')}
               </button>
             </div>
           </div>

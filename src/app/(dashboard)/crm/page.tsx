@@ -15,6 +15,7 @@ import {
   Pencil,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { useApp } from "@/lib/data/context";
 import {
   LEAD_SOURCES,
@@ -205,6 +206,7 @@ function KanbanCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
 export default function CrmPage() {
   const { leads, addLead, updateLead, addLeadCall, employees, settings } =
     useApp();
+  const { t } = useLanguage();
 
   /* ── Lead Sources (dynamic) ── */
   const [dynamicSources, setDynamicSources] = useState<{ value: string; label: string }[]>([]);
@@ -643,7 +645,7 @@ export default function CrmPage() {
         <button onClick={() => setIsModalOpen(true)} className={btnPrimary}>
           <span className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
-            ליד חדש
+            {t('newLead')}
           </span>
         </button>
       </div>
@@ -652,9 +654,9 @@ export default function CrmPage() {
       <div className="flex gap-1 rounded-lg bg-brand-bg p-1">
         {(
           [
-            { key: "leads", label: "לידים" },
-            { key: "closings", label: "סגירות" },
-            { key: "churned", label: "לקוחות נוטשים" },
+            { key: "leads", label: t('leads') },
+            { key: "closings", label: t('closings') },
+            { key: "churned", label: t('churned') },
           ] as const
         ).map((tab) => (
           <button
@@ -679,15 +681,15 @@ export default function CrmPage() {
           {/* KPI */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <div className={cardClass}>
-              <p className="text-xs text-brand-muted">סה&quot;כ לידים</p>
+              <p className="text-xs text-brand-muted">{t('totalLeads')}</p>
               <p className="mt-1 text-2xl font-semibold text-brand-dark">{leadsKpi.total}</p>
             </div>
             <div className={cardClass}>
-              <p className="text-xs text-brand-muted">שווי כולל</p>
+              <p className="text-xs text-brand-muted">{t('totalDealValue')}</p>
               <p className="mt-1 text-2xl font-semibold text-brand-dark">₪ {leadsKpi.totalValue.toLocaleString()}</p>
             </div>
             <div className={cardClass}>
-              <p className="text-xs text-brand-muted">לידים חדשים</p>
+              <p className="text-xs text-brand-muted">{t('newLeads')}</p>
               <p className="mt-1 text-2xl font-semibold text-brand-info">{leadsKpi.newCount}</p>
             </div>
             <div className={cardClass}>
@@ -704,7 +706,7 @@ export default function CrmPage() {
                 <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-muted" />
                 <input
                   type="text"
-                  placeholder="חיפוש שם / טלפון / אימייל..."
+                  placeholder={`${t('search')}...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className={`${inputClass} pr-9`}
@@ -712,14 +714,14 @@ export default function CrmPage() {
               </div>
               {/* Source */}
               <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className={inputClass}>
-                <option value="all">כל המקורות</option>
+                <option value="all">{t('source')}</option>
                 {LEAD_SOURCES.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
               {/* Status */}
               <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={inputClass}>
-                <option value="all">כל הסטטוסים</option>
+                <option value="all">{t('allStatuses')}</option>
                 {KANBAN_COLUMNS.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
@@ -727,7 +729,7 @@ export default function CrmPage() {
               </select>
               {/* Quality */}
               <select value={filterQuality} onChange={(e) => setFilterQuality(e.target.value)} className={inputClass}>
-                <option value="all">כל הדירוגים</option>
+                <option value="all">{t('quality')}</option>
                 {[1, 2, 3, 4, 5].map((q) => (
                   <option key={q} value={q}>{q} כוכבים</option>
                 ))}
@@ -738,14 +740,14 @@ export default function CrmPage() {
                 type="date"
                 value={filterDateFrom}
                 onChange={(e) => setFilterDateFrom(e.target.value)}
-                placeholder="מתאריך"
+                placeholder={t('date')}
                 className={inputClass}
               />
               <input
                 type="date"
                 value={filterDateTo}
                 onChange={(e) => setFilterDateTo(e.target.value)}
-                placeholder="עד תאריך"
+                placeholder={t('date')}
                 className={inputClass}
               />
             </div>
@@ -755,20 +757,20 @@ export default function CrmPage() {
                 type="number"
                 value={filterValueMin}
                 onChange={(e) => setFilterValueMin(e.target.value)}
-                placeholder="שווי מינימלי"
+                placeholder={t('value')}
                 className={`${inputClass} w-36`}
               />
               <input
                 type="number"
                 value={filterValueMax}
                 onChange={(e) => setFilterValueMax(e.target.value)}
-                placeholder="שווי מקסימלי"
+                placeholder={t('value')}
                 className={`${inputClass} w-36`}
               />
               <button onClick={clearFilters} className={btnSecondary}>
                 <span className="flex items-center gap-1">
                   <X className="h-3 w-3" />
-                  נקה פילטרים
+                  {t('clearFilters')}
                 </span>
               </button>
               {/* View toggle */}
@@ -795,15 +797,15 @@ export default function CrmPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-brand-border bg-brand-bg text-brand-muted">
-                    <th className="px-4 py-3 text-right font-medium">תאריך כניסה</th>
-                    <th className="px-4 py-3 text-right font-medium">שם</th>
-                    <th className="px-4 py-3 text-right font-medium">חברה</th>
-                    <th className="px-4 py-3 text-right font-medium">מקור</th>
-                    <th className="px-4 py-3 text-right font-medium">ערך</th>
-                    <th className="px-4 py-3 text-right font-medium">איכות</th>
-                    <th className="px-4 py-3 text-right font-medium">סטטוס</th>
-                    <th className="px-4 py-3 text-right font-medium">מעקב הבא</th>
-                    <th className="px-4 py-3 text-right font-medium">פרטי קשר</th>
+                    <th className="px-4 py-3 text-right font-medium">{t('date')}</th>
+                    <th className="px-4 py-3 text-right font-medium">{t('name')}</th>
+                    <th className="px-4 py-3 text-right font-medium">{t('company')}</th>
+                    <th className="px-4 py-3 text-right font-medium">{t('source')}</th>
+                    <th className="px-4 py-3 text-right font-medium">{t('value')}</th>
+                    <th className="px-4 py-3 text-right font-medium">{t('quality')}</th>
+                    <th className="px-4 py-3 text-right font-medium">{t('status')}</th>
+                    <th className="px-4 py-3 text-right font-medium">{t('dueDate')}</th>
+                    <th className="px-4 py-3 text-right font-medium">{t('contactInfo')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -867,7 +869,7 @@ export default function CrmPage() {
                   {activeLeads.length === 0 && (
                     <tr>
                       <td colSpan={9} className="px-4 py-8 text-center text-brand-muted">
-                        אין לידים להצגה
+                        {t('noResults')}
                       </td>
                     </tr>
                   )}
@@ -903,19 +905,19 @@ export default function CrmPage() {
           {/* KPI */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <div className={cardClass}>
-              <p className="text-xs text-brand-muted">סה&quot;כ סגירות</p>
+              <p className="text-xs text-brand-muted">{t('totalClosings')}</p>
               <p className="mt-1 text-2xl font-semibold text-brand-dark">{closingsKpi.total}</p>
             </div>
             <div className={cardClass}>
-              <p className="text-xs text-brand-muted">שווי עסקאות כולל</p>
+              <p className="text-xs text-brand-muted">{t('totalDealValue')}</p>
               <p className="mt-1 text-2xl font-semibold text-brand-success">₪ {closingsKpi.totalDealValue.toLocaleString()}</p>
             </div>
             <div className={cardClass}>
-              <p className="text-xs text-brand-muted">לקוחות פעילים</p>
+              <p className="text-xs text-brand-muted">{t('activeClients')}</p>
               <p className="mt-1 text-2xl font-semibold text-brand-info">{closingsKpi.activeClients}</p>
             </div>
             <div className={cardClass}>
-              <p className="text-xs text-brand-muted">ממוצע שווי עסקה</p>
+              <p className="text-xs text-brand-muted">{t('averageDealValue')}</p>
               <p className="mt-1 text-2xl font-semibold text-brand-dark">₪ {closingsKpi.avgDealValue.toLocaleString()}</p>
             </div>
           </div>
@@ -927,33 +929,33 @@ export default function CrmPage() {
                 <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-muted" />
                 <input
                   type="text"
-                  placeholder="חיפוש שם..."
+                  placeholder={`${t('search')}...`}
                   value={closingsSearch}
                   onChange={(e) => setClosingsSearch(e.target.value)}
                   className={`${inputClass} pr-9`}
                 />
               </div>
               <select value={closingsSource} onChange={(e) => setClosingsSource(e.target.value)} className={inputClass}>
-                <option value="all">כל המקורות</option>
+                <option value="all">{t('source')}</option>
                 {allSources.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
-              <input type="date" value={closingsDateFrom} onChange={(e) => setClosingsDateFrom(e.target.value)} placeholder="סגירה מתאריך" className={inputClass} />
-              <input type="date" value={closingsDateTo} onChange={(e) => setClosingsDateTo(e.target.value)} placeholder="סגירה עד תאריך" className={inputClass} />
-              <input type="number" value={closingsValueMin} onChange={(e) => setClosingsValueMin(e.target.value)} placeholder="שווי מינימלי" className={inputClass} />
-              <input type="number" value={closingsValueMax} onChange={(e) => setClosingsValueMax(e.target.value)} placeholder="שווי מקסימלי" className={inputClass} />
+              <input type="date" value={closingsDateFrom} onChange={(e) => setClosingsDateFrom(e.target.value)} placeholder={t('date')} className={inputClass} />
+              <input type="date" value={closingsDateTo} onChange={(e) => setClosingsDateTo(e.target.value)} placeholder={t('date')} className={inputClass} />
+              <input type="number" value={closingsValueMin} onChange={(e) => setClosingsValueMin(e.target.value)} placeholder={t('value')} className={inputClass} />
+              <input type="number" value={closingsValueMax} onChange={(e) => setClosingsValueMax(e.target.value)} placeholder={t('value')} className={inputClass} />
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <select value={closingsStatus} onChange={(e) => setClosingsStatus(e.target.value)} className={`${inputClass} w-36`}>
-                <option value="all">כל הסטטוסים</option>
-                <option value="active">פעיל</option>
-                <option value="ended">סיים</option>
+                <option value="all">{t('allStatuses')}</option>
+                <option value="active">{t('active')}</option>
+                <option value="ended">{t('ended')}</option>
               </select>
               <button onClick={clearClosingsFilters} className={btnSecondary}>
                 <span className="flex items-center gap-1">
                   <X className="h-3 w-3" />
-                  נקה פילטרים
+                  {t('clearFilters')}
                 </span>
               </button>
             </div>
@@ -964,14 +966,14 @@ export default function CrmPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-brand-border bg-brand-bg text-brand-muted">
-                  <th className="px-4 py-3 text-right font-medium">שם לקוח</th>
-                  <th className="px-4 py-3 text-right font-medium">תאריך סגירה</th>
-                  <th className="px-4 py-3 text-right font-medium">תאריך סיום</th>
-                  <th className="px-4 py-3 text-right font-medium">חודשי עבודה</th>
-                  <th className="px-4 py-3 text-right font-medium">שירות חודשי</th>
-                  <th className="px-4 py-3 text-right font-medium">הכנסה כוללת</th>
-                  <th className="px-4 py-3 text-right font-medium">סטטוס</th>
-                  <th className="px-4 py-3 text-right font-medium">מקור</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('name')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('closingDate')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('endDate')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('monthsWorked')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('monthlyService')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('totalRevenue')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('status')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('source')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -997,7 +999,7 @@ export default function CrmPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${isActive ? "bg-brand-success/20 text-brand-success" : "bg-gray-100 text-brand-muted"}`}>
-                          {isActive ? "פעיל" : "הסתיים"}
+                          {isActive ? t('active') : t('ended')}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -1011,7 +1013,7 @@ export default function CrmPage() {
                 {wonLeads.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-4 py-8 text-center text-brand-muted">
-                      אין סגירות להצגה
+                      {t('noResults')}
                     </td>
                   </tr>
                 )}
@@ -1029,15 +1031,15 @@ export default function CrmPage() {
           {/* KPI */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
             <div className={cardClass}>
-              <p className="text-xs text-brand-muted">סה&quot;כ נוטשים</p>
+              <p className="text-xs text-brand-muted">{t('totalChurned')}</p>
               <p className="mt-1 text-2xl font-semibold text-brand-danger">{churnedKpi.total}</p>
             </div>
             <div className={cardClass}>
-              <p className="text-xs text-brand-muted">ממוצע חודשים כלקוח</p>
+              <p className="text-xs text-brand-muted">{t('avgMonthsClient')}</p>
               <p className="mt-1 text-2xl font-semibold text-brand-dark">{churnedKpi.avgMonths}</p>
             </div>
             <div className={cardClass}>
-              <p className="text-xs text-brand-muted">סיבות נטישה עיקריות</p>
+              <p className="text-xs text-brand-muted">{t('topChurnReason')}</p>
               <div className="mt-1 space-y-1">
                 {churnedKpi.topReasons.length > 0 ? (
                   churnedKpi.topReasons.map((r) => (
@@ -1060,7 +1062,7 @@ export default function CrmPage() {
                 <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-muted" />
                 <input
                   type="text"
-                  placeholder="חיפוש שם..."
+                  placeholder={`${t('search')}...`}
                   value={churnedSearch}
                   onChange={(e) => setChurnedSearch(e.target.value)}
                   className={`${inputClass} pr-9`}
@@ -1073,19 +1075,19 @@ export default function CrmPage() {
                 ))}
               </select>
               <select value={churnedSource} onChange={(e) => setChurnedSource(e.target.value)} className={inputClass}>
-                <option value="all">כל המקורות</option>
+                <option value="all">{t('source')}</option>
                 {allSources.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
-              <input type="date" value={churnedDateFrom} onChange={(e) => setChurnedDateFrom(e.target.value)} placeholder="עזיבה מתאריך" className={inputClass} />
-              <input type="date" value={churnedDateTo} onChange={(e) => setChurnedDateTo(e.target.value)} placeholder="עזיבה עד תאריך" className={inputClass} />
+              <input type="date" value={churnedDateFrom} onChange={(e) => setChurnedDateFrom(e.target.value)} placeholder={t('date')} className={inputClass} />
+              <input type="date" value={churnedDateTo} onChange={(e) => setChurnedDateTo(e.target.value)} placeholder={t('date')} className={inputClass} />
             </div>
             <div className="flex items-center">
               <button onClick={clearChurnedFilters} className={btnSecondary}>
                 <span className="flex items-center gap-1">
                   <X className="h-3 w-3" />
-                  נקה פילטרים
+                  {t('clearFilters')}
                 </span>
               </button>
             </div>
@@ -1096,12 +1098,12 @@ export default function CrmPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-brand-border bg-brand-bg text-brand-muted">
-                  <th className="px-4 py-3 text-right font-medium">שם</th>
-                  <th className="px-4 py-3 text-right font-medium">תאריך עזיבה</th>
-                  <th className="px-4 py-3 text-right font-medium">תאריך התחלה</th>
-                  <th className="px-4 py-3 text-right font-medium">חודשי עבודה</th>
-                  <th className="px-4 py-3 text-right font-medium">סיבת עזיבה</th>
-                  <th className="px-4 py-3 text-right font-medium">הכנסה כוללת</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('name')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('churnDate')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('date')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('monthsWorked')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('churnReason')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('totalRevenue')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1133,7 +1135,7 @@ export default function CrmPage() {
                 {churnedLeads.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center text-brand-muted">
-                      אין לקוחות נוטשים
+                      {t('noResults')}
                     </td>
                   </tr>
                 )}
@@ -1146,27 +1148,27 @@ export default function CrmPage() {
       {/* ════════════════════════════════════════
          NEW LEAD MODAL
          ════════════════════════════════════════ */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="ליד חדש" size="lg">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={t('newLead')} size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">שם *</label>
-              <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} className={inputClass} placeholder="שם הליד" />
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('name')} *</label>
+              <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} className={inputClass} placeholder={t('name')} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">חברה</label>
-              <input value={form.company} onChange={(e) => setForm((p) => ({ ...p, company: e.target.value }))} className={inputClass} placeholder="שם החברה" />
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('company')}</label>
+              <input value={form.company} onChange={(e) => setForm((p) => ({ ...p, company: e.target.value }))} className={inputClass} placeholder={t('company')} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">אימייל</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('email')}</label>
               <input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} className={inputClass} placeholder="email@example.com" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">טלפון</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('phone')}</label>
               <input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} className={inputClass} placeholder="050-0000000" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">אתר</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('website')}</label>
               <input value={form.website} onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))} className={inputClass} placeholder="https://..." />
             </div>
             <div>
@@ -1174,7 +1176,7 @@ export default function CrmPage() {
               <input value={form.digitalAssets} onChange={(e) => setForm((p) => ({ ...p, digitalAssets: e.target.value }))} className={inputClass} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">מקור</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('source')}</label>
               {newSourceMode ? (
                 <div className="flex gap-2">
                   <input
@@ -1208,12 +1210,12 @@ export default function CrmPage() {
                   {allSources.map((s) => (
                     <option key={s.value} value={s.value}>{s.label}</option>
                   ))}
-                  <option value="__add_custom__">הוסף מקור חדש...</option>
+                  <option value="__add_custom__">{t('addSource')}</option>
                 </select>
               )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">סטטוס</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('status')}</label>
               <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as Lead["status"] }))} className={inputClass}>
                 {KANBAN_COLUMNS.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -1221,7 +1223,7 @@ export default function CrmPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">שווי עסקה</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('value')}</label>
               <input type="number" value={form.value} onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))} className={inputClass} placeholder="0" />
             </div>
             <div>
@@ -1238,7 +1240,7 @@ export default function CrmPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">מעקב הבא</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('dueDate')}</label>
               <input type="date" value={form.nextFollowUp} onChange={(e) => setForm((p) => ({ ...p, nextFollowUp: e.target.value }))} className={inputClass} />
             </div>
           </div>
@@ -1273,7 +1275,7 @@ export default function CrmPage() {
 
           {/* Services */}
           <div>
-            <label className="mb-2 block text-xs font-medium text-brand-muted">שירותים מעניינים</label>
+            <label className="mb-2 block text-xs font-medium text-brand-muted">{t('interestedServices')}</label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {INTERESTED_SERVICES.map((service) => (
                 <label key={service} className="flex cursor-pointer items-center gap-2 rounded-lg border border-brand-border px-3 py-2 text-xs transition-colors duration-200 hover:bg-brand-bg">
@@ -1296,8 +1298,8 @@ export default function CrmPage() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => setIsModalOpen(false)} className={btnSecondary}>ביטול</button>
-            <button type="submit" className={btnPrimary}>שמור ליד</button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className={btnSecondary}>{t('cancel')}</button>
+            <button type="submit" className={btnPrimary}>{t('save')}</button>
           </div>
         </form>
       </Modal>
@@ -1327,7 +1329,7 @@ export default function CrmPage() {
               <button onClick={() => openEditModal(selectedLead)} className={btnPrimary}>
                 <span className="flex items-center gap-1">
                   <Pencil className="h-3 w-3" />
-                  עריכה
+                  {t('edit')}
                 </span>
               </button>
             </div>
@@ -1363,7 +1365,7 @@ export default function CrmPage() {
                 <span className="text-sm text-brand-muted">נוצר: {formatDate(selectedLead.createdAt)}</span>
               </div>
               <div>
-                <span className="text-xs text-brand-muted">מקור: </span>
+                <span className="text-xs text-brand-muted">{t('source')}: </span>
                 <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${SOURCE_COLORS[selectedLead.source] || SOURCE_COLORS.other}`}>
                   {getSourceLabel(selectedLead.source)}
                 </span>
@@ -1397,7 +1399,7 @@ export default function CrmPage() {
             {/* Services */}
             {selectedLead.interestedServices?.length > 0 && (
               <div>
-                <p className="mb-2 text-xs font-medium text-brand-muted">שירותים מעניינים</p>
+                <p className="mb-2 text-xs font-medium text-brand-muted">{t('interestedServices')}</p>
                 <div className="flex flex-wrap gap-2">
                   {selectedLead.interestedServices.map((s) => (
                     <span key={s} className="rounded-full bg-brand-gold/20 px-3 py-1 text-xs font-medium text-brand-dark">{s}</span>
@@ -1417,7 +1419,7 @@ export default function CrmPage() {
             {/* Proposal details */}
             {selectedLead.proposalDetails && (
               <div>
-                <p className="mb-1 text-xs font-medium text-brand-muted">פרטים על השיחה והצעה</p>
+                <p className="mb-1 text-xs font-medium text-brand-muted">{t('proposalDetails')}</p>
                 <p className="rounded-lg bg-brand-bg p-3 text-sm text-brand-dark whitespace-pre-wrap">{selectedLead.proposalDetails}</p>
               </div>
             )}
@@ -1474,7 +1476,7 @@ export default function CrmPage() {
                 placeholder="הערות פנימיות..."
               />
               <button onClick={handleSaveInternalNotes} className={`${btnPrimary} mt-2`}>
-                שמור הערות
+                {t('save')}
               </button>
             </div>
 
@@ -1534,29 +1536,29 @@ export default function CrmPage() {
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        title="עריכת ליד"
+        title={t('edit')}
         size="lg"
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">שם</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('name')}</label>
               <input value={editForm.name || ""} onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))} className={inputClass} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">חברה</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('company')}</label>
               <input value={editForm.company || ""} onChange={(e) => setEditForm((p) => ({ ...p, company: e.target.value }))} className={inputClass} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">אימייל</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('email')}</label>
               <input type="email" value={editForm.email || ""} onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))} className={inputClass} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">טלפון</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('phone')}</label>
               <input value={editForm.phone || ""} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} className={inputClass} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">אתר</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('website')}</label>
               <input value={editForm.website || ""} onChange={(e) => setEditForm((p) => ({ ...p, website: e.target.value }))} className={inputClass} />
             </div>
             <div>
@@ -1564,7 +1566,7 @@ export default function CrmPage() {
               <input value={editForm.digitalAssets || ""} onChange={(e) => setEditForm((p) => ({ ...p, digitalAssets: e.target.value }))} className={inputClass} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">מקור</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('source')}</label>
               {editNewSourceMode ? (
                 <div className="flex gap-2">
                   <input
@@ -1598,12 +1600,12 @@ export default function CrmPage() {
                   {allSources.map((s) => (
                     <option key={s.value} value={s.value}>{s.label}</option>
                   ))}
-                  <option value="__add_custom__">הוסף מקור חדש...</option>
+                  <option value="__add_custom__">{t('addSource')}</option>
                 </select>
               )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">סטטוס</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('status')}</label>
               <select value={editForm.status || "new"} onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value as Lead["status"] }))} className={inputClass}>
                 {LEAD_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -1611,7 +1613,7 @@ export default function CrmPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">שווי עסקה (ערך)</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('value')}</label>
               <input type="number" value={editForm.value || 0} onChange={(e) => setEditForm((p) => ({ ...p, value: Number(e.target.value) }))} className={inputClass} />
             </div>
             <div>
@@ -1619,7 +1621,7 @@ export default function CrmPage() {
               <input type="number" value={editForm.dealValue || 0} onChange={(e) => setEditForm((p) => ({ ...p, dealValue: Number(e.target.value) }))} className={inputClass} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">שירות חודשי</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('monthlyService')}</label>
               <input type="number" value={editForm.monthlyValue || 0} onChange={(e) => setEditForm((p) => ({ ...p, monthlyValue: Number(e.target.value) }))} className={inputClass} />
             </div>
             <div>
@@ -1640,7 +1642,7 @@ export default function CrmPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">מעקב הבא</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('dueDate')}</label>
               <input type="date" value={editForm.nextFollowUp || ""} onChange={(e) => setEditForm((p) => ({ ...p, nextFollowUp: e.target.value }))} className={inputClass} />
             </div>
             <div>
@@ -1648,11 +1650,11 @@ export default function CrmPage() {
               <StarRating value={editForm.qualityRating || 0} onChange={(v) => setEditForm((p) => ({ ...p, qualityRating: v }))} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">תאריך סגירה</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('closingDate')}</label>
               <input type="date" value={editForm.closedAt || ""} onChange={(e) => setEditForm((p) => ({ ...p, closedAt: e.target.value }))} className={inputClass} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">תאריך סיום</label>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('endDate')}</label>
               <input type="date" value={editForm.endDate || ""} onChange={(e) => setEditForm((p) => ({ ...p, endDate: e.target.value }))} className={inputClass} />
             </div>
             <div>
@@ -1695,7 +1697,7 @@ export default function CrmPage() {
 
           {/* Services */}
           <div>
-            <label className="mb-2 block text-xs font-medium text-brand-muted">שירותים מעניינים</label>
+            <label className="mb-2 block text-xs font-medium text-brand-muted">{t('interestedServices')}</label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {INTERESTED_SERVICES.map((service) => (
                 <label key={service} className="flex cursor-pointer items-center gap-2 rounded-lg border border-brand-border px-3 py-2 text-xs transition-colors duration-200 hover:bg-brand-bg">
@@ -1723,7 +1725,7 @@ export default function CrmPage() {
 
           {/* Proposal details */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-brand-muted">פרטים על השיחה והצעה</label>
+            <label className="mb-1 block text-xs font-medium text-brand-muted">{t('proposalDetails')}</label>
             <textarea value={editForm.proposalDetails || ""} onChange={(e) => setEditForm((p) => ({ ...p, proposalDetails: e.target.value }))} className={`${inputClass} h-20`} placeholder="פרטים על השיחה וההצעה שהוגשה..." />
           </div>
 
@@ -1731,11 +1733,11 @@ export default function CrmPage() {
           {editForm.status === "churned" && (
             <div className="grid grid-cols-2 gap-4 rounded-lg border border-brand-danger/30 bg-brand-danger/5 p-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-brand-danger">תאריך עזיבה</label>
+                <label className="mb-1 block text-xs font-medium text-brand-danger">{t('churnDate')}</label>
                 <input type="date" value={editForm.churnedAt || ""} onChange={(e) => setEditForm((p) => ({ ...p, churnedAt: e.target.value }))} className={inputClass} />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-brand-danger">סיבת עזיבה</label>
+                <label className="mb-1 block text-xs font-medium text-brand-danger">{t('churnReason')}</label>
                 <select value={editForm.churnReason || ""} onChange={(e) => setEditForm((p) => ({ ...p, churnReason: e.target.value }))} className={inputClass}>
                   <option value="">בחר...</option>
                   {CHURN_REASONS.map((r) => (
@@ -1751,8 +1753,8 @@ export default function CrmPage() {
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => setIsEditModalOpen(false)} className={btnSecondary}>ביטול</button>
-            <button type="submit" className={btnPrimary}>שמור שינויים</button>
+            <button type="button" onClick={() => setIsEditModalOpen(false)} className={btnSecondary}>{t('cancel')}</button>
+            <button type="submit" className={btnPrimary}>{t('save')}</button>
           </div>
         </form>
       </Modal>
@@ -1777,7 +1779,7 @@ export default function CrmPage() {
             האם לסמן את <span className="font-medium text-brand-dark">{churnTarget?.name}</span> כלקוח נוטש?
           </p>
           <div>
-            <label className="mb-1 block text-xs font-medium text-brand-muted">תאריך עזיבה *</label>
+            <label className="mb-1 block text-xs font-medium text-brand-muted">{t('churnDate')} *</label>
             <input
               type="date"
               value={churnForm.churnedAt}
@@ -1786,7 +1788,7 @@ export default function CrmPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-brand-muted">סיבת עזיבה *</label>
+            <label className="mb-1 block text-xs font-medium text-brand-muted">{t('churnReason')} *</label>
             <select
               value={churnForm.churnReason}
               onChange={(e) => setChurnForm((p) => ({ ...p, churnReason: e.target.value }))}
@@ -1818,7 +1820,7 @@ export default function CrmPage() {
               }}
               className={btnSecondary}
             >
-              ביטול
+              {t('cancel')}
             </button>
             <button
               onClick={handleChurnSubmit}

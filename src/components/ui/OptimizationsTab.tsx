@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, AlertCircle, CheckCircle2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 export interface Optimization {
   id: string;
@@ -42,6 +43,7 @@ function todayIso() {
 }
 
 export default function OptimizationsTab({ clientId }: { clientId: string }) {
+  const { t } = useLanguage();
   const [optimizations, setOptimizations] = useState<Optimization[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,15 +135,15 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
 
   const showCampaignsDropdown = PLATFORMS_WITH_CAMPAIGNS.has(newOpt.platform);
 
-  if (loading) return <p className="text-sm text-brand-muted">טוען...</p>;
+  if (loading) return <p className="text-sm text-brand-muted">{t('loading')}</p>;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-brand-dark">אופטימיזציות</h2>
+        <h2 className="text-lg font-semibold text-brand-dark">{t('optimizations')}</h2>
         <button onClick={() => setShowAddModal(true)} className={`inline-flex items-center gap-2 ${btnPrimary}`}>
           <Plus className="h-4 w-4" />
-          הוסף אופטימיזציה
+          {t('addOptimization')}
         </button>
       </div>
 
@@ -149,14 +151,14 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
       <div className={cardClass}>
         <div className="mb-4 flex items-center gap-2">
           <AlertCircle className="h-5 w-5 text-brand-warning" />
-          <h3 className="text-base font-semibold text-brand-dark">אופטימיזציות לבדיקה</h3>
+          <h3 className="text-base font-semibold text-brand-dark">{t('toCheck')}</h3>
           <span className="rounded-full bg-brand-warning/20 px-2 py-0.5 text-xs font-medium text-brand-warning">
             {toCheck.length}
           </span>
         </div>
 
         {toCheck.length === 0 ? (
-          <p className="text-sm text-brand-muted">אין אופטימיזציות שממתינות לבדיקה.</p>
+          <p className="text-sm text-brand-muted">{t('noCheckNeeded')}</p>
         ) : (
           <div className="space-y-3">
             {toCheck.map((opt) => (
@@ -178,12 +180,12 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
                       )}
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-brand-muted">מה ביצענו</p>
+                      <p className="text-xs font-medium text-brand-muted">{t('whatWeDid')}</p>
                       <p className="text-sm text-brand-dark">{opt.actionTaken}</p>
                     </div>
                     {opt.expectedOutcome && (
                       <div>
-                        <p className="text-xs font-medium text-brand-muted">מה ציפינו לקבל</p>
+                        <p className="text-xs font-medium text-brand-muted">{t('whatWeExpect')}</p>
                         <p className="text-sm text-brand-dark">{opt.expectedOutcome}</p>
                       </div>
                     )}
@@ -195,13 +197,13 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
                     }}
                     className="shrink-0 rounded-lg border border-brand-success bg-brand-success/10 px-3 py-1.5 text-xs font-medium text-brand-success hover:bg-brand-success/20"
                   >
-                    סמן כנבדק
+                    {t('markAsChecked')}
                   </button>
                 </div>
 
                 {checkingId === opt.id && (
                   <div className="mt-3 space-y-2 border-t border-brand-warning/30 pt-3">
-                    <label className="block text-xs font-medium text-brand-dark">מה קרה בפועל?</label>
+                    <label className="block text-xs font-medium text-brand-dark">{t('whatHappened')}</label>
                     <textarea
                       className={inputClass}
                       rows={3}
@@ -214,14 +216,14 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
                         onClick={() => setCheckingId(null)}
                         className="rounded-lg px-3 py-1.5 text-xs text-brand-muted hover:bg-brand-bg"
                       >
-                        ביטול
+                        {t('cancel')}
                       </button>
                       <button
                         onClick={() => handleMarkChecked(opt.id)}
                         disabled={!checkText.trim()}
                         className="rounded-lg bg-brand-success px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-success/80 disabled:opacity-50"
                       >
-                        שמור
+                        {t('save')}
                       </button>
                     </div>
                   </div>
@@ -234,9 +236,9 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
 
       {/* ============ סקשן: היסטוריה (נבדקו + ישנים שלא נבדקו) ============ */}
       <div className={cardClass}>
-        <h3 className="mb-4 text-base font-semibold text-brand-dark">היסטוריה</h3>
+        <h3 className="mb-4 text-base font-semibold text-brand-dark">{t('history')}</h3>
         {checked.length === 0 && olderUnchecked.length === 0 ? (
-          <p className="text-sm text-brand-muted">אין אופטימיזציות בהיסטוריה.</p>
+          <p className="text-sm text-brand-muted">{t('noHistory')}</p>
         ) : (
           <div className="space-y-4">
             {[...checked, ...olderUnchecked]
@@ -251,12 +253,12 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
                     {opt.isChecked && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-brand-success/10 px-2 py-0.5 text-xs font-medium text-brand-success">
                         <CheckCircle2 className="h-3 w-3" />
-                        נבדק
+                        {t('checked')}
                       </span>
                     )}
                   </div>
                   <p className="mt-1 text-sm text-brand-dark">
-                    <span className="font-medium">מה ביצענו: </span>
+                    <span className="font-medium">{t('whatWeDid')}: </span>
                     {opt.actionTaken}
                   </p>
                   {opt.expectedOutcome && (
@@ -278,11 +280,11 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
       </div>
 
       {/* ============ מודל הוספת אופטימיזציה ============ */}
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="הוסף אופטימיזציה" size="lg">
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title={t('addOptimization')} size="lg">
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">תאריך</label>
+              <label className="mb-1 block text-sm font-medium text-brand-dark">{t('date')}</label>
               <input
                 type="date"
                 className={inputClass}
@@ -291,7 +293,7 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-brand-dark">פלטפורמה</label>
+              <label className="mb-1 block text-sm font-medium text-brand-dark">{t('platform')}</label>
               <select
                 className={inputClass}
                 value={newOpt.platform}
@@ -309,7 +311,7 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
           {showCampaignsDropdown && (
             <div>
               <label className="mb-1 block text-sm font-medium text-brand-dark">
-                קמפיינים <span className="font-normal text-brand-muted">({newOpt.campaignIds.length} נבחרו)</span>
+                {t('campaignsLabel')} <span className="font-normal text-brand-muted">({newOpt.campaignIds.length})</span>
               </label>
               {campaigns.length === 0 ? (
                 <p className="rounded-lg border border-brand-border bg-brand-bg p-3 text-xs text-brand-muted">
@@ -337,7 +339,7 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
           )}
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-brand-dark">מה ביצענו?</label>
+            <label className="mb-1 block text-sm font-medium text-brand-dark">{t('whatWeDid')}?</label>
             <textarea
               className={inputClass}
               rows={3}
@@ -348,7 +350,7 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-brand-dark">מה אנחנו מצפים לקבל?</label>
+            <label className="mb-1 block text-sm font-medium text-brand-dark">{t('whatWeExpect')}</label>
             <textarea
               className={inputClass}
               rows={3}
@@ -363,10 +365,10 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
               onClick={() => setShowAddModal(false)}
               className="rounded-lg px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg"
             >
-              ביטול
+              {t('cancel')}
             </button>
             <button onClick={handleCreate} disabled={saving || !newOpt.actionTaken} className={`${btnPrimary} disabled:opacity-50`}>
-              {saving ? "שומר..." : "הוסף"}
+              {saving ? t('loading') : t('add')}
             </button>
           </div>
         </div>

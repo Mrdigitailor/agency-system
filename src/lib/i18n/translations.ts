@@ -128,6 +128,12 @@ export const translations: Record<Lang, Record<string, string>> = {
     organic: "אורגני",
     ad: "מודעה",
     all: "הכל",
+    adAccount: "חשבון מודעות",
+    facebookPage: "עמוד פייסבוק",
+    pixelDataset: "פיקסל / Dataset",
+    disconnectConfirm: "האם לנתק את החיבור? תצטרך להתחבר מחדש.",
+    selectAssetsDescription: "בחר אילו נכסים רלוונטיים ללקוח הזה. רק הנכסים הנבחרים יופיעו בדוחות ובביצועים.",
+    connect: "חבר",
 
     // לקוחות
     newClient: "לקוח חדש",
@@ -463,6 +469,12 @@ export const translations: Record<Lang, Record<string, string>> = {
     organic: "Organic",
     ad: "Ad",
     all: "All",
+    adAccount: "Ad Account",
+    facebookPage: "Facebook Page",
+    pixelDataset: "Pixel / Dataset",
+    disconnectConfirm: "Disconnect this platform? You will need to reconnect.",
+    selectAssetsDescription: "Select which assets are relevant to this client. Only selected assets will appear in reports and performance.",
+    connect: "Connect",
 
     // Clients
     newClient: "New Client",
