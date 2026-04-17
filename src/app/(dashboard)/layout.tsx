@@ -4,6 +4,7 @@ import { AppProvider } from "@/lib/data/context";
 import SessionProvider from "@/components/providers/SessionProvider";
 import AiFloatingButton from "@/components/ui/AiFloatingButton";
 import { LanguageProvider } from "@/lib/i18n/LanguageContext";
+import DashboardShell, { ContentArea } from "@/components/layout/DashboardShell";
 
 export default function DashboardLayout({
   children,
@@ -14,14 +15,14 @@ export default function DashboardLayout({
     <SessionProvider>
       <LanguageProvider>
         <AppProvider>
-          <div className="min-h-screen">
+          <DashboardShell>
             <SidebarWrapper />
-            <div className="mr-[240px]">
+            <ContentArea>
               <Header />
               <main className="p-6">{children}</main>
-            </div>
+            </ContentArea>
             <AiFloatingButton />
-          </div>
+          </DashboardShell>
         </AppProvider>
       </LanguageProvider>
     </SessionProvider>

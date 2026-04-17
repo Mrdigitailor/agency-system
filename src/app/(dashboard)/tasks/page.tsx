@@ -5,6 +5,7 @@ import { Plus, Calendar, Filter, Clock, Loader2, CheckCircle2, AlertOctagon, Sen
 import { useSession } from "next-auth/react";
 import Modal from "@/components/ui/Modal";
 import { useApp } from "@/lib/data/context";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { PLATFORMS, PRIORITIES, TASK_STATUSES, TASK_TYPES, type Task } from "@/lib/data/types";
 
 function getPriorityInfo(priority: string) {
@@ -22,6 +23,7 @@ function isOverdue(task: Task) {
 }
 
 export default function TasksPage() {
+  const { t } = useLanguage();
   const { data: session } = useSession();
   const role = (session?.user as { role?: string })?.role ?? "admin";
   const userId = (session?.user as { id?: string })?.id ?? "";
@@ -141,29 +143,29 @@ export default function TasksPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-brand-dark">משימות</h1>
+        <h1 className="text-2xl font-semibold text-brand-dark">{t('tasks')}</h1>
         <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="flex items-center gap-2 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80">
           <Plus className="h-4 w-4" />
-          משימה חדשה
+          {t('newTask')}
         </button>
       </div>
 
       {/* KPI */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <button onClick={() => setFilterStatus("pending")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
-          <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-brand-muted" /><span className="text-sm text-brand-muted">בהמתנה</span></div>
+          <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-brand-muted" /><span className="text-sm text-brand-muted">{t('pending')}</span></div>
           <p className="mt-1 text-2xl font-semibold text-brand-dark">{kpi.pending}</p>
         </button>
         <button onClick={() => setFilterStatus("in_progress")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
-          <div className="flex items-center gap-2"><Loader2 className="h-4 w-4 text-brand-info" /><span className="text-sm text-brand-muted">בתהליך</span></div>
+          <div className="flex items-center gap-2"><Loader2 className="h-4 w-4 text-brand-info" /><span className="text-sm text-brand-muted">{t('inProgress')}</span></div>
           <p className="mt-1 text-2xl font-semibold text-brand-dark">{kpi.inProgress}</p>
         </button>
         <button onClick={() => setFilterStatus("done")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
-          <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-brand-success" /><span className="text-sm text-brand-muted">הושלמו</span></div>
+          <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-brand-success" /><span className="text-sm text-brand-muted">{t('done')}</span></div>
           <p className="mt-1 text-2xl font-semibold text-brand-dark">{kpi.done}</p>
         </button>
         <button onClick={() => setFilterStatus("overdue")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
-          <div className="flex items-center gap-2"><AlertOctagon className="h-4 w-4 text-brand-danger" /><span className="text-sm text-brand-muted">באיחור</span></div>
+          <div className="flex items-center gap-2"><AlertOctagon className="h-4 w-4 text-brand-danger" /><span className="text-sm text-brand-muted">{t('overdue')}</span></div>
           <p className="mt-1 text-2xl font-semibold text-brand-danger">{kpi.overdue}</p>
         </button>
       </div>
@@ -172,21 +174,21 @@ export default function TasksPage() {
       <div className="flex flex-wrap items-center gap-3">
         <Filter className="h-4 w-4 text-brand-muted" />
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none">
-          <option value="all">כל הסטטוסים</option>
+          <option value="all">{t('allStatuses')}</option>
           {TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-          <option value="overdue">באיחור</option>
+          <option value="overdue">{t('overdue')}</option>
         </select>
         <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none">
-          <option value="all">כל הדחיפויות</option>
+          <option value="all">{t('allPriorities')}</option>
           {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
         </select>
         <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} className="rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none">
-          <option value="all">כל העובדים</option>
+          <option value="all">{t('allEmployees')}</option>
           {employees.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}
         </select>
         {filterStatus !== "all" && (
           <button onClick={() => { setFilterStatus("all"); setFilterPriority("all"); setFilterAssignee("all"); }} className="rounded-lg border border-brand-border px-3 py-1.5 text-xs text-brand-muted hover:bg-brand-bg">
-            נקה פילטרים
+            {t('clearFilters')}
           </button>
         )}
       </div>
@@ -197,19 +199,19 @@ export default function TasksPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-brand-border bg-brand-bg/50">
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">כותרת</th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">לקוח</th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">אחראי</th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">סוג</th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">דחיפות</th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">תאריך יעד</th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">סטטוס</th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('taskTitle')}</th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('client')}</th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('assignee')}</th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('type')}</th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('priority')}</th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('dueDate')}</th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('status')}</th>
                 <th className="w-10 px-2 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {filteredTasks.length === 0 && (
-                <tr><td colSpan={8} className="px-6 py-12 text-center text-brand-muted">אין משימות להצגה</td></tr>
+                <tr><td colSpan={8} className="px-6 py-12 text-center text-brand-muted">{t('noResults')}</td></tr>
               )}
               {filteredTasks.map((task) => {
                 const priorityInfo = getPriorityInfo(task.priority);
@@ -232,7 +234,7 @@ export default function TasksPage() {
                     <td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${priorityInfo.bg} ${priorityInfo.color}`}>{priorityInfo.label}</span></td>
                     <td className={`px-4 py-4 text-sm ${overdue ? "text-brand-danger font-medium" : "text-brand-muted"}`}>
                       <div className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{formatDate(task.dueDate)}</div>
-                      {overdue && <span className="text-[10px] text-brand-danger">באיחור</span>}
+                      {overdue && <span className="text-[10px] text-brand-danger">{t('overdue')}</span>}
                     </td>
                     <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                       {editable ? (
@@ -244,7 +246,7 @@ export default function TasksPage() {
                           {TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                         </select>
                       ) : overdue ? (
-                        <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-brand-danger">באיחור</span>
+                        <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-brand-danger">{t('overdue')}</span>
                       ) : (
                         <span className="rounded-full bg-brand-bg px-2.5 py-1 text-xs font-medium text-brand-dark">{getTaskStatusInfo(task.status).label}</span>
                       )}
@@ -254,7 +256,7 @@ export default function TasksPage() {
                         <button
                           onClick={() => openEdit(task)}
                           className="rounded p-1 text-brand-muted transition-colors hover:bg-brand-bg hover:text-brand-dark"
-                          title="ערוך"
+                          title={t('edit')}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -269,7 +271,7 @@ export default function TasksPage() {
       </div>
 
       {/* מודל משימה חדשה */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="משימה חדשה">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={t('newTask')}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div><label className="mb-1 block text-sm font-medium text-brand-dark">כותרת</label><input type="text" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} className={inputClass} placeholder="כותרת המשימה" required /></div>
           <div><label className="mb-1 block text-sm font-medium text-brand-dark">תיאור</label><textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} rows={3} className={inputClass} placeholder="תיאור המשימה..." /></div>
@@ -289,14 +291,14 @@ export default function TasksPage() {
           </div>
           <div><label className="mb-1 block text-sm font-medium text-brand-dark">תאריך יעד</label><input type="date" value={form.dueDate} onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))} className={inputClass} /></div>
           <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg">ביטול</button>
-            <button type="submit" className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">שמור משימה</button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg">{t('cancel')}</button>
+            <button type="submit" className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">{t('save')}</button>
           </div>
         </form>
       </Modal>
 
       {/* מודל עריכת משימה */}
-      <Modal isOpen={!!editingTask} onClose={() => setEditingTask(null)} title="עריכת משימה">
+      <Modal isOpen={!!editingTask} onClose={() => setEditingTask(null)} title={`${t('edit')} ${t('tasks')}`}>
         {editingTask && (
           <div className="space-y-4">
             <p className="text-sm font-medium text-brand-dark">{editingTask.title}</p>
@@ -314,15 +316,15 @@ export default function TasksPage() {
               </div>
             )}
             <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
-              <button onClick={() => setEditingTask(null)} className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg">ביטול</button>
-              <button onClick={handleSaveEdit} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">שמור</button>
+              <button onClick={() => setEditingTask(null)} className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg">{t('cancel')}</button>
+              <button onClick={handleSaveEdit} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">{t('save')}</button>
             </div>
           </div>
         )}
       </Modal>
 
       {/* מודל פרטי משימה */}
-      <Modal isOpen={!!selectedTask} onClose={() => setSelectedTask(null)} title="פרטי משימה" size="lg">
+      <Modal isOpen={!!selectedTask} onClose={() => setSelectedTask(null)} title={t('taskDetails')} size="lg">
         {liveTask && (() => {
           const priorityInfo = getPriorityInfo(liveTask.priority);
           const statusInfo = getTaskStatusInfo(liveTask.status);
@@ -335,29 +337,29 @@ export default function TasksPage() {
                   {liveTask.description && <p className="mt-1 text-sm text-brand-muted">{liveTask.description}</p>}
                 </div>
                 <div className="flex items-center gap-2">
-                  {overdue && <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-brand-danger">באיחור</span>}
+                  {overdue && <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-brand-danger">{t('overdue')}</span>}
                   {canEditTask(liveTask) && (
                     <button onClick={() => { setSelectedTask(null); openEdit(liveTask); }} className="flex items-center gap-1 rounded-lg border border-brand-border px-2.5 py-1 text-xs text-brand-muted hover:bg-brand-bg">
                       <Pencil className="h-3 w-3" />
-                      ערוך
+                      {t('edit')}
                     </button>
                   )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">לקוח</p><p className="text-sm font-medium text-brand-dark">{getClientName(liveTask.clientId)}</p></div>
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">אחראי</p><p className="text-sm font-medium text-brand-dark">{liveTask.assignee}</p></div>
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">דחיפות</p><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${priorityInfo.bg} ${priorityInfo.color}`}>{priorityInfo.label}</span></div>
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">סטטוס</p><p className="text-sm font-medium text-brand-dark">{overdue ? "באיחור" : statusInfo.label}</p></div>
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">תאריך יעד</p><p className={`text-sm font-medium ${overdue ? "text-brand-danger" : "text-brand-dark"}`}>{formatDate(liveTask.dueDate)}</p></div>
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">סוג</p><p className="text-sm font-medium text-brand-dark">{liveTask.taskType === "advertising" ? `פרסום — ${liveTask.platform}` : "אחר"}</p></div>
+                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('client')}</p><p className="text-sm font-medium text-brand-dark">{getClientName(liveTask.clientId)}</p></div>
+                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('assignee')}</p><p className="text-sm font-medium text-brand-dark">{liveTask.assignee}</p></div>
+                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('priority')}</p><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${priorityInfo.bg} ${priorityInfo.color}`}>{priorityInfo.label}</span></div>
+                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('status')}</p><p className="text-sm font-medium text-brand-dark">{overdue ? t('overdue') : statusInfo.label}</p></div>
+                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('dueDate')}</p><p className={`text-sm font-medium ${overdue ? "text-brand-danger" : "text-brand-dark"}`}>{formatDate(liveTask.dueDate)}</p></div>
+                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('type')}</p><p className="text-sm font-medium text-brand-dark">{liveTask.taskType === "advertising" ? `פרסום — ${liveTask.platform}` : "אחר"}</p></div>
               </div>
 
               <div className="border-t border-brand-border pt-4">
-                <h4 className="mb-3 text-sm font-semibold text-brand-dark">הערות ושיחה פנימית</h4>
+                <h4 className="mb-3 text-sm font-semibold text-brand-dark">{t('notesAndChat')}</h4>
                 <div className="max-h-48 space-y-2 overflow-y-auto">
-                  {liveTask.notes.length === 0 && <p className="text-sm text-brand-muted">אין הערות עדיין</p>}
+                  {liveTask.notes.length === 0 && <p className="text-sm text-brand-muted">{t('noNotes')}</p>}
                   {liveTask.notes.map((note) => (
                     <div key={note.id} className="rounded-lg bg-brand-bg p-3">
                       <div className="flex items-center justify-between"><span className="text-xs font-medium text-brand-dark">{note.author}</span><span className="text-xs text-brand-muted">{formatDate(note.createdAt)}</span></div>
@@ -366,7 +368,7 @@ export default function TasksPage() {
                   ))}
                 </div>
                 <div className="mt-3 flex gap-2">
-                  <input type="text" value={noteText} onChange={(e) => setNoteText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddNote(); } }} className={`${inputClass} flex-1`} placeholder="כתוב הערה..." />
+                  <input type="text" value={noteText} onChange={(e) => setNoteText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddNote(); } }} className={`${inputClass} flex-1`} placeholder={t('writeNote')} />
                   <button type="button" onClick={handleAddNote} className="rounded-lg bg-brand-gold p-2 text-brand-dark hover:bg-brand-gold/80"><Send className="h-4 w-4" /></button>
                 </div>
               </div>

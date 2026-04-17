@@ -83,7 +83,7 @@ export default function Sidebar() {
     : navigationItems.filter((item) => item.roles.includes(userRole));
 
   return (
-    <aside className="fixed right-0 top-0 z-40 flex h-screen w-[240px] flex-col bg-brand-dark">
+    <aside className={`fixed top-0 z-40 flex h-screen w-[240px] flex-col bg-brand-dark ${lang === "he" ? "right-0" : "left-0"}`}>
       {/* לוגו */}
       <div className="flex h-20 items-center justify-center px-6">
         <Image

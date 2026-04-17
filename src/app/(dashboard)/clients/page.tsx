@@ -7,6 +7,7 @@ import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
 import DateRangePicker, { getPresetRange, type DateRange } from "@/components/ui/DateRangePicker";
 import { useApp } from "@/lib/data/context";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { PLATFORMS, CLIENT_TYPES, CLIENT_STATUSES, type Client } from "@/lib/data/types";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CURRENCIES, getCurrencySymbol } from "@/lib/utils/currency";
@@ -26,6 +27,7 @@ function daysLeftInMonth() {
 
 export default function ClientsPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const { clients, addClient, employees, refreshClients } = useApp();
   const [dateRange, setDateRange] = useState<DateRange>(() => getPresetRange("this_month"));
 
@@ -175,12 +177,12 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-brand-dark">לקוחות</h1>
+        <h1 className="text-2xl font-semibold text-brand-dark">{t('clients')}</h1>
         <div className="flex items-center gap-3">
           <DateRangePicker value={dateRange} onChange={setDateRange} />
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="flex items-center gap-2 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80">
             <Plus className="h-4 w-4" />
-            לקוח חדש
+            {t('newClient')}
           </button>
         </div>
       </div>
@@ -193,25 +195,25 @@ export default function ClientsPage() {
             type="text"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            placeholder="חיפוש לפי שם..."
+            placeholder={t('searchByName')}
             className="w-full rounded-lg border border-brand-border bg-brand-bg pr-9 pl-3 py-1.5 text-sm text-brand-dark placeholder:text-brand-muted focus:border-brand-gold focus:outline-none"
           />
         </div>
         <select value={filterCM} onChange={(e) => setFilterCM(e.target.value)} className="rounded-lg border border-brand-border bg-brand-bg px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none">
-          <option value="all">מנהל קמפיינים: הכל</option>
+          <option value="all">{`${t('campaignManager')}: ${t('all')}`}</option>
           {campaigners.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}
         </select>
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-lg border border-brand-border bg-brand-bg px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none">
-          <option value="all">סטטוס: הכל</option>
+          <option value="all">{`${t('status')}: ${t('all')}`}</option>
           {CLIENT_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
         {hasFilters && (
           <button onClick={() => { setSearchText(""); setFilterCM("all"); setFilterStatus("all"); setSortCol(null); setSortDir(null); }} className="flex items-center gap-1 rounded-lg border border-brand-border px-3 py-1.5 text-xs text-brand-muted hover:bg-brand-bg">
             <X className="h-3 w-3" />
-            נקה
+            {t('clearFilters')}
           </button>
         )}
-        <span className="text-xs text-brand-muted">{filteredAndSorted.length} לקוחות</span>
+        <span className="text-xs text-brand-muted">{filteredAndSorted.length} {t('clientsCount')}</span>
       </div>
 
       <div className="rounded-lg border border-brand-border bg-brand-light shadow-sm">
@@ -219,20 +221,20 @@ export default function ClientsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-brand-border bg-brand-bg/50">
-                <th className="px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("name")}>שם <SortIcon col="name" /></th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("cm")}>מנהל קמפיינים <SortIcon col="cm" /></th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">מנהל תיקים</th>
-                <th className="min-w-[180px] px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("budget")}>תקציב <SortIcon col="budget" /></th>
-                <th className="min-w-[160px] px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("cpa")}>עלות להמרה <SortIcon col="cpa" /></th>
-                <th className="min-w-[160px] px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("conversions")}>המרות <SortIcon col="conversions" /></th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted">אופטימיזציה</th>
-                <th className="px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("status")}>סטטוס <SortIcon col="status" /></th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("name")}>{t('name')} <SortIcon col="name" /></th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("cm")}>{t('campaignManager')} <SortIcon col="cm" /></th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('accountManager')}</th>
+                <th className="min-w-[180px] px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("budget")}>{t('budget')} <SortIcon col="budget" /></th>
+                <th className="min-w-[160px] px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("cpa")}>{t('costPerConversion')} <SortIcon col="cpa" /></th>
+                <th className="min-w-[160px] px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("conversions")}>{t('conversions')} <SortIcon col="conversions" /></th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('optimization')}</th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("status")}>{t('status')} <SortIcon col="status" /></th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {filteredAndSorted.length === 0 && (
-                <tr><td colSpan={9} className="px-6 py-12 text-center text-brand-muted">{hasFilters ? "אין לקוחות תואמים לסינון" : "אין לקוחות עדיין"}</td></tr>
+                <tr><td colSpan={9} className="px-6 py-12 text-center text-brand-muted">{hasFilters ? t('noMatchingClients') : t('noClients')}</td></tr>
               )}
               {filteredAndSorted.map((client) => {
                 const statusInfo = getStatusInfo(client.status);
@@ -256,20 +258,20 @@ export default function ClientsPage() {
                         </div>
                         <ProgressBar current={actualSpend} target={client.monthlyBudget} inverted />
                         <div className="flex justify-between text-[10px] text-brand-muted">
-                          <span>{budgetPct}% נוצל</span>
-                          <span>{remaining} ימים נותרו</span>
+                          <span>{budgetPct}% {t('used')}</span>
+                          <span>{remaining} {t('daysRemaining')}</span>
                         </div>
                       </div>
                     </td>
                     {/* עלות להמרה */}
                     <td className="px-4 py-4">
                       {!client.metaConversionEvent ? (
-                        <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-600">לא הוגדר</span>
+                        <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-600">{t('notDefined')}</span>
                       ) : client.hasMetaData && (client.currentMonthCostPerConv ?? 0) > 0 ? (
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
                             <span className="text-brand-dark font-medium">{sym}{Math.round(client.currentMonthCostPerConv ?? 0)}</span>
-                            <span className="text-brand-muted">יעד: {sym}{p.targetCostPerConversion}</span>
+                            <span className="text-brand-muted">{`${t('target')}:`} {sym}{p.targetCostPerConversion}</span>
                           </div>
                           <ProgressBar current={client.currentMonthCostPerConv ?? 0} target={p.targetCostPerConversion} inverted />
                         </div>
@@ -280,12 +282,12 @@ export default function ClientsPage() {
                     {/* המרות */}
                     <td className="px-4 py-4">
                       {!client.metaConversionEvent ? (
-                        <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-600">לא הוגדר</span>
+                        <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-600">{t('notDefined')}</span>
                       ) : client.hasMetaData ? (
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
                             <span className="text-brand-dark font-medium">{(client.currentMonthConversions ?? 0).toLocaleString()}</span>
-                            <span className="text-brand-muted">יעד: {p.targetConversions.toLocaleString()}</span>
+                            <span className="text-brand-muted">{`${t('target')}:`} {p.targetConversions.toLocaleString()}</span>
                           </div>
                           <ProgressBar current={client.currentMonthConversions ?? 0} target={p.targetConversions} />
                           <div className="text-[10px] text-brand-muted">
@@ -315,14 +317,14 @@ export default function ClientsPage() {
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
                             >
                               <PauseCircle className="h-4 w-4" />
-                              סמן כלא פעיל
+                              {t('deactivateClient')}
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: client.id, name: client.name }); setOpenMenuId(null); }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-brand-danger hover:bg-red-50"
                             >
                               <Trash2 className="h-4 w-4" />
-                              מחק לקוח
+                              {t('deleteClient')}
                             </button>
                           </div>
                         )}
@@ -337,7 +339,7 @@ export default function ClientsPage() {
       </div>
 
       {/* מודל לקוח חדש */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="לקוח חדש" size="lg">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={t('newClient')} size="lg">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <h3 className="mb-3 text-sm font-semibold text-brand-dark">פרטים כלליים</h3>
@@ -407,8 +409,8 @@ export default function ClientsPage() {
           </div>
           <div><label className="mb-1 block text-sm font-medium text-brand-dark">הערות</label><textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} rows={2} className={inputClass} placeholder="הערות נוספות..." /></div>
           <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg">ביטול</button>
-            <button type="submit" className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">שמור לקוח</button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg">{t('cancel')}</button>
+            <button type="submit" className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">{t('save')}</button>
           </div>
         </form>
       </Modal>
