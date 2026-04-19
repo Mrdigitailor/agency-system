@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Calendar, Filter, Clock, Loader2, CheckCircle2, AlertOctagon, Send, Pencil } from "lucide-react";
+import { Plus, Calendar, Filter, Clock, Loader2, CheckCircle2, AlertOctagon, Send, Pencil, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Modal from "@/components/ui/Modal";
 import { useApp } from "@/lib/data/context";
@@ -28,7 +28,7 @@ export default function TasksPage() {
   const role = (session?.user as { role?: string })?.role ?? "admin";
   const userId = (session?.user as { id?: string })?.id ?? "";
   const userName = (session?.user as { name?: string })?.name ?? "";
-  const { tasks: allTasks, addTask, updateTask, addTaskNote, clients, employees, settings } = useApp();
+  const { tasks: allTasks, addTask, updateTask, addTaskNote, refreshTasks, clients, employees, settings } = useApp();
 
   // מנהל קמפיינים רואה רק משימות שלו
   const tasks = role === "campaignManager" ? allTasks.filter((t) => t.assignee === userName) : allTasks;
@@ -98,6 +98,15 @@ export default function TasksPage() {
     addTaskNote(selectedTask.id, { author: settings.userName, content: noteText });
     setNoteText("");
   };
+
+  // === מחיקת משימה ===
+  async function handleDeleteTask(taskId: string) {
+    if (!confirm(t('delete') + '?')) return;
+    await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+    await refreshTasks();
+    setSelectedTask(null);
+    setEditingTask(null);
+  }
 
   // === שינוי סטטוס מהיר ===
   async function handleQuickStatus(taskId: string, newStatus: string, e: React.MouseEvent) {
@@ -207,11 +216,12 @@ export default function TasksPage() {
                 <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('dueDate')}</th>
                 <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('status')}</th>
                 <th className="w-10 px-2 py-3"></th>
+                <th className="w-10 px-2 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {filteredTasks.length === 0 && (
-                <tr><td colSpan={8} className="px-6 py-12 text-center text-brand-muted">{t('noResults')}</td></tr>
+                <tr><td colSpan={9} className="px-6 py-12 text-center text-brand-muted">{t('noResults')}</td></tr>
               )}
               {filteredTasks.map((task) => {
                 const priorityInfo = getPriorityInfo(task.priority);
@@ -259,6 +269,17 @@ export default function TasksPage() {
                           title={t('edit')}
                         >
                           <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-2 py-4" onClick={(e) => e.stopPropagation()}>
+                      {(canEditTask(task) || isAdmin) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }}
+                          className="rounded p-1 text-brand-muted transition-colors hover:bg-red-50 hover:text-brand-danger"
+                          title={t('delete')}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )}
                     </td>
@@ -342,6 +363,12 @@ export default function TasksPage() {
                     <button onClick={() => { setSelectedTask(null); openEdit(liveTask); }} className="flex items-center gap-1 rounded-lg border border-brand-border px-2.5 py-1 text-xs text-brand-muted hover:bg-brand-bg">
                       <Pencil className="h-3 w-3" />
                       {t('edit')}
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button onClick={() => handleDeleteTask(liveTask.id)} className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-brand-danger hover:bg-red-100">
+                      <Trash2 className="h-3 w-3" />
+                      {t('delete')}
                     </button>
                   )}
                 </div>
