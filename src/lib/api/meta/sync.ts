@@ -223,20 +223,22 @@ async function getMissingDates(clientId: string, since: string, until: string): 
   });
   const existingDates = new Set(existing.map((r) => r.date));
 
-  // תמיד סנכרן אתמול + היום (Meta מעדכן עד 48 שעות אחורה)
+  // תמיד סנכרן 3 ימים אחרונים (Meta מעדכן עד 72 שעות אחורה)
   const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+  const forceRefreshDates = new Set<string>();
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    forceRefreshDates.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+  }
 
-  // חשב ימים חסרים
+  // חשב ימים חסרים + 3 ימים אחרונים (תמיד)
   const allDates: string[] = [];
   const cur = new Date(since);
   const end = new Date(until);
   while (cur <= end) {
     const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
-    if (!existingDates.has(ds) || ds === todayStr || ds === yesterdayStr) {
+    if (!existingDates.has(ds) || forceRefreshDates.has(ds)) {
       allDates.push(ds);
     }
     cur.setDate(cur.getDate() + 1);

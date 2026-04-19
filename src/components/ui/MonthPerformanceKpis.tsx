@@ -16,6 +16,7 @@ interface Props {
   metaConversions?: number;
   gadsSpend?: number;
   gadsConversions?: number;
+  lastSyncAt?: string | null;
 }
 
 /**
@@ -59,6 +60,7 @@ export default function MonthPerformanceKpis({
   metaConversions,
   gadsSpend,
   gadsConversions,
+  lastSyncAt,
 }: Props) {
   const { t } = useLanguage();
   const hasBreakdown = (metaSpend ?? 0) > 0 || (gadsSpend ?? 0) > 0;
@@ -96,6 +98,11 @@ export default function MonthPerformanceKpis({
         </h2>
         <p className="text-xs text-brand-muted">
           {t('day')} {daysElapsed} {t('outOf')} {totalDays} · {Math.round(monthPct)}% {t('ofMonthPassed')}
+          {lastSyncAt && (
+            <span className="mr-2">
+              · {t('lastSync')} {new Date(lastSyncAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
         </p>
       </div>
 
