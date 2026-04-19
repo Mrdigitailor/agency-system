@@ -127,19 +127,29 @@ async function syncCreatives(clientId: string): Promise<{ count: number; error?:
       if (!cr) continue;
       const insights = ad.insights?.data?.[0] ?? {};
 
-      // Get thumbnail — use creative thumbnail or image_url
-      let thumbnailUrl = cr.thumbnail_url ?? cr.image_url ?? "";
+      // Get best image — prefer image_url (full res) over thumbnail_url (low res)
+      let imageUrl = cr.image_url ?? "";
+      let thumbnailUrl = cr.thumbnail_url ?? "";
 
-      // If video, try to get thumbnail
-      if (cr.video_id && !thumbnailUrl) {
+      // If no image, try object_story_spec for image data
+      if (!imageUrl && cr.object_story_spec) {
+        const spec = cr.object_story_spec as Record<string, any>;
+        imageUrl = spec?.link_data?.picture ?? spec?.photo_data?.images?.[0]?.source ?? spec?.video_data?.image_url ?? "";
+      }
+
+      // If video, get video source thumbnail
+      if (cr.video_id && !imageUrl) {
         try {
-          const video = await metaApiGet<{ thumbnails?: { data?: Array<{ uri: string }> } }>(
+          const video = await metaApiGet<{ source?: string; thumbnails?: { data?: Array<{ uri: string }> } }>(
             `/${cr.video_id}`,
-            { accessToken: connection.accessToken, params: { fields: "thumbnails" } }
+            { accessToken: connection.accessToken, params: { fields: "source,thumbnails" } }
           );
-          thumbnailUrl = video.thumbnails?.data?.[0]?.uri ?? "";
+          thumbnailUrl = video.thumbnails?.data?.[0]?.uri ?? thumbnailUrl;
         } catch {}
       }
+
+      // Use best available
+      const bestImage = imageUrl || thumbnailUrl;
 
       await prisma.metaCreative.upsert({
         where: { clientId_adId: { clientId, adId: ad.id } },
@@ -151,7 +161,7 @@ async function syncCreatives(clientId: string): Promise<{ count: number; error?:
           title: cr.title ?? "",
           linkUrl: cr.link_url ?? "",
           ctaType: cr.call_to_action_type ?? "",
-          imageUrl: cr.image_url ?? "",
+          imageUrl: bestImage,
           videoId: cr.video_id ?? "",
           thumbnailUrl,
           insightsJson: JSON.stringify(insights),
@@ -167,7 +177,7 @@ async function syncCreatives(clientId: string): Promise<{ count: number; error?:
           title: cr.title ?? "",
           linkUrl: cr.link_url ?? "",
           ctaType: cr.call_to_action_type ?? "",
-          imageUrl: cr.image_url ?? "",
+          imageUrl: bestImage,
           videoId: cr.video_id ?? "",
           thumbnailUrl,
           insightsJson: JSON.stringify(insights),

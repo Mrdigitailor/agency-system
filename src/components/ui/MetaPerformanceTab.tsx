@@ -13,10 +13,12 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from "recharts";
 import DateRangePicker, { getPresetRange, type DateRange } from "./DateRangePicker";
 import { getCurrencySymbol } from "@/lib/utils/currency";
 import { Plus, X } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface Props {
   clientId: string;
@@ -26,6 +28,7 @@ interface Props {
 type MetricFormat = "money" | "number" | "percent" | "decimal";
 type ChartType = "line" | "bar" | "area" | "kpi";
 type Platform = "all" | "meta" | "google_ads";
+type SectionWidth = "full" | "half" | "third";
 
 interface MetricDef {
   id: string;
@@ -98,21 +101,31 @@ interface SeriesPoint {
   value: number;
 }
 
+interface MultiSeriesPoint {
+  date: string;
+  [metricId: string]: string | number;
+}
+
 interface SectionConfig {
-  metric: string;
+  metrics: string[];
   chartType: ChartType;
   platform: Platform;
+  width: SectionWidth;
 }
 
 interface SectionState {
   id: number;
-  metric: string;
+  metrics: string[];
   chartType: ChartType;
   platform: Platform;
+  width: SectionWidth;
   range: DateRange;
-  data: SeriesPoint[];
+  dataByMetric: Record<string, SeriesPoint[]>;
   loading: boolean;
 }
+
+const METRIC_COLORS = ["#eed89b", "#3b82f6", "#22c55e", "#8b5cf6", "#f59e0b"];
+const MAX_METRICS_PER_SECTION = 5;
 
 const STORAGE_KEY_PREFIX = "perf-sections-";
 
@@ -121,7 +134,16 @@ function loadSavedConfig(clientId: string): SectionConfig[] | null {
     const raw = localStorage.getItem(STORAGE_KEY_PREFIX + clientId);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // migrate old format: single metric -> metrics array
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return parsed.map((cfg: any) => ({
+        metrics: Array.isArray(cfg.metrics) ? cfg.metrics as string[] : (cfg.metric ? [cfg.metric as string] : ["spend"]),
+        chartType: (cfg.chartType ?? "line") as ChartType,
+        platform: (cfg.platform ?? "all") as Platform,
+        width: (cfg.width ?? "full") as SectionWidth,
+      }));
+    }
   } catch {
     // ignore
   }
@@ -131,9 +153,10 @@ function loadSavedConfig(clientId: string): SectionConfig[] | null {
 function saveConfig(clientId: string, sections: SectionState[]) {
   try {
     const configs: SectionConfig[] = sections.map((s) => ({
-      metric: s.metric,
+      metrics: s.metrics,
       chartType: s.chartType,
       platform: s.platform,
+      width: s.width,
     }));
     localStorage.setItem(STORAGE_KEY_PREFIX + clientId, JSON.stringify(configs));
   } catch {
@@ -142,9 +165,9 @@ function saveConfig(clientId: string, sections: SectionState[]) {
 }
 
 const DEFAULT_CONFIGS: SectionConfig[] = [
-  { metric: "spend", chartType: "line", platform: "all" },
-  { metric: "conversions", chartType: "line", platform: "all" },
-  { metric: "cost_per_conversion", chartType: "kpi", platform: "all" },
+  { metrics: ["spend"], chartType: "line", platform: "all", width: "full" },
+  { metrics: ["conversions"], chartType: "line", platform: "all", width: "full" },
+  { metrics: ["cost_per_conversion"], chartType: "kpi", platform: "all", width: "full" },
 ];
 
 const MAX_SECTIONS = 8;
@@ -214,6 +237,168 @@ function mergeSeries(a: SeriesPoint[], b: SeriesPoint[]): SeriesPoint[] {
     .sort((x, y) => x.date.localeCompare(y.date));
 }
 
+// --- merge multiple metric series into a single array with keyed values ---
+
+function mergeMultiMetricData(
+  dataByMetric: Record<string, SeriesPoint[]>,
+  metrics: string[],
+): MultiSeriesPoint[] {
+  const dateMap = new Map<string, MultiSeriesPoint>();
+  for (const metricId of metrics) {
+    const series = dataByMetric[metricId] ?? [];
+    for (const point of series) {
+      if (!dateMap.has(point.date)) {
+        dateMap.set(point.date, { date: point.date });
+      }
+      const entry = dateMap.get(point.date)!;
+      entry[metricId] = point.value;
+    }
+  }
+  return Array.from(dateMap.values()).sort((a, b) =>
+    String(a.date).localeCompare(String(b.date)),
+  );
+}
+
+// --- width helpers ---
+
+function getWidthClass(width: SectionWidth): string {
+  switch (width) {
+    case "half":
+      return "w-[calc(50%-0.5rem)]";
+    case "third":
+      return "w-[calc(33.333%-0.67rem)]";
+    case "full":
+    default:
+      return "w-full";
+  }
+}
+
+// --- Multi-metric dropdown component ---
+
+function MultiMetricDropdown({
+  selectedMetrics,
+  availableMetrics,
+  onChange,
+}: {
+  selectedMetrics: string[];
+  availableMetrics: MetricDef[];
+  onChange: (metrics: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleMetric = (metricId: string) => {
+    if (selectedMetrics.includes(metricId)) {
+      // don't remove if it's the last one
+      if (selectedMetrics.length <= 1) return;
+      onChange(selectedMetrics.filter((m) => m !== metricId));
+    } else {
+      if (selectedMetrics.length >= MAX_METRICS_PER_SECTION) return;
+      onChange([...selectedMetrics, metricId]);
+    }
+  };
+
+  const selectedLabels = selectedMetrics
+    .map((id) => availableMetrics.find((m) => m.id === id)?.label ?? id)
+    .join(", ");
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="rounded-md border border-brand-border bg-white px-3 py-2 text-sm font-ploni focus:outline-none focus:ring-2 focus:ring-brand-primary text-right min-w-[140px] max-w-[240px] truncate flex items-center gap-1"
+      >
+        <span className="truncate">{selectedLabels}</span>
+        <span className="text-xs text-brand-muted mr-1">({selectedMetrics.length})</span>
+        <svg
+          className={`w-3 h-3 transition-transform flex-shrink-0 ${open ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 right-0 z-50 bg-white border border-brand-border rounded-lg shadow-lg max-h-[280px] overflow-y-auto min-w-[200px]">
+          {availableMetrics.map((m) => {
+            const isSelected = selectedMetrics.includes(m.id);
+            const isDisabled = !isSelected && selectedMetrics.length >= MAX_METRICS_PER_SECTION;
+            return (
+              <label
+                key={m.id}
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-ploni cursor-pointer hover:bg-gray-50 transition-colors ${
+                  isDisabled ? "opacity-40 cursor-not-allowed" : ""
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  disabled={isDisabled}
+                  onChange={() => toggleMetric(m.id)}
+                  className="rounded border-brand-border text-brand-primary focus:ring-brand-primary accent-[#eed89b]"
+                />
+                <span>{m.label}</span>
+              </label>
+            );
+          })}
+          {selectedMetrics.length >= MAX_METRICS_PER_SECTION && (
+            <div className="px-3 py-1.5 text-xs text-brand-muted border-t border-brand-border">
+              מקסימום {MAX_METRICS_PER_SECTION} מדדים
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Width toggle component ---
+
+function WidthToggle({
+  width,
+  onChange,
+}: {
+  width: SectionWidth;
+  onChange: (w: SectionWidth) => void;
+}) {
+  const options: { value: SectionWidth; icon: string; title: string }[] = [
+    { value: "full", icon: "\u25AC", title: "רוחב מלא" },
+    { value: "half", icon: "\u258C\u258C", title: "חצי רוחב" },
+    { value: "third", icon: "\u258C\u258C\u258C", title: "שליש רוחב" },
+  ];
+
+  return (
+    <div className="flex items-center border border-brand-border rounded-md overflow-hidden">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          title={opt.title}
+          className={`px-2 py-1.5 text-xs font-ploni transition-colors duration-200 ${
+            width === opt.value
+              ? "bg-brand-primary text-brand-dark"
+              : "bg-white text-brand-muted hover:bg-gray-50"
+          }`}
+        >
+          {opt.icon}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // --- main component ---
 
 export default function MetaPerformanceTab({ clientId, currency }: Props) {
@@ -224,18 +409,19 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
     const configs = saved ?? DEFAULT_CONFIGS;
     return configs.map((cfg, i) => ({
       id: i + 1,
-      metric: cfg.metric,
+      metrics: cfg.metrics,
       chartType: cfg.chartType,
       platform: cfg.platform,
+      width: cfg.width ?? "full",
       range: getPresetRange("this_month"),
-      data: [],
+      dataByMetric: {},
       loading: false,
     }));
   }, [clientId]);
 
   const [sections, setSections] = useState<SectionState[]>(buildInitialSections);
 
-  // persist config whenever sections change (metric/chartType/platform)
+  // persist config whenever sections change
   useEffect(() => {
     saveConfig(clientId, sections);
   }, [clientId, sections]);
@@ -265,42 +451,54 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
     [clientId],
   );
 
+  const fetchSingleMetric = useCallback(
+    async (metric: string, range: DateRange, platform: Platform): Promise<SeriesPoint[]> => {
+      const metricDef = getMetricDef(metric, platform);
+      if (platform === "all") {
+        const [metaSeries, googleSeries] = await Promise.allSettled([
+          fetchTimeseries("meta", metric, range, metricDef.eventOverride),
+          fetchTimeseries("google_ads", metric, range, metricDef.eventOverride),
+        ]);
+        const metaData = metaSeries.status === "fulfilled" ? metaSeries.value : [];
+        const googleData = googleSeries.status === "fulfilled" ? googleSeries.value : [];
+        return mergeSeries(metaData, googleData);
+      } else {
+        return await fetchTimeseries(platform, metric, range, metricDef.eventOverride);
+      }
+    },
+    [fetchTimeseries],
+  );
+
   const fetchSection = useCallback(
-    async (sectionId: number, metric: string, range: DateRange, platform: Platform) => {
+    async (sectionId: number, metrics: string[], range: DateRange, platform: Platform) => {
       setSections((prev) =>
         prev.map((s) => (s.id === sectionId ? { ...s, loading: true } : s)),
       );
       try {
-        const metricDef = getMetricDef(metric, platform);
-        let series: SeriesPoint[];
-
-        if (platform === "all") {
-          // fetch both and merge
-          const [metaSeries, googleSeries] = await Promise.allSettled([
-            fetchTimeseries("meta", metric, range, metricDef.eventOverride),
-            fetchTimeseries("google_ads", metric, range, metricDef.eventOverride),
-          ]);
-          const metaData = metaSeries.status === "fulfilled" ? metaSeries.value : [];
-          const googleData = googleSeries.status === "fulfilled" ? googleSeries.value : [];
-          series = mergeSeries(metaData, googleData);
-        } else {
-          series = await fetchTimeseries(platform, metric, range, metricDef.eventOverride);
+        const results = await Promise.all(
+          metrics.map(async (metric) => {
+            const series = await fetchSingleMetric(metric, range, platform);
+            return { metric, series };
+          }),
+        );
+        const dataByMetric: Record<string, SeriesPoint[]> = {};
+        for (const r of results) {
+          dataByMetric[r.metric] = r.series;
         }
-
         setSections((prev) =>
           prev.map((s) =>
-            s.id === sectionId ? { ...s, data: series, loading: false } : s,
+            s.id === sectionId ? { ...s, dataByMetric, loading: false } : s,
           ),
         );
       } catch {
         setSections((prev) =>
           prev.map((s) =>
-            s.id === sectionId ? { ...s, data: [], loading: false } : s,
+            s.id === sectionId ? { ...s, dataByMetric: {}, loading: false } : s,
           ),
         );
       }
     },
-    [fetchTimeseries],
+    [fetchSingleMetric],
   );
 
   // initial fetch
@@ -309,18 +507,18 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
     setSections(initial);
     nextIdRef.current = initial.length + 1;
     initial.forEach((s) => {
-      fetchSection(s.id, s.metric, s.range, s.platform);
+      fetchSection(s.id, s.metrics, s.range, s.platform);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
-  const handleMetricChange = (sectionId: number, metric: string) => {
+  const handleMetricsChange = (sectionId: number, metrics: string[]) => {
     setSections((prev) =>
-      prev.map((s) => (s.id === sectionId ? { ...s, metric } : s)),
+      prev.map((s) => (s.id === sectionId ? { ...s, metrics } : s)),
     );
     const section = sections.find((s) => s.id === sectionId);
     if (section) {
-      fetchSection(sectionId, metric, section.range, section.platform);
+      fetchSection(sectionId, metrics, section.range, section.platform);
     }
   };
 
@@ -330,19 +528,27 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
     );
   };
 
+  const handleWidthChange = (sectionId: number, width: SectionWidth) => {
+    setSections((prev) =>
+      prev.map((s) => (s.id === sectionId ? { ...s, width } : s)),
+    );
+  };
+
   const handlePlatformChange = (sectionId: number, platform: Platform) => {
     const section = sections.find((s) => s.id === sectionId);
     if (!section) return;
-    // check if current metric exists in new platform; if not, pick first
-    const newMetrics = getMetricsForPlatform(platform);
-    const metricExists = newMetrics.some((m) => m.id === section.metric);
-    const newMetric = metricExists ? section.metric : newMetrics[0].id;
+    const newAvailable = getMetricsForPlatform(platform);
+    // filter selected metrics to only those available in new platform
+    const validMetrics = section.metrics.filter((m) =>
+      newAvailable.some((am) => am.id === m),
+    );
+    const finalMetrics = validMetrics.length > 0 ? validMetrics : [newAvailable[0].id];
     setSections((prev) =>
       prev.map((s) =>
-        s.id === sectionId ? { ...s, platform, metric: newMetric } : s,
+        s.id === sectionId ? { ...s, platform, metrics: finalMetrics } : s,
       ),
     );
-    fetchSection(sectionId, newMetric, section.range, platform);
+    fetchSection(sectionId, finalMetrics, section.range, platform);
   };
 
   const handleRangeChange = (sectionId: number, range: DateRange) => {
@@ -351,7 +557,7 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
     );
     const section = sections.find((s) => s.id === sectionId);
     if (section) {
-      fetchSection(sectionId, section.metric, range, section.platform);
+      fetchSection(sectionId, section.metrics, range, section.platform);
     }
   };
 
@@ -360,15 +566,16 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
     const id = nextIdRef.current++;
     const newSection: SectionState = {
       id,
-      metric: "spend",
+      metrics: ["spend"],
       chartType: "line",
       platform: "all",
+      width: "full",
       range: getPresetRange("this_month"),
-      data: [],
+      dataByMetric: {},
       loading: false,
     };
     setSections((prev) => [...prev, newSection]);
-    fetchSection(id, newSection.metric, newSection.range, newSection.platform);
+    fetchSection(id, newSection.metrics, newSection.range, newSection.platform);
   };
 
   const removeSection = (sectionId: number) => {
@@ -390,15 +597,17 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
   ];
 
   return (
-    <div dir="rtl" className="flex flex-col gap-4">
+    <div dir="rtl" className="flex flex-wrap gap-4">
       {sections.map((section) => {
-        const metricDef = getMetricDef(section.metric, section.platform);
         const availableMetrics = getMetricsForPlatform(section.platform);
+        const hasData = section.metrics.some(
+          (m) => (section.dataByMetric[m]?.length ?? 0) > 0,
+        );
 
         return (
           <div
             key={section.id}
-            className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm"
+            className={`rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm ${getWidthClass(section.width)}`}
           >
             {/* section header */}
             <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -417,18 +626,12 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
                 ))}
               </select>
 
-              {/* metric selector */}
-              <select
-                value={section.metric}
-                onChange={(e) => handleMetricChange(section.id, e.target.value)}
-                className="rounded-md border border-brand-border bg-white px-3 py-2 text-sm font-ploni focus:outline-none focus:ring-2 focus:ring-brand-primary"
-              >
-                {availableMetrics.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
+              {/* multi-metric selector */}
+              <MultiMetricDropdown
+                selectedMetrics={section.metrics}
+                availableMetrics={availableMetrics}
+                onChange={(metrics) => handleMetricsChange(section.id, metrics)}
+              />
 
               {/* chart type selector */}
               <select
@@ -451,6 +654,12 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
                 onChange={(r) => handleRangeChange(section.id, r)}
               />
 
+              {/* width toggle */}
+              <WidthToggle
+                width={section.width}
+                onChange={(w) => handleWidthChange(section.id, w)}
+              />
+
               {/* spacer */}
               <div className="flex-1" />
 
@@ -467,22 +676,28 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
             </div>
 
             {/* chart / kpi area */}
-            <div className={section.chartType === "kpi" ? "h-[140px] w-full" : "h-[260px] w-full"}>
+            <div className={section.chartType === "kpi" ? "min-h-[140px] w-full" : "h-[260px] w-full"}>
               {section.loading ? (
                 <div className="flex h-full items-center justify-center text-sm text-brand-muted font-ploni">
                   טוען...
                 </div>
-              ) : section.data.length === 0 ? (
+              ) : !hasData ? (
                 <div className="flex h-full items-center justify-center text-sm text-brand-muted font-ploni">
                   אין נתונים לטווח זה.
                 </div>
               ) : section.chartType === "kpi" ? (
-                <KpiCard data={section.data} metricDef={metricDef} currency={currency} />
+                <MultiKpiCards
+                  dataByMetric={section.dataByMetric}
+                  metrics={section.metrics}
+                  platform={section.platform}
+                  currency={currency}
+                />
               ) : (
-                <ChartRenderer
+                <MultiChartRenderer
                   chartType={section.chartType}
-                  data={section.data}
-                  metricDef={metricDef}
+                  dataByMetric={section.dataByMetric}
+                  metrics={section.metrics}
+                  platform={section.platform}
                   currency={currency}
                 />
               )}
@@ -495,7 +710,7 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
       {sections.length < MAX_SECTIONS && (
         <button
           onClick={addSection}
-          className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-brand-border bg-brand-light p-3 text-sm font-ploni text-brand-muted hover:border-brand-gold hover:text-brand-dark transition-colors duration-200"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-brand-border bg-brand-light p-3 text-sm font-ploni text-brand-muted hover:border-brand-gold hover:text-brand-dark transition-colors duration-200"
         >
           <Plus size={16} />
           הוסף גרף
@@ -505,54 +720,80 @@ export default function MetaPerformanceTab({ clientId, currency }: Props) {
   );
 }
 
-// --- KPI card ---
+// --- Multi KPI cards ---
 
-function KpiCard({
-  data,
-  metricDef,
+function MultiKpiCards({
+  dataByMetric,
+  metrics,
+  platform,
   currency,
 }: {
-  data: SeriesPoint[];
-  metricDef: MetricDef;
+  dataByMetric: Record<string, SeriesPoint[]>;
+  metrics: string[];
+  platform: Platform;
   currency: string;
 }) {
-  const total = data.reduce((sum, p) => sum + p.value, 0);
-  // for rate metrics (ctr, cpc, cpm, roas, cost_per_conversion etc.) show average instead of sum
-  const isRate = ["percent", "decimal"].includes(metricDef.format) ||
-    metricDef.id.includes("cost_per") ||
-    metricDef.id.includes("cpc") ||
-    metricDef.id.includes("cpm") ||
-    metricDef.id.includes("averageCpc") ||
-    metricDef.id.includes("averageCpm") ||
-    metricDef.id.includes("costPerConversion");
-  const displayValue = isRate ? total / data.length : total;
-
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-2">
-      <span className="text-sm font-ploni text-brand-muted">{metricDef.label}</span>
-      <span className="text-4xl font-ploni font-semibold text-brand-dark">
-        {formatValue(displayValue, metricDef.format, currency)}
-      </span>
-      <span className="text-xs font-ploni text-brand-muted">
-        {data.length} ימים
-      </span>
+    <div className="flex flex-wrap items-center justify-center gap-4 h-full">
+      {metrics.map((metricId, idx) => {
+        const metricDef = getMetricDef(metricId, platform);
+        const data = dataByMetric[metricId] ?? [];
+        if (data.length === 0) return null;
+        const total = data.reduce((sum, p) => sum + p.value, 0);
+        const isRate =
+          ["percent", "decimal"].includes(metricDef.format) ||
+          metricDef.id.includes("cost_per") ||
+          metricDef.id.includes("cpc") ||
+          metricDef.id.includes("cpm") ||
+          metricDef.id.includes("averageCpc") ||
+          metricDef.id.includes("averageCpm") ||
+          metricDef.id.includes("costPerConversion");
+        const displayValue = isRate ? total / data.length : total;
+
+        return (
+          <div
+            key={metricId}
+            className="flex flex-col items-center justify-center gap-2 rounded-lg border border-brand-border bg-white p-4 min-w-[160px] flex-1"
+          >
+            <div className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: METRIC_COLORS[idx % METRIC_COLORS.length] }}
+              />
+              <span className="text-sm font-ploni text-brand-muted">{metricDef.label}</span>
+            </div>
+            <span className="text-3xl font-ploni font-semibold text-brand-dark">
+              {formatValue(displayValue, metricDef.format, currency)}
+            </span>
+            <span className="text-xs font-ploni text-brand-muted">
+              {data.length} ימים
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-// --- Chart renderer ---
+// --- Multi Chart renderer ---
 
-function ChartRenderer({
+function MultiChartRenderer({
   chartType,
-  data,
-  metricDef,
+  dataByMetric,
+  metrics,
+  platform,
   currency,
 }: {
   chartType: "line" | "bar" | "area";
-  data: SeriesPoint[];
-  metricDef: MetricDef;
+  dataByMetric: Record<string, SeriesPoint[]>;
+  metrics: string[];
+  platform: Platform;
   currency: string;
 }) {
+  const mergedData = mergeMultiMetricData(dataByMetric, metrics);
+  // Use first metric's format for axis formatting
+  const primaryDef = getMetricDef(metrics[0], platform);
+
   const commonXAxis = (
     <XAxis
       dataKey="date"
@@ -565,7 +806,7 @@ function ChartRenderer({
 
   const commonYAxis = (
     <YAxis
-      tickFormatter={(v: number) => formatAxisValue(v, metricDef.format, currency)}
+      tickFormatter={(v: number) => formatAxisValue(v, primaryDef.format, currency)}
       stroke="#666666"
       tick={{ fontSize: 12, fontFamily: "Ploni" }}
       orientation="right"
@@ -574,10 +815,13 @@ function ChartRenderer({
 
   const commonTooltip = (
     <Tooltip
-      formatter={(value: unknown) => [
-        formatValue(Number(value) || 0, metricDef.format, currency),
-        metricDef.label,
-      ]}
+      formatter={(value: unknown, name: unknown) => {
+        const def = getMetricDef(String(name ?? ""), platform);
+        return [
+          formatValue(Number(value) || 0, def.format, currency),
+          def.label,
+        ] as [string, string];
+      }}
       labelFormatter={(label: unknown) => formatDateShort(String(label))}
       contentStyle={{
         direction: "rtl",
@@ -591,45 +835,83 @@ function ChartRenderer({
   const commonGrid = <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />;
   const margin = { top: 10, right: 10, left: 10, bottom: 10 };
 
+  const legendFormatter = (value: string) => {
+    const def = getMetricDef(value, platform);
+    return def.label;
+  };
+
+  const showLegend = metrics.length > 1;
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       {chartType === "bar" ? (
-        <BarChart data={data} margin={margin}>
+        <BarChart data={mergedData} margin={margin}>
           {commonGrid}
           {commonXAxis}
           {commonYAxis}
           {commonTooltip}
-          <Bar dataKey="value" fill="#eed89b" radius={[4, 4, 0, 0]} />
+          {showLegend && (
+            <Legend
+              formatter={legendFormatter}
+              wrapperStyle={{ fontFamily: "Ploni", fontSize: "12px" }}
+            />
+          )}
+          {metrics.map((metricId, idx) => (
+            <Bar
+              key={metricId}
+              dataKey={metricId}
+              fill={METRIC_COLORS[idx % METRIC_COLORS.length]}
+              radius={[4, 4, 0, 0]}
+            />
+          ))}
         </BarChart>
       ) : chartType === "area" ? (
-        <AreaChart data={data} margin={margin}>
+        <AreaChart data={mergedData} margin={margin}>
           {commonGrid}
           {commonXAxis}
           {commonYAxis}
           {commonTooltip}
-          <Area
-            type="monotone"
-            dataKey="value"
-            stroke="#eed89b"
-            strokeWidth={2}
-            fill="#eed89b"
-            fillOpacity={0.2}
-          />
+          {showLegend && (
+            <Legend
+              formatter={legendFormatter}
+              wrapperStyle={{ fontFamily: "Ploni", fontSize: "12px" }}
+            />
+          )}
+          {metrics.map((metricId, idx) => (
+            <Area
+              key={metricId}
+              type="monotone"
+              dataKey={metricId}
+              stroke={METRIC_COLORS[idx % METRIC_COLORS.length]}
+              strokeWidth={2}
+              fill={METRIC_COLORS[idx % METRIC_COLORS.length]}
+              fillOpacity={0.15}
+            />
+          ))}
         </AreaChart>
       ) : (
-        <LineChart data={data} margin={margin}>
+        <LineChart data={mergedData} margin={margin}>
           {commonGrid}
           {commonXAxis}
           {commonYAxis}
           {commonTooltip}
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke="#eed89b"
-            strokeWidth={2}
-            dot={{ fill: "#eed89b", r: 3 }}
-            activeDot={{ r: 5 }}
-          />
+          {showLegend && (
+            <Legend
+              formatter={legendFormatter}
+              wrapperStyle={{ fontFamily: "Ploni", fontSize: "12px" }}
+            />
+          )}
+          {metrics.map((metricId, idx) => (
+            <Line
+              key={metricId}
+              type="monotone"
+              dataKey={metricId}
+              stroke={METRIC_COLORS[idx % METRIC_COLORS.length]}
+              strokeWidth={2}
+              dot={{ fill: METRIC_COLORS[idx % METRIC_COLORS.length], r: 3 }}
+              activeDot={{ r: 5 }}
+            />
+          ))}
         </LineChart>
       )}
     </ResponsiveContainer>
