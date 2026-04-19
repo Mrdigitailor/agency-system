@@ -43,6 +43,7 @@ const NAV_KEYS: Record<string, string> = {
   "/chat": "chat",
   "/crm": "crm",
   "/reports": "reports",
+  "/finance": "finance",
   "/recruitment": "recruitment",
   "/suppliers": "suppliers",
   "/settings": "settings",

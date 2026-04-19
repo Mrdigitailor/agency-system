@@ -652,6 +652,53 @@ model MessageSyncStatus {
   @@map("message_sync_status")
 }
 
+// ==================== כספים ====================
+
+model Income {
+  id              String   @id @default(cuid())
+  month           Int      // 1-12
+  year            Int
+  clientId        String?  // optional — לקוח מהמערכת
+  clientName      String   @default("") // שם חופשי אם לא מהמערכת
+  terms           String   @default("") // תנאי רווח
+  invoiceIssued   Boolean  @default(false)
+  invoiceDate     String   @default("")
+  amount          Float    @default(0)
+  vat             Float    @default(0)
+  paid            Boolean  @default(false)
+  receiptIssued   Boolean  @default(false)
+  collectionDate  String   @default("")
+  serviceMonth    String   @default("") // עבור חודש שירות
+  paymentTerms    String   @default("") // שוטף+0 / שוטף+30 / שוטף+45 / שוטף+60 / אחר
+  automated       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([year, month])
+  @@map("incomes")
+}
+
+model Expense {
+  id              String   @id @default(cuid())
+  month           Int
+  year            Int
+  category        String   @default("") // government / tools / marketing / salaries / suppliers / office / insurance / other
+  expenseType     String   @default("") // פירוט
+  paymentMethod   String   @default("") // standing_order / credit / transfer / cash / paypal / other
+  creditCardLast4 String   @default("")
+  amount          Float    @default(0) // כולל מעמ
+  amountBeforeVat Float    @default(0)
+  vat             Float    @default(0)
+  chargeDate      String   @default("")
+  clearingDate    String   @default("")
+  filed           Boolean  @default(false)
+  requiresReceipt Boolean  @default(false)
+  receiptProvided Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([year, month])
+  @@map("expenses")
+}
+
 // ==================== קריאייטיבים Meta ====================
 
 model MetaCreative {
