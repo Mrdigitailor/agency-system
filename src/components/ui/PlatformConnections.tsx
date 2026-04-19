@@ -239,10 +239,16 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                     <div>
                       <p className="flex items-center gap-2 text-sm font-medium text-brand-dark">
                         {platform?.label}
-                        <CheckCircle2 className="h-4 w-4 text-brand-success" />
+                        {conn.accountName?.includes("TOKEN_EXPIRED") || (conn.tokenExpiry && new Date(conn.tokenExpiry) < new Date()) ? (
+                          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-brand-danger">
+                            {lang === "he" ? "פג תוקף — חבר מחדש" : "Expired — Reconnect"}
+                          </span>
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4 text-brand-success" />
+                        )}
                       </p>
                       <p className="text-xs text-brand-muted">
-                        {conn.accountName} · {t('connectedFrom')}{formatDate(conn.connectedAt)}
+                        {conn.accountName?.replace(" [TOKEN_EXPIRED]", "")} · {t('connectedFrom')}{formatDate(conn.connectedAt)}
                       </p>
                       <p className="mt-0.5 text-xs text-brand-muted">
                         {selectedCount} {t('assetsSelected')} {conn.assets.length}

@@ -45,6 +45,24 @@ export async function GET(req: Request) {
       aggregate.pagePostsFetched += stats.pagePostsFetched;
       aggregate.igMediaFetched += stats.igMediaFetched;
       aggregate.errors.push(...stats.errors);
+
+      // אם token פג — צור התראה לאדמין
+      if (stats.errors.some((e) => e.includes("TOKEN_EXPIRED"))) {
+        const client = await prisma.client.findUnique({ where: { id: conn.clientId }, select: { name: true } });
+        const admins = await prisma.user.findMany({ where: { role: "admin", isActive: true }, select: { id: true } });
+        for (const admin of admins) {
+          await prisma.alert.create({
+            data: {
+              type: "performance_drop",
+              title: `חיבור Meta פג תוקף — ${client?.name ?? conn.clientId}`,
+              message: "יש לחבר מחדש את Meta בכרטיס הלקוח",
+              link: `/clients/${conn.clientId}`,
+              userId: admin.id,
+              clientId: conn.clientId,
+            },
+          });
+        }
+      }
     } catch (err) {
       aggregate.errors.push(`meta ${conn.clientId}: ${err instanceof Error ? err.message : "unknown"}`);
     }

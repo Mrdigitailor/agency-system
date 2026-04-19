@@ -61,7 +61,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ clientI
       fetchAdAccounts(accessToken).catch(() => []),
       fetchPages(accessToken).catch(() => []),
     ]);
+    console.log(`[Refresh Assets] Found ${pages.length} pages`);
+    for (const page of pages) {
+      console.log(`[Refresh Assets] Page: ${page.name} (${page.id}) — IG: ${page.instagram_business_account?.id ?? "none"}`);
+    }
     const igAccounts = await fetchInstagramAccounts(pages, accessToken).catch(() => []);
+    console.log(`[Refresh Assets] Found ${igAccounts.length} Instagram accounts`);
 
     // שלב 2.5 — שאיבת פיקסלים מכל חשבונות המודעות במקביל
     const pixelsByAccount = await Promise.all(

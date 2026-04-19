@@ -131,7 +131,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     adAccount: "חשבון מודעות",
     facebookPage: "עמוד פייסבוק",
     pixelDataset: "פיקסל / Dataset",
-    disconnectConfirm: "האם לנתק את החיבור? תצטרך להתחבר מחדש.",
+    disconnectConfirm: "ניתוק יסיר את כל הנתונים שנשאבו מהפלטפורמה (ביצועים, הודעות, קריאייטיבים). להמשיך?",
     selectAssetsDescription: "בחר אילו נכסים רלוונטיים ללקוח הזה. רק הנכסים הנבחרים יופיעו בדוחות ובביצועים.",
     connect: "חבר",
 
@@ -472,7 +472,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     adAccount: "Ad Account",
     facebookPage: "Facebook Page",
     pixelDataset: "Pixel / Dataset",
-    disconnectConfirm: "Disconnect this platform? You will need to reconnect.",
+    disconnectConfirm: "Disconnecting will remove all data synced from this platform (performance, messages, creatives). Continue?",
     selectAssetsDescription: "Select which assets are relevant to this client. Only selected assets will appear in reports and performance.",
     connect: "Connect",
 
