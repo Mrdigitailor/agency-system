@@ -31,6 +31,7 @@ interface AppContextType {
   leads: Lead[];
   addLead: (data: Omit<Lead, "id" | "createdAt" | "calls">) => Promise<void>;
   updateLead: (id: string, data: Partial<Lead>) => Promise<void>;
+  deleteLead: (id: string) => Promise<void>;
   addLeadCall: (leadId: string, call: Omit<LeadCall, "id">) => Promise<void>;
   refreshLeads: () => Promise<void>;
 
@@ -322,6 +323,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await refreshLeads();
   }, [refreshLeads]);
 
+  const deleteLead = useCallback(async (id: string) => {
+    await api(`/api/leads/${id}`, { method: "DELETE" });
+    await refreshLeads();
+  }, [refreshLeads]);
+
   const addLeadCall = useCallback(async (leadId: string, call: Omit<LeadCall, "id">) => {
     await api(`/api/leads/${leadId}/calls`, { method: "POST", body: JSON.stringify(call) });
     await refreshLeads();
@@ -370,7 +376,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider value={{
       clients, addClient, updateClient, getClient, refreshClients,
       tasks, addTask, updateTask, addTaskNote, refreshTasks,
-      leads, addLead, updateLead, addLeadCall, refreshLeads,
+      leads, addLead, updateLead, deleteLead, addLeadCall, refreshLeads,
       employees, addEmployee, updateEmployee, deleteEmployee, refreshEmployees,
       alerts, markAlertRead,
       settings, updateSettings,

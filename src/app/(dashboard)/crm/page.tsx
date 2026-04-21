@@ -13,6 +13,8 @@ import {
   Star,
   X,
   Pencil,
+  Filter,
+  Trash2,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
@@ -204,9 +206,9 @@ function KanbanCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
    ══════════════════════════════════════════ */
 
 export default function CrmPage() {
-  const { leads, addLead, updateLead, addLeadCall, employees, settings } =
+  const { leads, addLead, updateLead, deleteLead, addLeadCall, employees, settings } =
     useApp();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   /* ── Lead Sources (dynamic) ── */
   const [dynamicSources, setDynamicSources] = useState<{ value: string; label: string }[]>([]);
@@ -274,6 +276,11 @@ export default function CrmPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isChurnModalOpen, setIsChurnModalOpen] = useState(false);
   const [churnTarget, setChurnTarget] = useState<Lead | null>(null);
+
+  /* ── Collapsible filter state ── */
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [closingsFiltersOpen, setClosingsFiltersOpen] = useState(false);
+  const [churnedFiltersOpen, setChurnedFiltersOpen] = useState(false);
 
   /* ── Filters ── */
   const [searchQuery, setSearchQuery] = useState("");
@@ -465,6 +472,24 @@ export default function CrmPage() {
     setSelectedLead((p) => (p ? { ...p, proposalFileName: fileName } : null));
   };
 
+  async function handleDeleteLead(leadId: string) {
+    if (!confirm(lang === "he" ? "למחוק את הליד?" : "Delete this lead?")) return;
+    await deleteLead(leadId);
+    setSelectedLead(null);
+  }
+
+  async function handleUploadProposal(file: File) {
+    if (!selectedLead) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    if (res.ok) {
+      const { url } = await res.json();
+      updateLead(selectedLead.id, { proposalUrl: url });
+      setSelectedLead((p) => p ? { ...p, proposalUrl: url } : null);
+    }
+  }
+
   const [internalNotesLocal, setInternalNotesLocal] = useState("");
 
   const openDetailModal = (lead: Lead) => {
@@ -537,6 +562,11 @@ export default function CrmPage() {
   const handleQualityChange = (leadId: string, rating: number) => {
     updateLead(leadId, { qualityRating: rating });
   };
+
+  /* ── Active filter counts ── */
+  const activeFilterCount = [searchQuery, filterSource !== "all" ? filterSource : "", filterStatus !== "all" ? filterStatus : "", filterQuality !== "all" ? filterQuality : "", filterDateFrom, filterDateTo, filterValueMin, filterValueMax].filter(Boolean).length;
+  const closingsFilterCount = [closingsSearch, closingsSource !== "all" ? closingsSource : "", closingsStatus !== "all" ? closingsStatus : "", closingsDateFrom, closingsDateTo, closingsValueMin, closingsValueMax].filter(Boolean).length;
+  const churnedFilterCount = [churnedSearch, churnedReasonFilter !== "all" ? churnedReasonFilter : "", churnedSource !== "all" ? churnedSource : "", churnedDateFrom, churnedDateTo].filter(Boolean).length;
 
   /* ── Filtered data ── */
   const activeLeads = useMemo(() => {
@@ -699,6 +729,8 @@ export default function CrmPage() {
           </div>
 
           {/* Filter bar */}
+          <button onClick={() => setFiltersOpen(!filtersOpen)} className="flex items-center gap-2 rounded-lg border border-brand-border bg-brand-light px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg"><Filter className="h-4 w-4" />{t('filter')}{activeFilterCount > 0 && <span className="rounded-full bg-brand-gold px-2 py-0.5 text-xs font-bold text-brand-dark">{activeFilterCount}</span>}</button>
+          {filtersOpen && (
           <div className={`${cardClass} space-y-3`}>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               {/* Search */}
@@ -790,6 +822,7 @@ export default function CrmPage() {
               </div>
             </div>
           </div>
+          )}
 
           {/* Table view */}
           {viewMode === "table" && (
@@ -923,6 +956,8 @@ export default function CrmPage() {
           </div>
 
           {/* Closings Filter bar */}
+          <button onClick={() => setClosingsFiltersOpen(!closingsFiltersOpen)} className="flex items-center gap-2 rounded-lg border border-brand-border bg-brand-light px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg"><Filter className="h-4 w-4" />{t('filter')}{closingsFilterCount > 0 && <span className="rounded-full bg-brand-gold px-2 py-0.5 text-xs font-bold text-brand-dark">{closingsFilterCount}</span>}</button>
+          {closingsFiltersOpen && (
           <div className={`${cardClass} space-y-3`}>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <div className="relative col-span-2 sm:col-span-1">
@@ -960,6 +995,7 @@ export default function CrmPage() {
               </button>
             </div>
           </div>
+          )}
 
           {/* Table */}
           <div className={`${cardClass} overflow-x-auto p-0`}>
@@ -1056,6 +1092,8 @@ export default function CrmPage() {
           </div>
 
           {/* Churned Filter bar */}
+          <button onClick={() => setChurnedFiltersOpen(!churnedFiltersOpen)} className="flex items-center gap-2 rounded-lg border border-brand-border bg-brand-light px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg"><Filter className="h-4 w-4" />{t('filter')}{churnedFilterCount > 0 && <span className="rounded-full bg-brand-gold px-2 py-0.5 text-xs font-bold text-brand-dark">{churnedFilterCount}</span>}</button>
+          {churnedFiltersOpen && (
           <div className={`${cardClass} space-y-3`}>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               <div className="relative col-span-2 sm:col-span-1">
@@ -1092,6 +1130,7 @@ export default function CrmPage() {
               </button>
             </div>
           </div>
+          )}
 
           {/* Table */}
           <div className={`${cardClass} overflow-x-auto p-0`}>
@@ -1326,12 +1365,18 @@ export default function CrmPage() {
                   setSelectedLead((p) => p ? { ...p, qualityRating: v } : null);
                 }} />
               </div>
-              <button onClick={() => openEditModal(selectedLead)} className={btnPrimary}>
-                <span className="flex items-center gap-1">
-                  <Pencil className="h-3 w-3" />
-                  {t('edit')}
-                </span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => handleDeleteLead(selectedLead.id)} className="flex items-center gap-1 rounded-lg border border-brand-danger px-2.5 py-1 text-xs text-brand-danger hover:bg-red-50">
+                  <Trash2 className="h-3 w-3" />
+                  {t('delete')}
+                </button>
+                <button onClick={() => openEditModal(selectedLead)} className={btnPrimary}>
+                  <span className="flex items-center gap-1">
+                    <Pencil className="h-3 w-3" />
+                    {t('edit')}
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* Info grid */}
@@ -1464,6 +1509,16 @@ export default function CrmPage() {
                   </div>
                 </div>
               )}
+              <div className="mt-3">
+                <label className="mb-1 block text-sm font-medium text-brand-dark">הצעת מחיר</label>
+                {selectedLead.proposalUrl ? (
+                  <a href={selectedLead.proposalUrl} target="_blank" className="flex items-center gap-2 text-sm text-brand-gold hover:underline">
+                    <FileText className="h-4 w-4" />
+                    צפה בהצעה
+                  </a>
+                ) : null}
+                <input type="file" accept=".pdf" onChange={(e) => { if (e.target.files?.[0]) handleUploadProposal(e.target.files[0]); }} className="mt-2 text-sm" />
+              </div>
             </div>
 
             {/* Internal notes */}
@@ -1752,9 +1807,15 @@ export default function CrmPage() {
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => setIsEditModalOpen(false)} className={btnSecondary}>{t('cancel')}</button>
-            <button type="submit" className={btnPrimary}>{t('save')}</button>
+          <div className="flex items-center justify-between pt-2">
+            <button type="button" onClick={() => { if (selectedLead) handleDeleteLead(selectedLead.id); setIsEditModalOpen(false); }} className="flex items-center gap-1 rounded-lg border border-brand-danger px-2.5 py-1 text-xs text-brand-danger hover:bg-red-50">
+              <Trash2 className="h-3 w-3" />
+              {t('delete')}
+            </button>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setIsEditModalOpen(false)} className={btnSecondary}>{t('cancel')}</button>
+              <button type="submit" className={btnPrimary}>{t('save')}</button>
+            </div>
           </div>
         </form>
       </Modal>
