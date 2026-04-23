@@ -43,31 +43,63 @@ export async function GET(req: Request) {
   const until = searchParams.get("until") ?? defaultEnd;
 
   const clientIds = clients.map((c) => c.id);
-  const insights = clientIds.length > 0 ? await prisma.metaInsightDaily.findMany({
-    where: { clientId: { in: clientIds }, date: { gte: since, lte: until } },
-    select: { clientId: true, spend: true, conversions: true, purchases: true, leads: true, actionsJson: true },
-  }) : [];
+
+  // שליפת insights מכל הפלטפורמות
+  const [metaInsights, gadsInsights, ttInsights] = clientIds.length > 0 ? await Promise.all([
+    prisma.metaInsightDaily.findMany({
+      where: { clientId: { in: clientIds }, date: { gte: since, lte: until } },
+      select: { clientId: true, spend: true, conversions: true, purchases: true, leads: true, actionsJson: true },
+    }),
+    prisma.googleAdsInsightDaily.findMany({
+      where: { clientId: { in: clientIds }, date: { gte: since, lte: until } },
+      select: { clientId: true, spend: true, conversions: true },
+    }),
+    prisma.tikTokInsightDaily.findMany({
+      where: { clientId: { in: clientIds }, date: { gte: since, lte: until } },
+      select: { clientId: true, spend: true, conversions: true },
+    }),
+  ]) : [[], [], []];
 
   // קיבוץ לפי clientId
-  const byClient = new Map<string, typeof insights>();
-  for (const ins of insights) {
-    if (!byClient.has(ins.clientId)) byClient.set(ins.clientId, []);
-    byClient.get(ins.clientId)!.push(ins);
+  const metaByClient = new Map<string, typeof metaInsights>();
+  for (const ins of metaInsights) {
+    if (!metaByClient.has(ins.clientId)) metaByClient.set(ins.clientId, []);
+    metaByClient.get(ins.clientId)!.push(ins);
+  }
+
+  const gadsSpendByClient = new Map<string, number>();
+  const gadsConvByClient = new Map<string, number>();
+  for (const ins of gadsInsights) {
+    gadsSpendByClient.set(ins.clientId, (gadsSpendByClient.get(ins.clientId) ?? 0) + ins.spend);
+    gadsConvByClient.set(ins.clientId, (gadsConvByClient.get(ins.clientId) ?? 0) + ins.conversions);
+  }
+
+  const ttSpendByClient = new Map<string, number>();
+  const ttConvByClient = new Map<string, number>();
+  for (const ins of ttInsights) {
+    ttSpendByClient.set(ins.clientId, (ttSpendByClient.get(ins.clientId) ?? 0) + ins.spend);
+    ttConvByClient.set(ins.clientId, (ttConvByClient.get(ins.clientId) ?? 0) + ins.conversions);
   }
 
   const parsed = clients.map((c) => {
-    const clientInsights = byClient.get(c.id) ?? [];
-    const spend = clientInsights.reduce((s, i) => s + i.spend, 0);
-    const conv = clientInsights.length > 0 ? countConversions(clientInsights, c.metaConversionEvent ?? "") : 0;
-    const costPerConv = conv > 0 ? spend / conv : 0;
+    const clientMetaInsights = metaByClient.get(c.id) ?? [];
+    const metaSpend = clientMetaInsights.reduce((s, i) => s + i.spend, 0);
+    const metaConv = clientMetaInsights.length > 0 ? countConversions(clientMetaInsights, c.metaConversionEvent ?? "") : 0;
+    const gadsSpend = gadsSpendByClient.get(c.id) ?? 0;
+    const gadsConv = gadsConvByClient.get(c.id) ?? 0;
+    const ttSpend = ttSpendByClient.get(c.id) ?? 0;
+    const ttConv = ttConvByClient.get(c.id) ?? 0;
+    const totalSpend = metaSpend + gadsSpend + ttSpend;
+    const totalConv = metaConv + gadsConv + ttConv;
+    const costPerConv = totalConv > 0 ? totalSpend / totalConv : 0;
     return {
       ...c,
       platforms: JSON.parse(c.platforms),
       customAssets: JSON.parse(c.customAssets ?? "[]"),
-      currentMonthSpend: spend,
-      currentMonthConversions: conv,
+      currentMonthSpend: totalSpend,
+      currentMonthConversions: totalConv,
       currentMonthCostPerConv: costPerConv,
-      hasMetaData: clientInsights.length > 0,
+      hasMetaData: clientMetaInsights.length > 0 || gadsInsights.length > 0 || ttInsights.length > 0,
     };
   });
 
