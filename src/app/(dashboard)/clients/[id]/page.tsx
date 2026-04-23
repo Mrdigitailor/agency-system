@@ -37,6 +37,7 @@ import PlatformConnections from "@/components/ui/PlatformConnections";
 import ConversionEventSelector from "@/components/ui/ConversionEventSelector";
 import MetaCampaignsTab from "@/components/ui/MetaCampaignsTab";
 import GoogleAdsCampaignsTab from "@/components/ui/GoogleAdsCampaignsTab";
+import TikTokCampaignsTab from "@/components/ui/TikTokCampaignsTab";
 import MetaPerformanceTab from "@/components/ui/MetaPerformanceTab";
 import MessagesTab from "@/components/ui/MessagesTab";
 import ClientIdentityTab from "@/components/ui/ClientIdentityTab";
@@ -166,7 +167,7 @@ export default function ClientDetailPage() {
   const client = getClient(params.id as string);
 
   // נתוני ביצועים מ-Meta (החודש הנוכחי)
-  const [metaPerf, setMetaPerf] = useState<{ totalSpend: number; totalConversions: number; avgCostPerConv: number; hasMetaData: boolean; lastOptimization: string | null; lastSync?: string | null; metaSpend?: number; metaConversions?: number; gadsSpend?: number; gadsConversions?: number } | null>(null);
+  const [metaPerf, setMetaPerf] = useState<{ totalSpend: number; totalConversions: number; avgCostPerConv: number; hasMetaData: boolean; lastOptimization: string | null; lastSync?: string | null; metaSpend?: number; metaConversions?: number; gadsSpend?: number; gadsConversions?: number; ttSpend?: number; ttConversions?: number } | null>(null);
   useEffect(() => {
     if (!client?.id) return;
     fetch(`/api/clients/${client.id}/performance`).then((r) => r.json()).then(setMetaPerf).catch(() => {});
@@ -476,6 +477,8 @@ export default function ClientDetailPage() {
             metaConversions={metaPerf?.metaConversions}
             gadsSpend={metaPerf?.gadsSpend}
             gadsConversions={metaPerf?.gadsConversions}
+            ttSpend={metaPerf?.ttSpend}
+            ttConversions={metaPerf?.ttConversions}
             lastSyncAt={metaPerf?.lastSync}
           />
 
@@ -665,6 +668,7 @@ export default function ClientDetailPage() {
         <div className="space-y-8">
           <MetaCampaignsTab clientId={client.id} currency={client.currency ?? "ILS"} />
           <GoogleAdsCampaignsTab clientId={client.id} currency={client.currency ?? "ILS"} />
+          <TikTokCampaignsTab clientId={client.id} currency={client.currency ?? "ILS"} />
         </div>
       )}
 

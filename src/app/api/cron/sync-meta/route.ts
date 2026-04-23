@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { syncClientMeta } from "@/lib/api/meta/sync";
 import { syncClientGoogleAds } from "@/lib/api/google-ads/sync";
+import { syncClientTikTok } from "@/lib/api/tiktok/sync";
 
 /**
  * Cron יומי לסנכרון Meta + Google Ads — רץ כל לילה ב-03:00
@@ -83,6 +84,22 @@ export async function GET(req: Request) {
       aggregate.errors.push(...stats.errors);
     } catch (err) {
       aggregate.errors.push(`google_ads ${conn.clientId}: ${err instanceof Error ? err.message : "unknown"}`);
+    }
+  }
+
+  // === TikTok ===
+  const ttConnections = await prisma.platformConnection.findMany({
+    where: { platform: "tiktok", isActive: true },
+    select: { clientId: true },
+    distinct: ["clientId"],
+  });
+
+  for (const conn of ttConnections) {
+    try {
+      const stats = await syncClientTikTok(conn.clientId, 3);
+      aggregate.errors.push(...stats.errors);
+    } catch (err) {
+      aggregate.errors.push(`tiktok ${conn.clientId}: ${err instanceof Error ? err.message : "unknown"}`);
     }
   }
 

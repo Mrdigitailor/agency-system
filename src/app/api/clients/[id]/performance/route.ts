@@ -46,9 +46,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const gadsSpend = gadsInsights.reduce((s, i) => s + i.spend, 0);
   const gadsConversions = gadsInsights.reduce((s, i) => s + i.conversions, 0);
 
+  // TikTok Insights
+  const ttInsights = await prisma.tikTokInsightDaily.findMany({
+    where: { clientId, date: { gte: since, lte: until } },
+  });
+  const ttSpend = ttInsights.reduce((s, i) => s + i.spend, 0);
+  const ttConversions = ttInsights.reduce((s, i) => s + i.conversions, 0);
+
   // Combined
-  const totalSpend = metaSpend + gadsSpend;
-  const conversions = metaConversions + gadsConversions;
+  const totalSpend = metaSpend + gadsSpend + ttSpend;
+  const conversions = metaConversions + gadsConversions + ttConversions;
   const avgCostPerConv = conversions > 0 ? totalSpend / conversions : 0;
   const roas = totalSpend > 0 ? totalPurchaseValue / totalSpend : 0;
 
@@ -82,6 +89,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     metaConversions,
     gadsSpend,
     gadsConversions,
+    ttSpend,
+    ttConversions,
     selectedEvent: selectedEventRaw,
     lastSync: lastSync?.lastSyncAt ?? null,
     lastOptimization: lastOpt?.date ?? (lastOpt?.createdAt ? lastOpt.createdAt.toISOString().split("T")[0] : null),

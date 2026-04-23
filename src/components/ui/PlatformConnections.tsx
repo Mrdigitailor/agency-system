@@ -114,6 +114,16 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
         }
       }
 
+      // TikTok — OAuth flow
+      if (platform === "tiktok") {
+        const res = await fetch(`/api/platforms/tiktok/connect?clientId=${clientId}`);
+        const data = await res.json();
+        if (data.authUrl) {
+          window.location.href = data.authUrl;
+          return;
+        }
+      }
+
       // פלטפורמות אחרות — דמו
       const res = await fetch(`/api/clients/${clientId}/connections/${platform}/connect`, { method: "POST" });
       const data = await res.json();
@@ -162,6 +172,8 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
     try {
       const endpoint = platform === "google_ads"
         ? `/api/platforms/google-ads/sync/${clientId}`
+        : platform === "tiktok"
+        ? `/api/platforms/tiktok/sync/${clientId}`
         : `/api/platforms/meta/sync/${clientId}`;
       await fetch(endpoint, {
         method: "POST",
@@ -257,7 +269,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {(conn.platform === "meta" || conn.platform === "google_ads") && (
+                    {(conn.platform === "meta" || conn.platform === "google_ads" || conn.platform === "tiktok") && (
                       <button
                         onClick={() => handleSync(conn.platform)}
                         disabled={syncingPlatform === conn.platform}

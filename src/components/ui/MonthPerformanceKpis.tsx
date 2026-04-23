@@ -16,6 +16,8 @@ interface Props {
   metaConversions?: number;
   gadsSpend?: number;
   gadsConversions?: number;
+  ttSpend?: number;
+  ttConversions?: number;
   lastSyncAt?: string | null;
 }
 
@@ -60,10 +62,12 @@ export default function MonthPerformanceKpis({
   metaConversions,
   gadsSpend,
   gadsConversions,
+  ttSpend,
+  ttConversions,
   lastSyncAt,
 }: Props) {
   const { t } = useLanguage();
-  const hasBreakdown = (metaSpend ?? 0) > 0 || (gadsSpend ?? 0) > 0;
+  const hasBreakdown = (metaSpend ?? 0) > 0 || (gadsSpend ?? 0) > 0 || (ttSpend ?? 0) > 0;
   const { totalDays, daysElapsed, daysRemaining, monthPct } = getMonthProgress();
 
   /* ============ קוביית תקציב ============ */
@@ -135,6 +139,8 @@ export default function MonthPerformanceKpis({
               {(metaSpend ?? 0) > 0 && <span>Meta: {formatCurrency(metaSpend ?? 0, currency)}</span>}
               {(metaSpend ?? 0) > 0 && (gadsSpend ?? 0) > 0 && <span> · </span>}
               {(gadsSpend ?? 0) > 0 && <span>Google: {formatCurrency(gadsSpend ?? 0, currency)}</span>}
+              {(gadsSpend ?? 0) > 0 && (ttSpend ?? 0) > 0 && <span> · </span>}
+              {(ttSpend ?? 0) > 0 && <span>TikTok: {formatCurrency(ttSpend ?? 0, currency)}</span>}
             </div>
           )}
         </div>

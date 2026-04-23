@@ -766,6 +766,46 @@ model GoogleAdsInsightDaily {
   @@map("google_ads_insight_daily")
 }
 
+// ==================== נתוני TikTok Ads ====================
+
+model TikTokInsightDaily {
+  id               String   @id @default(cuid())
+  clientId         String
+  assetId          String
+  campaignId       String
+  campaignName     String   @default("")
+  campaignStatus   String   @default("")
+  objectiveType    String   @default("")
+  date             String
+
+  spend              Float @default(0)
+  impressions        Int   @default(0)
+  clicks             Int   @default(0)
+  ctr                Float @default(0)
+  cpc                Float @default(0)
+  cpm                Float @default(0)
+  reach              Int   @default(0)
+  frequency          Float @default(0)
+  conversions        Int   @default(0)
+  costPerConversion  Float @default(0)
+  conversionRate     Float @default(0)
+  videoViews         Int   @default(0)
+  videoWatched2s     Int   @default(0)
+  videoWatched6s     Int   @default(0)
+  likes              Int   @default(0)
+  comments           Int   @default(0)
+  shares             Int   @default(0)
+  follows            Int   @default(0)
+  profileVisits      Int   @default(0)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([assetId, campaignId, date])
+  @@index([clientId, date])
+  @@map("tiktok_insight_daily")
+}
+
 // לוג סנכרון — תיעוד כל ריצה של שליפת נתונים
 model SyncLog {
   id             String   @id @default(cuid())
