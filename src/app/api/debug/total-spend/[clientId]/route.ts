@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { metaApiGet } from "@/lib/api/meta/client";
+import { syncClientMeta } from "@/lib/api/meta/sync";
+import { syncClientGoogleAds } from "@/lib/api/google-ads/sync";
+import { syncClientTikTok } from "@/lib/api/tiktok/sync";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ clientId: string }> }) {
   const auth = await requireAuth();
@@ -180,6 +183,35 @@ export async function GET(_req: Request, { params }: { params: Promise<{ clientI
 
   const bestEstimate = metaApiSpend + gadsDbSpend + ttDbSpend;
   out(`   Best estimate (API Meta + DB others): ₪${bestEstimate.toFixed(2)}`);
+
+  // === 4. Optional: trigger sync ===
+  const doSync = new URL(_req.url).searchParams.get("sync") === "true";
+  if (doSync) {
+    out(`\n🔄 Triggering sync for all platforms...`);
+    try {
+      const metaStats = await syncClientMeta(clientId, 7, true);
+      out(`   Meta sync: ${metaStats.adInsightsFetched} insights, ${metaStats.errors.length} errors`);
+    } catch (e) { out(`   Meta sync error: ${e}`); }
+    try {
+      const gadsStats = await syncClientGoogleAds(clientId, 7);
+      out(`   Google sync: ${gadsStats.fetched} rows, ${gadsStats.errors.length} errors`);
+    } catch (e) { out(`   Google sync error: ${e}`); }
+    try {
+      const ttStats = await syncClientTikTok(clientId, 7);
+      out(`   TikTok sync: ${ttStats.fetched} rows, ${ttStats.errors.length} errors`);
+    } catch (e) { out(`   TikTok sync error: ${e}`); }
+
+    // Re-check DB after sync
+    const [metaAfter, gadsAfter, ttAfter] = await Promise.all([
+      prisma.metaInsightDaily.aggregate({ where: { clientId, date: { gte: monthStart, lte: today } }, _sum: { spend: true } }),
+      prisma.googleAdsInsightDaily.aggregate({ where: { clientId, date: { gte: monthStart, lte: today } }, _sum: { spend: true } }),
+      prisma.tikTokInsightDaily.aggregate({ where: { clientId, date: { gte: monthStart, lte: today } }, _sum: { spend: true } }),
+    ]);
+    const newTotal = (metaAfter._sum.spend ?? 0) + (gadsAfter._sum.spend ?? 0) + (ttAfter._sum.spend ?? 0);
+    out(`\n   After sync — DB Total: ₪${newTotal.toFixed(2)} (Meta: ₪${(metaAfter._sum.spend ?? 0).toFixed(2)}, Google: ₪${(gadsAfter._sum.spend ?? 0).toFixed(2)}, TikTok: ₪${(ttAfter._sum.spend ?? 0).toFixed(2)})`);
+  } else {
+    out(`\n💡 Add ?sync=true to trigger full sync`);
+  }
 
   return NextResponse.json({
     log,
