@@ -41,15 +41,39 @@ async function tiktokPost<T>(path: string, body: Record<string, unknown>, access
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (accessToken) headers["Access-Token"] = accessToken;
 
-  const res = await fetch(`${TIKTOK_API}${path}`, {
+  const fullUrl = `${TIKTOK_API}${path}`;
+  console.log(`[TikTok] POST ${fullUrl} | Access-Token: ${accessToken ? "yes" : "no"}`);
+
+  const res = await fetch(fullUrl, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
     signal: controller.signal,
+    redirect: "manual", // prevent redirect from downgrading POST to GET
   });
   clearTimeout(timer);
 
-  if (!res.ok) throw new Error(`TikTok API error: HTTP ${res.status}`);
+  // Handle redirect manually — re-POST to new location
+  if (res.status === 301 || res.status === 302 || res.status === 307 || res.status === 308) {
+    const location = res.headers.get("location");
+    if (location) {
+      console.log(`[TikTok] Redirect ${res.status} → ${location}`);
+      const res2 = await fetch(location, { method: "POST", headers, body: JSON.stringify(body) });
+      if (!res2.ok) {
+        const err = await res2.text().catch(() => "");
+        throw new Error(`TikTok API error: HTTP ${res2.status} (after redirect) ${err.slice(0, 200)}`);
+      }
+      const json2 = await res2.json() as TikTokResponse<T>;
+      if (json2.code !== 0) throw new Error(`TikTok API error: ${json2.message} (code: ${json2.code})`);
+      return json2.data;
+    }
+  }
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    console.error(`[TikTok] POST failed: HTTP ${res.status} ${errBody.slice(0, 200)}`);
+    throw new Error(`TikTok API error: HTTP ${res.status}`);
+  }
   const json = await res.json() as TikTokResponse<T>;
   if (json.code !== 0) throw new Error(`TikTok API error: ${json.message} (code: ${json.code})`);
   return json.data;
