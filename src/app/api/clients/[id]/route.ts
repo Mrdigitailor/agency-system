@@ -3,22 +3,37 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
 import { syncClientManagers } from "@/lib/utils/syncManagers";
 
-// שדות שמנהל קמפיינים לא יכול לשנות
+// Whitelist — שדות שמנהל קמפיינים מורשה לערוך
+const CM_ALLOWED_FIELDS = new Set([
+  // נכסים דיגיטליים
+  "metaAdAccount", "googleAdAccount", "tiktokAdAccount",
+  "facebookPage", "instagram", "linkedin", "website",
+  "customAssets",
+  // הערות
+  "notes",
+  // Meta conversion event (נבחר בכרטיס)
+  "metaConversionEvent",
+]);
+
+// שדות שאף אחד חוץ מ-admin לא יכול לגעת בהם
 const ADMIN_ONLY_FIELDS = new Set([
   "campaignManager", "campaignManagerId",
   "accountManager", "accountManagerId",
-  "managerId", "managerUser",
-  "monthlyBudget", "currency",
-  "status", "clientType",
+  "managerId",
   "name",
+  "status", "clientType",
+  "monthlyBudget", "currency",
+  "targetConversions", "targetCostPerConversion",
+  "platforms",
 ]);
 
-// שדות שלעולם לא צריכים להגיע ל-update (computed / relation)
+// שדות שלעולם לא מגיעים ל-update
 const EXCLUDE_FIELDS = new Set([
   "id", "createdAt", "updatedAt", "deletedAt",
   "optimizations", "tasks", "leads", "reports", "alerts",
   "chatRoom", "platformConnections", "profile",
   "hasMetaData", "currentMonthSpend", "currentMonthConversions", "currentMonthCostPerConv",
+  "performance", "digitalAssets",
 ]);
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -43,34 +58,53 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const body = await req.json();
 
-  console.log(`[Client PATCH] clientId=${id} | user=${user.name} (${user.role}) | fields: ${Object.keys(body).join(", ")}`);
+  // שמור מצב נוכחי לצורך logging
+  const before = await prisma.client.findUnique({
+    where: { id },
+    select: { campaignManager: true, campaignManagerId: true },
+  });
 
-  // סנן שדות שלא צריכים להגיע ל-update
+  console.log(`[Client PATCH] clientId=${id} | user=${user.name} (${user.role})`);
+  console.log(`[Client PATCH] Body fields: ${Object.keys(body).join(", ")}`);
+  console.log(`[Client PATCH] campaignManagerId BEFORE: ${before?.campaignManagerId}`);
+
+  // בנה את data object לפי תפקיד
   const data: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(body)) {
-    // דלג על שדות שאסור לעדכן
-    if (EXCLUDE_FIELDS.has(key)) continue;
 
-    // מנהל קמפיינים — חסום שדות admin-only
-    if (user.role === "campaignManager" && ADMIN_ONLY_FIELDS.has(key)) {
-      console.log(`[Client PATCH] BLOCKED field "${key}" for campaignManager`);
-      continue;
+  if (user.role === "campaignManager") {
+    // campaignManager — רק שדות מ-whitelist
+    for (const key of CM_ALLOWED_FIELDS) {
+      if (key in body && body[key] !== undefined) {
+        data[key] = body[key];
+      }
     }
-
-    // לא לדרוס עם undefined
-    if (value === undefined) continue;
-
-    // לא לאפשר דריסת campaignManager/campaignManagerId ל-null/ריק (חוץ מ-admin)
-    if (
-      (key === "campaignManager" || key === "campaignManagerId") &&
-      (value === null || value === "") &&
-      user.role !== "admin"
-    ) {
-      console.log(`[Client PATCH] Prevented ${key} from being set to null/empty by ${user.role}`);
-      continue;
+    console.log(`[Client PATCH] CM whitelist applied — fields: ${Object.keys(data).join(", ")}`);
+  } else {
+    // admin / manager — כל השדות חוץ מ-EXCLUDE
+    for (const [key, value] of Object.entries(body)) {
+      if (EXCLUDE_FIELDS.has(key)) continue;
+      if (value === undefined) continue;
+      data[key] = value;
     }
+  }
 
-    data[key] = value;
+  // הגנה מוחלטת: campaignManager/Id לא משתנה ע"י לא-admin
+  if (user.role !== "admin") {
+    delete data.campaignManager;
+    delete data.campaignManagerId;
+    delete data.accountManager;
+    delete data.accountManagerId;
+    delete data.managerId;
+  }
+
+  // אדמין: לא לאפשר דריסת campaignManager ל-null/ריק בטעות
+  if (user.role === "admin") {
+    if (data.campaignManager === "" || data.campaignManager === null) {
+      // אם admin שולח ריק — לא לדרוס (אלא אם במפורש שולח)
+      if (!body._explicitClearCM) {
+        delete data.campaignManager;
+      }
+    }
   }
 
   // JSON stringify for array fields
@@ -81,11 +115,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data.customAssets = JSON.stringify(data.customAssets);
   }
 
-  console.log(`[Client PATCH] Applying fields: ${Object.keys(data).join(", ")}`);
+  if (Object.keys(data).length === 0) {
+    console.log(`[Client PATCH] No fields to update — skipping`);
+    const client = await prisma.client.findUnique({ where: { id }, include: { optimizations: { orderBy: { createdAt: "desc" } } } });
+    return NextResponse.json({ ...client, platforms: JSON.parse(client!.platforms), customAssets: JSON.parse(client!.customAssets ?? "[]") });
+  }
+
+  console.log(`[Client PATCH] Final update fields: ${Object.keys(data).join(", ")}`);
 
   const client = await prisma.client.update({ where: { id }, data });
 
-  // אם שונו מנהלים — סנכרן את assignedClientIds
+  console.log(`[Client PATCH] campaignManagerId AFTER: ${client.campaignManagerId}`);
+
+  // אם שונו מנהלים — סנכרן
   if (data.campaignManager !== undefined || data.accountManager !== undefined) {
     await syncClientManagers(
       id,

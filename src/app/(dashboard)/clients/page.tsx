@@ -265,15 +265,15 @@ export default function ClientsPage() {
                     </td>
                     {/* עלות להמרה */}
                     <td className="px-4 py-4">
-                      {!client.metaConversionEvent ? (
-                        <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-600">{t('notDefined')}</span>
-                      ) : client.hasMetaData && (client.currentMonthCostPerConv ?? 0) > 0 ? (
+                      {(client.currentMonthCostPerConv ?? 0) > 0 || p.targetCostPerConversion > 0 ? (
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
-                            <span className="text-brand-dark font-medium">{sym}{Math.round(client.currentMonthCostPerConv ?? 0)}</span>
-                            <span className="text-brand-muted">{`${t('target')}:`} {sym}{p.targetCostPerConversion}</span>
+                            <span className="text-brand-dark font-medium">{(client.currentMonthCostPerConv ?? 0) > 0 ? `${sym}${Math.round(client.currentMonthCostPerConv ?? 0)}` : "—"}</span>
+                            {p.targetCostPerConversion > 0 && <span className="text-brand-muted">{`${t('target')}:`} {sym}{p.targetCostPerConversion}</span>}
                           </div>
-                          <ProgressBar current={client.currentMonthCostPerConv ?? 0} target={p.targetCostPerConversion} inverted />
+                          {(client.currentMonthCostPerConv ?? 0) > 0 && p.targetCostPerConversion > 0 && (
+                            <ProgressBar current={client.currentMonthCostPerConv ?? 0} target={p.targetCostPerConversion} inverted />
+                          )}
                         </div>
                       ) : (
                         <span className="text-sm text-brand-muted">—</span>
@@ -281,9 +281,7 @@ export default function ClientsPage() {
                     </td>
                     {/* המרות */}
                     <td className="px-4 py-4">
-                      {!client.metaConversionEvent ? (
-                        <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] text-orange-600">{t('notDefined')}</span>
-                      ) : client.hasMetaData ? (
+                      {(client.currentMonthConversions ?? 0) > 0 || p.targetConversions > 0 ? (
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
                             <span className="text-brand-dark font-medium">{(client.currentMonthConversions ?? 0).toLocaleString()}</span>
