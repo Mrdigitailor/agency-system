@@ -268,7 +268,8 @@ export async function syncClientMeta(clientId: string, daysBack = 30, forceAll =
     stats.errors.push("לא נמצא חיבור Meta פעיל");
     return stats;
   }
-  console.log(`[SyncMeta] Connection: ${connection.id} | account: ${connection.accountName} | ${connection.assets.length} selected assets`);
+  const daysUntilExpiry = connection.tokenExpiry ? Math.round((connection.tokenExpiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000)) : "unknown";
+  console.log(`[SyncMeta] Connection: ${connection.id} | account: ${connection.accountName} | ${connection.assets.length} assets | token expires: ${connection.tokenExpiry?.toISOString() ?? "unknown"} (${daysUntilExpiry} days)`);
   connection.assets.forEach((a) => console.log(`  Asset: ${a.assetType} | ${a.externalId} | ${a.name}`));
 
   const todayDate = new Date();

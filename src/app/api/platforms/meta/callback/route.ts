@@ -30,10 +30,12 @@ export async function GET(req: Request) {
     if (!shortToken?.access_token) throw new Error("לא התקבל access token");
 
     // 2. המרה ל-long-lived (60 יום)
+    console.log("[Meta Callback] Exchanging for long-lived token...");
     const longToken = await exchangeForLongLivedToken(shortToken.access_token);
     const accessToken = longToken?.access_token ?? shortToken.access_token;
     const expiresIn = longToken?.expires_in ?? shortToken.expires_in ?? 60 * 24 * 60 * 60;
     const tokenExpiry = new Date(Date.now() + expiresIn * 1000);
+    console.log(`[Meta Callback] Token type: ${longToken ? "long-lived" : "short-lived (fallback)"}, expires: ${tokenExpiry.toISOString()} (${Math.round(expiresIn / 86400)} days)`);
 
     // 3. פרטי המשתמש
     const meInfo = await getMeInfo(accessToken);

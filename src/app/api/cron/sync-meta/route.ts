@@ -28,8 +28,80 @@ export async function GET(req: Request) {
     pagePostsFetched: 0,
     igMediaFetched: 0,
     googleAdsFetched: 0,
+    tokensRenewed: 0,
     errors: [] as string[],
   };
+
+  // === שלב 0: חידוש Tokens ===
+  console.log("[Cron] Step 0: Token renewal");
+
+  // Meta — חידוש long-lived token אם פג תוך 7 ימים
+  const metaTokens = await prisma.platformConnection.findMany({
+    where: { platform: "meta", isActive: true, tokenExpiry: { not: null } },
+    select: { id: true, accessToken: true, tokenExpiry: true, accountName: true },
+  });
+  const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  for (const conn of metaTokens) {
+    if (conn.tokenExpiry && conn.tokenExpiry < sevenDaysFromNow) {
+      const daysLeft = Math.round((conn.tokenExpiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+      console.log(`[Cron] Meta token for ${conn.accountName} expires in ${daysLeft} days — renewing`);
+      try {
+        const res = await fetch(`https://graph.facebook.com/${process.env.META_API_VERSION ?? "v21.0"}/oauth/access_token?grant_type=fb_exchange_token&client_id=${process.env.META_APP_ID}&client_secret=${process.env.META_APP_SECRET}&fb_exchange_token=${conn.accessToken}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.access_token) {
+            const newExpiry = new Date(Date.now() + (data.expires_in ?? 5184000) * 1000);
+            await prisma.platformConnection.update({
+              where: { id: conn.id },
+              data: { accessToken: data.access_token, tokenExpiry: newExpiry, accountName: (conn.accountName ?? "").replace(" [TOKEN_EXPIRED]", "") },
+            });
+            console.log(`[Cron] ✅ Meta token renewed, new expiry: ${newExpiry.toISOString()}`);
+            aggregate.tokensRenewed++;
+          }
+        }
+      } catch (err) {
+        console.error(`[Cron] Meta token renewal failed:`, err);
+      }
+    }
+  }
+
+  // Google — רענון access_token עם refresh_token
+  const googleTokens = await prisma.platformConnection.findMany({
+    where: { platform: "google_ads", isActive: true },
+    select: { id: true, refreshToken: true, tokenExpiry: true, accountName: true },
+  });
+  for (const conn of googleTokens) {
+    if (conn.refreshToken && conn.tokenExpiry && conn.tokenExpiry < new Date()) {
+      console.log(`[Cron] Google token for ${conn.accountName} expired — refreshing`);
+      try {
+        const res = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: process.env.GOOGLE_CLIENT_ID ?? "",
+            client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+            refresh_token: conn.refreshToken,
+            grant_type: "refresh_token",
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.access_token) {
+            await prisma.platformConnection.update({
+              where: { id: conn.id },
+              data: { accessToken: data.access_token, tokenExpiry: new Date(Date.now() + (data.expires_in ?? 3600) * 1000) },
+            });
+            console.log(`[Cron] ✅ Google token refreshed`);
+            aggregate.tokensRenewed++;
+          }
+        }
+      } catch (err) {
+        console.error(`[Cron] Google token refresh failed:`, err);
+      }
+    }
+  }
+
+  console.log(`[Cron] Token renewal done: ${aggregate.tokensRenewed} renewed`);
 
   // === Meta ===
   const metaConnections = await prisma.platformConnection.findMany({
