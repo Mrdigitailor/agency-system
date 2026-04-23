@@ -20,7 +20,11 @@ async function tiktokGet<T>(path: string, params: Record<string, string>): Promi
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
 
-  const res = await fetch(url.toString(), { signal: controller.signal });
+  // TikTok requires Access-Token header in addition to query param
+  const headers: Record<string, string> = {};
+  if (params.access_token) headers["Access-Token"] = params.access_token;
+
+  const res = await fetch(url.toString(), { headers, signal: controller.signal });
   clearTimeout(timer);
 
   if (!res.ok) throw new Error(`TikTok API error: HTTP ${res.status}`);

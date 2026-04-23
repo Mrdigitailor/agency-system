@@ -23,8 +23,11 @@ export async function GET(req: Request) {
 
   try {
     // 1. Exchange code for token
+    console.log(`[TikTok Callback] Exchanging auth_code: ${authCode.slice(0, 10)}...`);
     const tokenData = await exchangeToken(authCode);
-    console.log(`[TikTok Callback] Got token, ${tokenData.advertiser_ids?.length ?? 0} advertiser IDs`);
+    console.log(`[TikTok Callback] Response:`, JSON.stringify(tokenData).slice(0, 200));
+    console.log(`[TikTok Callback] access_token: ${tokenData.access_token?.slice(0, 15)}... (len=${tokenData.access_token?.length ?? 0})`);
+    console.log(`[TikTok Callback] advertiser_ids: ${JSON.stringify(tokenData.advertiser_ids)}`);
 
     // 2. Save connection
     const conn = await prisma.platformConnection.upsert({

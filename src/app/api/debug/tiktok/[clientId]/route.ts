@@ -42,7 +42,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ clientI
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30000);
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, {
+      headers: { "Access-Token": connection.accessToken },
+      signal: controller.signal,
+    });
     clearTimeout(timer);
 
     out(`HTTP status: ${res.status}`);
