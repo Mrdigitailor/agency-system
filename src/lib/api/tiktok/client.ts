@@ -114,31 +114,47 @@ export async function fetchCampaignReport(
   startDate: string,
   endDate: string,
 ): Promise<Array<Record<string, unknown>>> {
-  const data = await tiktokGet<{ list: Array<{ dimensions: Record<string, string>; metrics: Record<string, unknown> }> }>(
-    "/report/integrated/get/",
-    {
-      advertiser_id: advertiserId,
-      report_type: "BASIC",
-      data_level: "AUCTION_CAMPAIGN",
-      dimensions: JSON.stringify(["campaign_id", "stat_time_day"]),
-      metrics: JSON.stringify([
-        "spend", "impressions", "clicks", "ctr", "cpc", "cpm",
-        "reach", "frequency", "conversion", "cost_per_conversion",
-        "conversion_rate", "video_play_actions", "video_watched_2s",
-        "video_watched_6s", "likes", "comments", "shares", "follows",
-        "profile_visits",
-      ]),
-      start_date: startDate,
-      end_date: endDate,
-      page_size: "1000",
-    },
-    accessToken,
-  );
+  const allRows: Array<Record<string, unknown>> = [];
+  let page = 1;
+  const pageSize = 1000;
 
-  return (data.list ?? []).map((row) => ({
-    ...row.dimensions,
-    ...row.metrics,
-  }));
+  while (true) {
+    const data = await tiktokGet<{
+      list: Array<{ dimensions: Record<string, string>; metrics: Record<string, unknown> }>;
+      page_info?: { total_number?: number; total_page?: number; page?: number };
+    }>(
+      "/report/integrated/get/",
+      {
+        advertiser_id: advertiserId,
+        report_type: "BASIC",
+        data_level: "AUCTION_CAMPAIGN",
+        dimensions: JSON.stringify(["campaign_id", "stat_time_day"]),
+        metrics: JSON.stringify([
+          "spend", "impressions", "clicks", "ctr", "cpc", "cpm",
+          "reach", "frequency", "conversion", "cost_per_conversion",
+          "conversion_rate", "video_play_actions", "video_watched_2s",
+          "video_watched_6s", "likes", "comments", "shares", "follows",
+          "profile_visits",
+        ]),
+        start_date: startDate,
+        end_date: endDate,
+        page_size: String(pageSize),
+        page: String(page),
+      },
+      accessToken,
+    );
+
+    const rows = (data.list ?? []).map((row) => ({ ...row.dimensions, ...row.metrics }));
+    allRows.push(...rows);
+    console.log(`[TikTok] Report page ${page}: ${rows.length} rows (total so far: ${allRows.length})`);
+
+    const totalPages = data.page_info?.total_page ?? 1;
+    if (page >= totalPages || rows.length < pageSize) break;
+    page++;
+    if (page > 20) break; // safety limit
+  }
+
+  return allRows;
 }
 
 /**
