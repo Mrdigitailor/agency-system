@@ -119,35 +119,28 @@ export async function GET(_req: Request, { params }: { params: Promise<{ clientI
     if (selectedTt) {
       out(`\n   Calling TikTok Report API for advertiser ${selectedTt.externalId}...`);
       try {
-        const ttUrl = "https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/";
-        const ttBody = {
+        const ttParams = new URLSearchParams({
           advertiser_id: selectedTt.externalId,
           report_type: "BASIC",
           data_level: "AUCTION_ADVERTISER",
-          dimensions: ["stat_time_day"],
-          metrics: ["spend", "impressions", "clicks", "conversion"],
+          dimensions: JSON.stringify(["stat_time_day"]),
+          metrics: JSON.stringify(["spend", "impressions", "clicks", "conversion"]),
           start_date: monthStart,
           end_date: today,
-          page_size: 100,
-        };
-        out(`   URL: ${ttUrl}`);
-        out(`   Method: POST`);
-        out(`   Body: ${JSON.stringify(ttBody).slice(0, 200)}`);
+          page_size: "100",
+        });
+        const ttUrl = `https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/?${ttParams}`;
+        out(`   Method: GET`);
+        out(`   URL: ${ttUrl.slice(0, 200)}...`);
         out(`   Access-Token: ${ttConnection.accessToken.slice(0, 15)}...`);
 
         const ttRes = await fetch(ttUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Token": ttConnection.accessToken,
-          },
-          body: JSON.stringify(ttBody),
-          redirect: "manual", // לא לעקוב אחרי redirect שמשנה method ל-GET
+          method: "GET",
+          headers: { "Access-Token": ttConnection.accessToken },
         });
         out(`   HTTP ${ttRes.status} ${ttRes.statusText}`);
-        out(`   Response headers: ${JSON.stringify(Object.fromEntries(ttRes.headers.entries())).slice(0, 300)}`);
         const ttText = await ttRes.text();
-        out(`   Response body: ${ttText.slice(0, 500)}`);
+        out(`   Response: ${ttText.slice(0, 500)}`);
 
         if (ttRes.ok) {
           try {
