@@ -98,6 +98,79 @@ export async function GET(_req: Request, { params }: { params: Promise<{ clientI
     out(`\nℹ️ No Meta connection/ad account for this client`);
   }
 
+  // === TikTok live check ===
+  const ttConnection = await prisma.platformConnection.findFirst({
+    where: { clientId, platform: "tiktok", isActive: true },
+    include: { assets: true },
+  });
+
+  if (ttConnection) {
+    out(`\n📡 TikTok connection found: token=${ttConnection.accessToken.slice(0, 15)}... (len=${ttConnection.accessToken.length})`);
+    const ttAssets = ttConnection.assets.filter((a) => a.assetType === "tiktok_ad_account");
+    out(`   TikTok assets: ${ttAssets.length} (selected: ${ttAssets.filter(a => a.isSelected).length})`);
+    for (const a of ttAssets) {
+      out(`   ${a.externalId} | ${a.name} | selected=${a.isSelected}`);
+    }
+
+    const selectedTt = ttAssets.find((a) => a.isSelected);
+    if (selectedTt) {
+      out(`\n   Calling TikTok Report API for advertiser ${selectedTt.externalId}...`);
+      try {
+        const ttRes = await fetch("https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Token": ttConnection.accessToken,
+          },
+          body: JSON.stringify({
+            advertiser_id: selectedTt.externalId,
+            report_type: "BASIC",
+            data_level: "AUCTION_ADVERTISER",
+            dimensions: ["stat_time_day"],
+            metrics: ["spend", "impressions", "clicks", "conversion"],
+            start_date: monthStart,
+            end_date: today,
+            page_size: 100,
+          }),
+        });
+        const ttText = await ttRes.text();
+        out(`   HTTP ${ttRes.status}: ${ttText.slice(0, 500)}`);
+
+        if (ttRes.ok) {
+          try {
+            const ttJson = JSON.parse(ttText);
+            out(`   code: ${ttJson.code}, message: ${ttJson.message}`);
+            if (ttJson.data?.list) {
+              let ttApiSpend = 0;
+              for (const row of ttJson.data.list) {
+                const s = Number(row.metrics?.spend ?? 0);
+                ttApiSpend += s;
+              }
+              out(`   TikTok API spend: ₪${ttApiSpend.toFixed(2)} (${ttJson.data.list.length} days)`);
+            }
+          } catch {}
+        }
+      } catch (err) {
+        out(`   ❌ TikTok API error: ${err instanceof Error ? err.message : err}`);
+      }
+    } else {
+      out(`   ⚠️ No TikTok ad account selected (isSelected=false)`);
+    }
+  } else {
+    out(`\nℹ️ No TikTok connection for this client`);
+  }
+
+  // === Google live check ===
+  const gadsConnection = await prisma.platformConnection.findFirst({
+    where: { clientId, platform: "google_ads", isActive: true },
+    include: { assets: { where: { isSelected: true, assetType: "google_ads_account" } } },
+  });
+  if (gadsConnection?.assets[0]) {
+    out(`\n📡 Google Ads connection found, asset: ${gadsConnection.assets[0].externalId}`);
+  } else {
+    out(`\nℹ️ No Google Ads connection/selected account`);
+  }
+
   // === 3. Summary ===
   out(`\n📊 Summary:`);
   out(`   DB Total:  ₪${totalDbSpend.toFixed(2)}`);
