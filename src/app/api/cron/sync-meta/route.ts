@@ -55,7 +55,7 @@ export async function GET(req: Request) {
             const newExpiry = new Date(Date.now() + (data.expires_in ?? 5184000) * 1000);
             await prisma.platformConnection.update({
               where: { id: conn.id },
-              data: { accessToken: data.access_token, tokenExpiry: newExpiry, accountName: (conn.accountName ?? "").replace(" [TOKEN_EXPIRED]", "") },
+              data: { accessToken: data.access_token, tokenExpiry: newExpiry },
             });
             console.log(`[Cron] ✅ Meta token renewed, new expiry: ${newExpiry.toISOString()}`);
             aggregate.tokensRenewed++;

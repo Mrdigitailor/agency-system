@@ -311,10 +311,10 @@ export async function syncClientMeta(clientId: string, daysBack = 30, forceAll =
 
       // Token expired — mark connection as expired, stop processing this client
       if (errMsg.startsWith("META_TOKEN_EXPIRED")) {
-        console.error(`[SyncMeta] Token expired for client ${clientId} — marking connection`);
+        console.error(`[SyncMeta] Token expired for client ${clientId} — setting expiry to past`);
         await prisma.platformConnection.update({
           where: { id: connection.id },
-          data: { accountName: `${connection.accountName} [TOKEN_EXPIRED]` },
+          data: { tokenExpiry: new Date(0) }, // סימון כפג — בלי לשנות את השם
         });
         stats.errors.push(`TOKEN_EXPIRED: ${errMsg}`);
         break; // לא ממשיכים לנכסים נוספים — token פג
