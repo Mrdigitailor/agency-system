@@ -545,84 +545,57 @@ export default function ClientDetailPage() {
                 נכסים דיגיטליים
               </h2>
               <div className="space-y-4">
-                {adAccounts.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium text-brand-muted">חשבונות פרסום</p>
-                    <div className="space-y-2">
-                      {adAccounts.map((acc) => {
-                        const isLink = /^https?:\/\//i.test(acc.value);
-                        const content = (
+                {/* All assets as clean icon tiles */}
+                {(() => {
+                  const allAssets = [
+                    ...adAccounts.map((a) => ({ label: a.label, url: a.value, icon: a.icon })),
+                    ...assetLinks.map((a) => ({ label: a.label, url: a.url, icon: a.icon })),
+                    ...(client.customAssets ?? []).map((a) => ({ label: a.label, url: a.value, icon: <Globe className="h-5 w-5 text-brand-muted" /> })),
+                  ];
+
+                  if (allAssets.length === 0) {
+                    return <p className="text-sm text-brand-muted">{t("noDigitalAssets")}</p>;
+                  }
+
+                  return (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {allAssets.map((asset) => {
+                        const hasLink = asset.url && /^https?:\/\//i.test(asset.url);
+                        const cls = `flex flex-col items-center gap-2 rounded-lg border p-3 text-center transition-colors duration-200 ${
+                          hasLink
+                            ? "border-brand-border bg-brand-bg cursor-pointer hover:bg-brand-border/50 hover:shadow-sm"
+                            : "border-brand-border/50 bg-brand-bg/50 opacity-50"
+                        }`;
+
+                        const inner = (
                           <>
-                            {acc.icon}
-                            <span className="flex-1 text-sm font-medium text-brand-dark">{acc.label}</span>
-                            {isLink ? (
-                              <ExternalLink className="h-4 w-4 text-brand-muted" />
-                            ) : (
-                              <span className="font-mono text-xs text-brand-muted">{acc.value}</span>
-                            )}
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-light shadow-sm">
+                              {asset.icon}
+                            </div>
+                            <span className="text-xs font-medium text-brand-dark leading-tight">{asset.label}</span>
                           </>
                         );
-                        return isLink ? (
+
+                        return hasLink ? (
                           <a
-                            key={acc.label}
-                            href={acc.value}
+                            key={asset.label}
+                            href={asset.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-3 rounded-lg bg-brand-bg p-3 transition-colors duration-200 hover:bg-brand-border/50"
+                            className={cls}
+                            title={lang === "he" ? "לחץ לפתיחה" : "Click to open"}
                           >
-                            {content}
+                            {inner}
                           </a>
                         ) : (
-                          <div
-                            key={acc.label}
-                            className="flex items-center gap-3 rounded-lg bg-brand-bg p-3"
-                          >
-                            {content}
+                          <div key={asset.label} className={cls}>
+                            {inner}
                           </div>
                         );
                       })}
                     </div>
-                  </div>
-                )}
-                {assetLinks.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium text-brand-muted">קישורים</p>
-                    <div className="space-y-2">
-                      {assetLinks.map((link) => (
-                        <a
-                          key={link.label}
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-3 rounded-lg bg-brand-bg p-3 transition-colors duration-200 hover:bg-brand-border/50"
-                        >
-                          {link.icon}
-                          <span className="flex-1 text-sm font-medium text-brand-dark">{link.label}</span>
-                          <ExternalLink className="h-4 w-4 text-brand-muted" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {client.customAssets && client.customAssets.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium text-brand-muted">נכסים מותאמים</p>
-                    <div className="space-y-2">
-                      {client.customAssets.map((asset) => (
-                        <div
-                          key={asset.id}
-                          className="flex items-center gap-3 rounded-lg bg-brand-bg p-3"
-                        >
-                          <span className="flex-1 text-sm font-medium text-brand-dark">{asset.label}</span>
-                          <span className="text-xs text-brand-muted">{asset.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {adAccounts.length === 0 && assetLinks.length === 0 && (!client.customAssets || client.customAssets.length === 0) && (
-                  <p className="text-sm text-brand-muted">לא הוגדרו נכסים דיגיטליים</p>
-                )}
+                  );
+                })()}
 
                 {/* חיבורי פלטפורמות פרסום */}
                 <div className="border-t border-brand-border pt-4">
