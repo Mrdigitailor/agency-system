@@ -36,7 +36,18 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const result = await requireAuth();
   if (result instanceof NextResponse) return result;
+  const user = result as AuthUser;
   const body = await req.json();
+
+  if (body.markAllRead) {
+    // סמן הכל כנקרא
+    await prisma.alert.updateMany({
+      where: { OR: [{ userId: user.id }, { userId: null }], isRead: false },
+      data: { isRead: true },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
   if (body.id) {
     await prisma.alert.update({ where: { id: body.id }, data: { isRead: true } });
   }

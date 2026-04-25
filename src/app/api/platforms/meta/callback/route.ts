@@ -30,12 +30,24 @@ export async function GET(req: Request) {
     if (!shortToken?.access_token) throw new Error("לא התקבל access token");
 
     // 2. המרה ל-long-lived (60 יום)
+    console.log(`[Meta Callback] Short token received: ${shortToken.access_token.slice(0, 15)}... (len=${shortToken.access_token.length})`);
     console.log("[Meta Callback] Exchanging for long-lived token...");
     const longToken = await exchangeForLongLivedToken(shortToken.access_token);
-    const accessToken = longToken?.access_token ?? shortToken.access_token;
-    const expiresIn = longToken?.expires_in ?? shortToken.expires_in ?? 60 * 24 * 60 * 60;
-    const tokenExpiry = new Date(Date.now() + expiresIn * 1000);
-    console.log(`[Meta Callback] Token type: ${longToken ? "long-lived" : "short-lived (fallback)"}, expires: ${tokenExpiry.toISOString()} (${Math.round(expiresIn / 86400)} days)`);
+
+    let accessToken: string;
+    let tokenExpiry: Date;
+
+    if (longToken?.access_token) {
+      accessToken = longToken.access_token;
+      const expiresIn = longToken.expires_in ?? 5184000; // 60 days default
+      tokenExpiry = new Date(Date.now() + expiresIn * 1000);
+      console.log(`[Meta Callback] ✅ LONG-LIVED token: ${accessToken.slice(0, 15)}... expires: ${tokenExpiry.toISOString()} (${Math.round(expiresIn / 86400)} days)`);
+    } else {
+      // Fallback to short-lived — set expiry to 1 hour (not 60 days!)
+      accessToken = shortToken.access_token;
+      tokenExpiry = new Date(Date.now() + 3600 * 1000);
+      console.error(`[Meta Callback] ⚠️ WARNING: Using SHORT-LIVED token! Expires in 1 hour. Long-lived exchange failed.`);
+    }
 
     // 3. פרטי המשתמש
     const meInfo = await getMeInfo(accessToken);

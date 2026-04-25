@@ -129,7 +129,18 @@ export default function Header() {
               <div className="flex items-center justify-between border-b border-brand-border px-4 py-3">
                 <h3 className="text-sm font-semibold text-brand-dark">התראות</h3>
                 {unreadCount > 0 && (
-                  <span className="text-xs text-brand-muted">{unreadCount} לא נקראו</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-brand-muted">{unreadCount} {t("unread")}</span>
+                    <button
+                      onClick={async () => {
+                        await fetch("/api/alerts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ markAllRead: true }) });
+                        setAlerts((prev) => prev.map((a) => ({ ...a, isRead: true })));
+                      }}
+                      className="text-xs text-brand-gold hover:underline"
+                    >
+                      {t("markAllRead") || "סמן הכל כנקרא"}
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="max-h-96 overflow-y-auto">

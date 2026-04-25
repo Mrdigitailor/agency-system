@@ -40,11 +40,13 @@ export async function GET(req: Request) {
     where: { platform: "meta", isActive: true, tokenExpiry: { not: null } },
     select: { id: true, accessToken: true, tokenExpiry: true, accountName: true },
   });
-  const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const fourteenDaysFromNow = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+  console.log(`[Cron] Checking ${metaTokens.length} Meta connections for token renewal (14-day window)`);
   for (const conn of metaTokens) {
-    if (conn.tokenExpiry && conn.tokenExpiry < sevenDaysFromNow) {
-      const daysLeft = Math.round((conn.tokenExpiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-      console.log(`[Cron] Meta token for ${conn.accountName} expires in ${daysLeft} days — renewing`);
+    const daysLeft = Math.round((conn.tokenExpiry!.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+    console.log(`[Cron] Meta ${conn.accountName}: expires ${conn.tokenExpiry!.toISOString()} (${daysLeft} days left)`);
+    if (conn.tokenExpiry! < fourteenDaysFromNow) {
+      console.log(`[Cron] Renewing token for ${conn.accountName} (${daysLeft} days left)...`);
       try {
         const res = await fetch(`https://graph.facebook.com/${process.env.META_API_VERSION ?? "v21.0"}/oauth/access_token?grant_type=fb_exchange_token&client_id=${process.env.META_APP_ID}&client_secret=${process.env.META_APP_SECRET}&fb_exchange_token=${conn.accessToken}`);
         if (res.ok) {

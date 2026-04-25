@@ -132,13 +132,20 @@ export async function exchangeForLongLivedToken(shortToken: string): Promise<{
     { method: "GET" }
   );
 
+  const text = await res.text();
   if (!res.ok) {
-    const err = await res.text();
-    console.error("[Meta OAuth] long-lived exchange failed:", err);
+    console.error(`[Meta OAuth] long-lived exchange FAILED: HTTP ${res.status} — ${text.slice(0, 300)}`);
     return null;
   }
 
-  return res.json();
+  try {
+    const data = JSON.parse(text);
+    console.log(`[Meta OAuth] long-lived exchange SUCCESS: expires_in=${data.expires_in} (${Math.round((data.expires_in ?? 0) / 86400)} days)`);
+    return data;
+  } catch {
+    console.error(`[Meta OAuth] long-lived exchange: invalid JSON — ${text.slice(0, 200)}`);
+    return null;
+  }
 }
 
 /**
