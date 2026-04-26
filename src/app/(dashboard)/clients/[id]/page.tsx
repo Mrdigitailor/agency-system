@@ -50,6 +50,7 @@ import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
 import { CURRENCIES, getCurrencySymbol } from "@/lib/utils/currency";
+import { getWeekRangeBack } from "@/lib/utils/dates";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 /* ==================== עזרים ==================== */
@@ -669,20 +670,9 @@ export default function ClientDetailPage() {
 
             const reports: Array<{ id: string; type: string; period: string; sentDate: string; status: string }> = [];
 
-            // שבוע = ראשון עד שבת.
-            // מצא את השבת האחרונה שסיימה שבוע מלא (לא היום).
-            // dayOfWeek: 0=ראשון, 1=שני, ..., 6=שבת
-            const dayOfWeek = now.getDay();
-            // ראשון(0)→1, שני(1)→2, ..., שבת(6)→7
-            const lastSaturday = new Date(now);
-            lastSaturday.setDate(now.getDate() - (dayOfWeek + 1));
-
-            // 6 שבועות — כל שבוע: ראשון עד שבת
+            // 6 שבועות — משתמש בפונקציה מרכזית
             for (let w = 0; w < 6; w++) {
-              const endDate = new Date(lastSaturday);
-              endDate.setDate(lastSaturday.getDate() - w * 7);
-              const startDate = new Date(endDate);
-              startDate.setDate(endDate.getDate() - 6); // ראשון = 6 ימים לפני שבת
+              const { start: startDate, end: endDate } = getWeekRangeBack(w);
               const isCurrent = w === 0;
               reports.push({
                 id: `w${w}`,

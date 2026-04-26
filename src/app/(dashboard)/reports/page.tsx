@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useApp } from "@/lib/data/context";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
+import { formatWeekRange } from "@/lib/utils/dates";
 import { getCampaignManagerForClient } from "@/lib/utils/resolveManagers";
 import { FileText, CheckCircle2, AlertTriangle, Filter, Eye, Pencil, Copy, Sparkles, Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
@@ -50,7 +51,7 @@ function getWeeklyPeriod(dateStr: string): string {
   const end = new Date(dateStr);
   const start = new Date(end);
   start.setDate(start.getDate() - 6);
-  return `${start.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })}-${end.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" })}`;
+  return formatWeekRange(start, end);
 }
 
 function getMonthlyPeriod(dateStr: string): string {
