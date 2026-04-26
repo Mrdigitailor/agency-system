@@ -74,6 +74,19 @@ export default function ReportsPage() {
   const [trackers, setTrackers] = useState<ReportTracker[]>([]);
   const [statusFilter, setStatusFilter] = useState<"all" | "sent" | "not_sent">("all");
   const [managerFilter, setManagerFilter] = useState("all");
+  const [nameFilter, setNameFilter] = useState("");
+  const [openFilter, setOpenFilter] = useState<string | null>(null);
+
+  // סגירת פופאובר בלחיצה בחוץ
+  useEffect(() => {
+    if (!openFilter) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("th")) setOpenFilter(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openFilter]);
 
   // מודל הזנת תוכן דוח
   const [contentModal, setContentModal] = useState<{ clientId: string; clientName: string; type: "weekly" | "monthly" } | null>(null);
@@ -144,13 +157,14 @@ export default function ReportsPage() {
       })
       .filter((row): row is NonNullable<typeof row> => {
         if (!row) return false;
-        const { tracker } = row;
-        if (managerFilter !== "all" && getClientCM(row.client.id) !== managerFilter) return false;
+        const { tracker, client: c } = row;
+        if (nameFilter && !c.name.toLowerCase().includes(nameFilter.toLowerCase())) return false;
+        if (managerFilter !== "all" && getClientCM(c.id) !== managerFilter) return false;
         if (statusFilter === "sent") return isWithinLastDays(tracker.weeklyLastSent, 7) || isCurrentMonth(tracker.monthlyLastSent);
         if (statusFilter === "not_sent") return !isWithinLastDays(tracker.weeklyLastSent, 7) || !isCurrentMonth(tracker.monthlyLastSent);
         return true;
       });
-  }, [roleFilteredTrackers, clients, statusFilter, managerFilter]);
+  }, [roleFilteredTrackers, clients, statusFilter, managerFilter, nameFilter]);
 
   // === פתיחת מודל תוכן (במקום סימון ישיר) ===
   function openContentModal(clientId: string, type: "weekly" | "monthly") {
@@ -308,33 +322,68 @@ export default function ReportsPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard title="{t('weeklySent')}" value={kpis.weeklySent} color="green" icon={<CheckCircle2 className="h-5 w-5 text-green-500" />} />
-        <KpiCard title="{t('weeklyMissing')}" value={kpis.weeklyMissing} color="red" icon={<AlertTriangle className="h-5 w-5 text-red-500" />} />
-        <KpiCard title="{t('monthlySent')}" value={kpis.monthlySent} color="green" icon={<CheckCircle2 className="h-5 w-5 text-green-500" />} />
-        <KpiCard title="{t('monthlyMissing')}" value={kpis.monthlyMissing} color="red" icon={<AlertTriangle className="h-5 w-5 text-red-500" />} />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm">
-        <Filter className="h-4 w-4 text-brand-muted" />
-        <select className={`${inputClass} w-48`} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}>
-          <option value="all">{t('status')}: {t('all')}</option>
-          <option value="sent">{t('sent')}</option>
-          <option value="not_sent">{t('notSent')}</option>
-        </select>
-        <select className={`${inputClass} w-56`} value={managerFilter} onChange={(e) => setManagerFilter(e.target.value)}>
-          <option value="all">{t('campaignManager')}: {t('all')}</option>
-          {campaignManagers.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
-        </select>
+        <KpiCard title={t('weeklySent')} value={kpis.weeklySent} color="green" icon={<CheckCircle2 className="h-5 w-5 text-green-500" />} />
+        <KpiCard title={t('weeklyMissing')} value={kpis.weeklyMissing} color="red" icon={<AlertTriangle className="h-5 w-5 text-red-500" />} />
+        <KpiCard title={t('monthlySent')} value={kpis.monthlySent} color="green" icon={<CheckCircle2 className="h-5 w-5 text-green-500" />} />
+        <KpiCard title={t('monthlyMissing')} value={kpis.monthlyMissing} color="red" icon={<AlertTriangle className="h-5 w-5 text-red-500" />} />
       </div>
 
       {/* טבלה */}
-      <div className="overflow-x-auto rounded-lg border border-brand-border bg-brand-light shadow-sm">
+      <div className="overflow-visible rounded-lg border border-brand-border bg-brand-light shadow-sm">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-brand-border bg-brand-bg text-brand-dark">
-              <th className="px-4 py-3 text-right font-medium">{t('name')}</th>
-              <th className="px-4 py-3 text-right font-medium">{t('campaignManager')}</th>
-              <th className="px-4 py-3 text-right font-medium">{t('weeklyReport')}</th>
+              {/* שם לקוח — חיפוש */}
+              <th className="relative px-4 py-3 text-right font-medium">
+                <button onClick={() => setOpenFilter(openFilter === "name" ? null : "name")} className="flex items-center gap-1">
+                  {t('name')}
+                  <Filter className={`h-3 w-3 ${nameFilter ? "text-brand-gold" : "text-brand-muted"}`} />
+                </button>
+                {openFilter === "name" && (
+                  <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-brand-border bg-brand-light p-2 shadow-lg">
+                    <input
+                      type="text"
+                      value={nameFilter}
+                      onChange={(e) => setNameFilter(e.target.value)}
+                      placeholder={`${t('search')}...`}
+                      className={inputClass}
+                      autoFocus
+                      onKeyDown={(e) => { if (e.key === "Escape") setOpenFilter(null); }}
+                    />
+                  </div>
+                )}
+              </th>
+              {/* מנהל קמפיינים */}
+              <th className="relative px-4 py-3 text-right font-medium">
+                <button onClick={() => setOpenFilter(openFilter === "cm" ? null : "cm")} className="flex items-center gap-1">
+                  {t('campaignManager')}
+                  <Filter className={`h-3 w-3 ${managerFilter !== "all" ? "text-brand-gold" : "text-brand-muted"}`} />
+                </button>
+                {openFilter === "cm" && (
+                  <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-brand-border bg-brand-light p-2 shadow-lg">
+                    <select value={managerFilter} onChange={(e) => { setManagerFilter(e.target.value); setOpenFilter(null); }} className={inputClass} autoFocus>
+                      <option value="all">{t('all')}</option>
+                      {campaignManagers.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+                    </select>
+                  </div>
+                )}
+              </th>
+              {/* דוח שבועי */}
+              <th className="relative px-4 py-3 text-right font-medium">
+                <button onClick={() => setOpenFilter(openFilter === "weekly" ? null : "weekly")} className="flex items-center gap-1">
+                  {t('weeklyReport')}
+                  <Filter className={`h-3 w-3 ${statusFilter !== "all" ? "text-brand-gold" : "text-brand-muted"}`} />
+                </button>
+                {openFilter === "weekly" && (
+                  <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-lg border border-brand-border bg-brand-light p-2 shadow-lg">
+                    <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setOpenFilter(null); }} className={inputClass} autoFocus>
+                      <option value="all">{t('all')}</option>
+                      <option value="sent">{t('sent')}</option>
+                      <option value="not_sent">{t('notSent')}</option>
+                    </select>
+                  </div>
+                )}
+              </th>
               <th className="px-4 py-3 text-right font-medium">{t('monthlyReport')}</th>
             </tr>
           </thead>
