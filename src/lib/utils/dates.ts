@@ -42,6 +42,25 @@ export function getWeekRangeBack(weeksBack: number): { start: Date; end: Date } 
 }
 
 /**
+ * מחזיר את טווח השבוע שחלף יחסית לתאריך נתון (לא בהכרח היום).
+ * שימוש: כשדוח סומן כנשלח ב-dateStr, מה השבוע שהוא מכסה?
+ */
+export function getWeekRangeForDate(dateStr: string): { start: Date; end: Date } {
+  const date = new Date(dateStr);
+  date.setHours(0, 0, 0, 0);
+  const day = date.getDay();
+  const daysBack = day === 6 ? 7 : day + 1;
+
+  const lastSaturday = new Date(date);
+  lastSaturday.setDate(date.getDate() - daysBack);
+
+  const lastSunday = new Date(lastSaturday);
+  lastSunday.setDate(lastSaturday.getDate() - 6);
+
+  return { start: lastSunday, end: lastSaturday };
+}
+
+/**
  * פורמט טווח שבועי לתצוגה: "19.04-25.04.2026"
  */
 export function formatWeekRange(start: Date, end: Date): string {

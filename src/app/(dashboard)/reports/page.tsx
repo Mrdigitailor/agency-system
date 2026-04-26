@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useApp } from "@/lib/data/context";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
-import { formatWeekRange } from "@/lib/utils/dates";
+import { formatWeekRange, getWeekRangeForDate } from "@/lib/utils/dates";
 import { getCampaignManagerForClient } from "@/lib/utils/resolveManagers";
 import { FileText, CheckCircle2, AlertTriangle, Filter, Eye, Pencil, Copy, Sparkles, Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
@@ -48,9 +48,7 @@ function formatDate(dateStr: string): string {
 
 function getWeeklyPeriod(dateStr: string): string {
   if (!dateStr) return "\u2014";
-  const end = new Date(dateStr);
-  const start = new Date(end);
-  start.setDate(start.getDate() - 6);
+  const { start, end } = getWeekRangeForDate(dateStr);
   return formatWeekRange(start, end);
 }
 
