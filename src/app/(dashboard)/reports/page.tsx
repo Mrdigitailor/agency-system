@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useApp } from "@/lib/data/context";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
-import { formatWeekRange, getWeekRangeForDate } from "@/lib/utils/dates";
+import { formatWeekRange, getWeekRangeForDate, getLastWeekRange } from "@/lib/utils/dates";
 import { getCampaignManagerForClient } from "@/lib/utils/resolveManagers";
 import { FileText, CheckCircle2, AlertTriangle, Filter, Eye, Pencil, Copy, Sparkles, Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
@@ -131,16 +131,22 @@ export default function ReportsPage() {
     return trackers;
   }, [trackers, employees, role, userName]);
 
+  // תמיד מחושב — השבוע הנוכחי שחלף
+  const currentWeekStart = useMemo(() => {
+    const { start } = getLastWeekRange();
+    return start.toISOString().split("T")[0];
+  }, []);
+
   const kpis = useMemo(() => {
-    const weeklySent = roleFilteredTrackers.filter((t) => isWithinLastDays(t.weeklyLastSent, 7)).length;
+    const weeklySent = roleFilteredTrackers.filter((t) => t.weeklyLastSent >= currentWeekStart).length;
     const weeklyMissing = roleFilteredTrackers.length - weeklySent;
     const monthlySent = roleFilteredTrackers.filter((t) => isCurrentMonth(t.monthlyLastSent)).length;
     const monthlyMissing = roleFilteredTrackers.length - monthlySent;
     return { weeklySent, weeklyMissing, monthlySent, monthlyMissing };
-  }, [roleFilteredTrackers]);
+  }, [roleFilteredTrackers, currentWeekStart]);
 
   const alertCounts = useMemo(() => {
-    const weeklyMissing = roleFilteredTrackers.filter((t) => !isWithinLastDays(t.weeklyLastSent, 7)).length;
+    const weeklyMissing = roleFilteredTrackers.filter((t) => t.weeklyLastSent < currentWeekStart).length;
     const monthlyMissing = roleFilteredTrackers.filter((t) => {
       if (!t.monthlyLastSent) return true;
       return new Date().getTime() - new Date(t.monthlyLastSent).getTime() > 30 * 24 * 60 * 60 * 1000;
@@ -160,8 +166,8 @@ export default function ReportsPage() {
         const { tracker, client: c } = row;
         if (nameFilter && !c.name.toLowerCase().includes(nameFilter.toLowerCase())) return false;
         if (managerFilter !== "all" && getClientCM(c.id) !== managerFilter) return false;
-        if (statusFilter === "sent") return isWithinLastDays(tracker.weeklyLastSent, 7) || isCurrentMonth(tracker.monthlyLastSent);
-        if (statusFilter === "not_sent") return !isWithinLastDays(tracker.weeklyLastSent, 7) || !isCurrentMonth(tracker.monthlyLastSent);
+        if (statusFilter === "sent") return tracker.weeklyLastSent >= currentWeekStart || isCurrentMonth(tracker.monthlyLastSent);
+        if (statusFilter === "not_sent") return tracker.weeklyLastSent < currentWeekStart || !isCurrentMonth(tracker.monthlyLastSent);
         return true;
       });
   }, [roleFilteredTrackers, clients, statusFilter, managerFilter, nameFilter]);
@@ -392,24 +398,30 @@ export default function ReportsPage() {
               <tr><td colSpan={4} className="px-4 py-8 text-center text-brand-muted">{t('noResults')}</td></tr>
             ) : (
               filteredRows.map(({ tracker, client }) => {
-                const weeklySent = isWithinLastDays(tracker.weeklyLastSent, 7);
+                // השבוע הנוכחי שחלף — תמיד מוצג
+                const currentWeek = getLastWeekRange();
+                const currentWeekStartStr = currentWeek.start.toISOString().split("T")[0];
+                const currentWeekPeriod = formatWeekRange(currentWeek.start, currentWeek.end);
+
+                // האם דוח שבועי נשלח על השבוע הנוכחי?
+                const weeklySent = tracker.weeklyLastSent >= currentWeekStartStr;
                 const monthlySent = isCurrentMonth(tracker.monthlyLastSent);
                 return (
                   <tr key={client.id} className="border-b border-brand-border transition-colors hover:bg-brand-bg">
                     <td className="px-4 py-3 font-medium text-brand-dark">{client.name}</td>
                     <td className="px-4 py-3 text-brand-muted">{getClientCM(client.id) || "—"}</td>
 
-                    {/* שבועי */}
+                    {/* שבועי — תמיד מציג את השבוע הנוכחי שחלף */}
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
                         {weeklySent ? (
                           <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">{t('sent')}</span>
                         ) : (
-                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">לא {t('sent')}</span>
+                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">{t('notSent')}</span>
                         )}
-                        <span className="text-xs text-brand-muted">{getWeeklyPeriod(tracker.weeklyLastSent)}</span>
+                        <span className="text-xs text-brand-muted">{currentWeekPeriod}</span>
                         {weeklySent && tracker.weeklyContent && (
-                          <button onClick={() => openViewModal(tracker, "weekly")} className="rounded p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark" title="צפה בדוח">
+                          <button onClick={() => openViewModal(tracker, "weekly")} className="rounded p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark" title={t('viewReport')}>
                             <Eye className="h-3.5 w-3.5" />
                           </button>
                         )}
@@ -418,7 +430,7 @@ export default function ReportsPage() {
                             {t('markAsSent')}
                           </button>
                         )}
-                        {weeklyWarning(tracker.weeklyLastSent) && <AlertTriangle className="h-4 w-4 text-red-400" />}
+                        {!weeklySent && <AlertTriangle className="h-4 w-4 text-red-400" />}
                       </div>
                     </td>
 
