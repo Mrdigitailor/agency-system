@@ -229,7 +229,8 @@ export default function CrmPage() {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          setDynamicSources(data);
+          // API returns { id, name } — map to { value, label }
+          setDynamicSources(data.map((s: { name: string }) => ({ value: s.name, label: s.name })));
         }
       }
     } catch {
@@ -248,23 +249,23 @@ export default function CrmPage() {
     onSelect: (value: string) => void,
     resetMode: () => void,
   ) => {
-    if (!sourceLabel.trim()) return;
-    const value = sourceLabel.trim().toLowerCase().replace(/\s+/g, "_");
+    const name = sourceLabel.trim();
+    if (!name) return;
     try {
       const res = await fetch("/api/lead-sources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value, label: sourceLabel.trim() }),
+        body: JSON.stringify({ name }),
       });
       if (res.ok) {
         await fetchSources();
       } else {
-        setDynamicSources((prev) => [...prev, { value, label: sourceLabel.trim() }]);
+        setDynamicSources((prev) => [...prev, { value: name, label: name }]);
       }
     } catch {
-      setDynamicSources((prev) => [...prev, { value, label: sourceLabel.trim() }]);
+      setDynamicSources((prev) => [...prev, { value: name, label: name }]);
     }
-    onSelect(value);
+    onSelect(name);
     resetMode();
   };
 
