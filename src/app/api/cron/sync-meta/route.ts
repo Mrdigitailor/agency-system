@@ -21,6 +21,7 @@ export async function GET(req: Request) {
   }
 
   const startTime = Date.now();
+  console.log(`[Cron] ========== STARTED at ${new Date().toISOString()} ==========`);
   const aggregate = {
     metaProcessed: 0,
     googleAdsProcessed: 0,
@@ -178,6 +179,11 @@ export async function GET(req: Request) {
   }
 
   const durationMs = Date.now() - startTime;
-  console.log(`[Cron] Done in ${durationMs}ms — meta: ${aggregate.metaProcessed}, gads: ${aggregate.googleAdsProcessed}, errors: ${aggregate.errors.length}`);
+  console.log(`[Cron] ========== COMPLETED in ${(durationMs / 1000).toFixed(1)}s ==========`);
+  console.log(`[Cron] Meta: ${aggregate.metaProcessed} clients, ${aggregate.adInsightsFetched} insights`);
+  console.log(`[Cron] Google: ${aggregate.googleAdsProcessed} clients, ${aggregate.googleAdsFetched} rows`);
+  console.log(`[Cron] Tokens renewed: ${aggregate.tokensRenewed}`);
+  console.log(`[Cron] Errors: ${aggregate.errors.length}`);
+  if (aggregate.errors.length > 0) aggregate.errors.forEach((e) => console.error(`[Cron] Error: ${e}`));
   return NextResponse.json({ ...aggregate, durationMs });
 }
