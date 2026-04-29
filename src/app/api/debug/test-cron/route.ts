@@ -6,100 +6,65 @@ import { syncClientGoogleAds } from "@/lib/api/google-ads/sync";
 import { syncClientTikTok } from "@/lib/api/tiktok/sync";
 
 /**
- * GET /api/debug/test-cron
- * Runs the same logic as the cron job but with auth check (not CRON_SECRET)
+ * GET /api/debug/test-cron?clientId=XXX
+ * Syncs a single client (or the first one if no clientId provided)
  */
-export async function GET() {
+export async function GET(req: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  const startTime = Date.now();
+  const { searchParams } = new URL(req.url);
+  let clientId = searchParams.get("clientId");
+
   const log: string[] = [];
   const out = (msg: string) => { console.log(`[Test Cron] ${msg}`); log.push(msg); };
 
-  out(`Started at ${new Date().toISOString()}`);
-  out(`CRON_SECRET set: ${!!process.env.CRON_SECRET}`);
-
-  const aggregate = {
-    metaClients: 0, metaInsights: 0,
-    gadsClients: 0, gadsFetched: 0,
-    ttClients: 0, ttFetched: 0,
-    errors: [] as string[],
-  };
-
-  // Meta
-  const metaConns = await prisma.platformConnection.findMany({
-    where: { platform: "meta", isActive: true },
-    select: { clientId: true },
-    distinct: ["clientId"],
-  });
-  out(`Meta connections: ${metaConns.length}`);
-
-  for (const conn of metaConns) {
-    aggregate.metaClients++;
-    const client = await prisma.client.findUnique({ where: { id: conn.clientId }, select: { name: true } });
-    try {
-      const stats = await syncClientMeta(conn.clientId, 3, true);
-      out(`  Meta ${client?.name ?? conn.clientId}: ${stats.adInsightsFetched} insights, ${stats.errors.length} errors`);
-      aggregate.metaInsights += stats.adInsightsFetched;
-      aggregate.errors.push(...stats.errors);
-    } catch (err) {
-      const msg = `Meta ${conn.clientId}: ${err instanceof Error ? err.message : "unknown"}`;
-      out(`  ❌ ${msg}`);
-      aggregate.errors.push(msg);
-    }
+  // If no clientId, pick the first connected client
+  if (!clientId) {
+    const first = await prisma.platformConnection.findFirst({
+      where: { isActive: true },
+      select: { clientId: true },
+    });
+    clientId = first?.clientId ?? null;
   }
 
-  // Google Ads
-  const gadsConns = await prisma.platformConnection.findMany({
-    where: { platform: "google_ads", isActive: true },
-    select: { clientId: true },
-    distinct: ["clientId"],
-  });
-  out(`\nGoogle Ads connections: ${gadsConns.length}`);
+  if (!clientId) {
+    return NextResponse.json({ log: ["No connected clients found"], error: "no_clients" });
+  }
 
-  for (const conn of gadsConns) {
-    aggregate.gadsClients++;
-    const client = await prisma.client.findUnique({ where: { id: conn.clientId }, select: { name: true } });
-    try {
-      const stats = await syncClientGoogleAds(conn.clientId, 3);
-      out(`  Google ${client?.name ?? conn.clientId}: ${stats.fetched} rows, ${stats.errors.length} errors`);
-      aggregate.gadsFetched += stats.fetched;
-      aggregate.errors.push(...stats.errors);
-    } catch (err) {
-      const msg = `Google ${conn.clientId}: ${err instanceof Error ? err.message : "unknown"}`;
-      out(`  ❌ ${msg}`);
-      aggregate.errors.push(msg);
-    }
+  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { name: true } });
+  out(`Syncing: ${client?.name ?? clientId} (${clientId})`);
+  out(`CRON_SECRET set: ${!!process.env.CRON_SECRET}`);
+
+  const startTime = Date.now();
+
+  // Meta
+  try {
+    const stats = await syncClientMeta(clientId, 3, true);
+    out(`Meta: ${stats.adInsightsFetched} insights, ${stats.pagePostsFetched} posts, ${stats.errors.length} errors`);
+    if (stats.errors.length > 0) stats.errors.forEach((e) => out(`  Error: ${e}`));
+  } catch (err) {
+    out(`Meta error: ${err instanceof Error ? err.message : err}`);
+  }
+
+  // Google
+  try {
+    const stats = await syncClientGoogleAds(clientId, 3);
+    out(`Google: ${stats.fetched} rows, ${stats.errors.length} errors`);
+  } catch (err) {
+    out(`Google error: ${err instanceof Error ? err.message : err}`);
   }
 
   // TikTok
-  const ttConns = await prisma.platformConnection.findMany({
-    where: { platform: "tiktok", isActive: true },
-    select: { clientId: true },
-    distinct: ["clientId"],
-  });
-  out(`\nTikTok connections: ${ttConns.length}`);
-
-  for (const conn of ttConns) {
-    aggregate.ttClients++;
-    const client = await prisma.client.findUnique({ where: { id: conn.clientId }, select: { name: true } });
-    try {
-      const stats = await syncClientTikTok(conn.clientId, 3);
-      out(`  TikTok ${client?.name ?? conn.clientId}: ${stats.fetched} rows, ${stats.errors.length} errors`);
-      aggregate.ttFetched += stats.fetched;
-      aggregate.errors.push(...stats.errors);
-    } catch (err) {
-      const msg = `TikTok ${conn.clientId}: ${err instanceof Error ? err.message : "unknown"}`;
-      out(`  ❌ ${msg}`);
-      aggregate.errors.push(msg);
-    }
+  try {
+    const stats = await syncClientTikTok(clientId, 3);
+    out(`TikTok: ${stats.fetched} rows, ${stats.errors.length} errors`);
+  } catch (err) {
+    out(`TikTok error: ${err instanceof Error ? err.message : err}`);
   }
 
-  const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
-  out(`\nCompleted in ${durationSec}s`);
-  out(`Summary: Meta ${aggregate.metaInsights} insights from ${aggregate.metaClients} clients, Google ${aggregate.gadsFetched} from ${aggregate.gadsClients}, TikTok ${aggregate.ttFetched} from ${aggregate.ttClients}`);
-  out(`Errors: ${aggregate.errors.length}`);
+  const dur = ((Date.now() - startTime) / 1000).toFixed(1);
+  out(`Done in ${dur}s`);
 
-  return NextResponse.json({ log, aggregate, durationSec });
+  return NextResponse.json({ log, clientId, clientName: client?.name, durationSec: dur });
 }

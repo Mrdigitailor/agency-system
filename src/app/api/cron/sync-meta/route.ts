@@ -106,17 +106,22 @@ export async function GET(req: Request) {
 
   console.log(`[Cron] Token renewal done: ${aggregate.tokensRenewed} renewed`);
 
+  const MAX_TIME_MS = 55000; // 55 seconds — leave 5s for response
+  function timeLeft() { return MAX_TIME_MS - (Date.now() - startTime); }
+
   // === Meta ===
   const metaConnections = await prisma.platformConnection.findMany({
     where: { platform: "meta", isActive: true },
     select: { clientId: true },
     distinct: ["clientId"],
   });
+  console.log(`[Cron] Meta: ${metaConnections.length} clients to sync`);
 
   for (const conn of metaConnections) {
+    if (timeLeft() < 5000) { console.log("[Cron] Time limit reached — stopping Meta sync"); break; }
     aggregate.metaProcessed++;
     try {
-      const stats = await syncClientMeta(conn.clientId, 7);
+      const stats = await syncClientMeta(conn.clientId, 3);
       aggregate.adInsightsFetched += stats.adInsightsFetched;
       aggregate.pagePostsFetched += stats.pagePostsFetched;
       aggregate.igMediaFetched += stats.igMediaFetched;
@@ -151,7 +156,9 @@ export async function GET(req: Request) {
     distinct: ["clientId"],
   });
 
+  console.log(`[Cron] Google Ads: ${gadsConnections.length} clients to sync`);
   for (const conn of gadsConnections) {
+    if (timeLeft() < 5000) { console.log("[Cron] Time limit reached — stopping Google sync"); break; }
     aggregate.googleAdsProcessed++;
     try {
       const stats = await syncClientGoogleAds(conn.clientId, 7);
@@ -169,7 +176,9 @@ export async function GET(req: Request) {
     distinct: ["clientId"],
   });
 
+  console.log(`[Cron] TikTok: ${ttConnections.length} clients to sync`);
   for (const conn of ttConnections) {
+    if (timeLeft() < 5000) { console.log("[Cron] Time limit reached — stopping TikTok sync"); break; }
     try {
       const stats = await syncClientTikTok(conn.clientId, 3);
       aggregate.errors.push(...stats.errors);
