@@ -2,11 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/sync-meta",
-      "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/sync-meta",
-      "schedule": "0 11 * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }
