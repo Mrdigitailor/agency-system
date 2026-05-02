@@ -4,5 +4,13 @@
       "path": "/api/cron/sync-meta",
       "schedule": "0 * * * *"
     }
-  ]
+  ],
+  "functions": {
+    "src/app/api/cron/sync-meta/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/ping/route.ts": {
+      "maxDuration": 10
+    }
+  }
 }
