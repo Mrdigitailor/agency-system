@@ -195,3 +195,6 @@ export async function GET(req: Request) {
 
   return NextResponse.json({ ...aggregate, totalClients: sortedClients.length, durationSec });
 }
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
