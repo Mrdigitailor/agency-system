@@ -12,6 +12,9 @@ const MAX_TIME_MS = 50000; // 50s — leave 10s for token renewal + response
  * פלטפורמות רצות במקביל (Promise.all) לחיסכון זמן.
  */
 export async function GET(req: Request) {
+  console.log(`[Cron] Route hit at ${new Date().toISOString()}`);
+
+  // Vercel cron authentication
   const authHeader = req.headers.get("authorization");
   const { searchParams } = new URL(req.url);
   const querySecret = searchParams.get("secret");
@@ -19,7 +22,12 @@ export async function GET(req: Request) {
   const expected = process.env.CRON_SECRET;
   const provided = authHeader?.replace("Bearer ", "") ?? querySecret;
 
-  if (!expected || provided !== expected) {
+  console.log(`[Cron] Auth: expected=${expected ? "set" : "NOT SET"}, provided=${provided ? provided.slice(0, 8) + "..." : "none"}, header=${authHeader ? "yes" : "no"}`);
+
+  if (!expected) {
+    console.warn("[Cron] CRON_SECRET not set — running without auth");
+  } else if (provided !== expected) {
+    console.error("[Cron] Auth FAILED — returning 401");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
