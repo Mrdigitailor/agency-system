@@ -241,6 +241,7 @@ model Lead {
   proposalDate       String   @default("")
   proposalFileName   String   @default("")
   proposalUrl        String   @default("")
+  proposalUploadedAt String   @default("")
   internalNotes      String   @default("")
   quality            String   @default("")
   priority           String   @default("")

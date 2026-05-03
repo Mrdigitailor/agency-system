@@ -15,6 +15,7 @@ import {
   Pencil,
   Filter,
   Trash2,
+  Eye,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
@@ -393,6 +394,7 @@ export default function CrmPage() {
       churnReason: "",
       churnDetails: "",
       proposalDetails: "",
+      proposalUploadedAt: "",
     });
     resetForm();
     setIsModalOpen(false);
@@ -479,16 +481,25 @@ export default function CrmPage() {
     setSelectedLead(null);
   }
 
+  const [proposalViewOpen, setProposalViewOpen] = useState(false);
+
   async function handleUploadProposal(file: File) {
     if (!selectedLead) return;
     const formData = new FormData();
     formData.append("file", file);
     const res = await fetch("/api/upload", { method: "POST", body: formData });
     if (res.ok) {
-      const { url } = await res.json();
-      updateLead(selectedLead.id, { proposalUrl: url });
-      setSelectedLead((p) => p ? { ...p, proposalUrl: url } : null);
+      const { url, originalName } = await res.json();
+      const now = new Date().toISOString();
+      updateLead(selectedLead.id, { proposalUrl: url, proposalFileName: originalName ?? file.name, proposalUploadedAt: now } as Partial<Lead>);
+      setSelectedLead((p) => p ? { ...p, proposalUrl: url, proposalFileName: originalName ?? file.name } : null);
     }
+  }
+
+  async function handleDeleteProposal() {
+    if (!selectedLead) return;
+    updateLead(selectedLead.id, { proposalUrl: "", proposalFileName: "" } as Partial<Lead>);
+    setSelectedLead((p) => p ? { ...p, proposalUrl: "", proposalFileName: "" } : null);
   }
 
   const [internalNotesLocal, setInternalNotesLocal] = useState("");
@@ -1510,15 +1521,61 @@ export default function CrmPage() {
                   </div>
                 </div>
               )}
-              <div className="mt-3">
-                <label className="mb-1 block text-sm font-medium text-brand-dark">הצעת מחיר</label>
+              {/* === הצעת מחיר === */}
+              <div className="mt-4 rounded-lg border border-brand-border bg-brand-bg/50 p-4">
+                <p className="mb-3 text-sm font-semibold text-brand-dark">הצעת מחיר</p>
                 {selectedLead.proposalUrl ? (
-                  <a href={selectedLead.proposalUrl} target="_blank" className="flex items-center gap-2 text-sm text-brand-gold hover:underline">
-                    <FileText className="h-4 w-4" />
-                    צפה בהצעה
-                  </a>
-                ) : null}
-                <input type="file" accept=".pdf" onChange={(e) => { if (e.target.files?.[0]) handleUploadProposal(e.target.files[0]); }} className="mt-2 text-sm" />
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 rounded-lg bg-brand-light p-3 border border-brand-border">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100">
+                        <FileText className="h-5 w-5 text-red-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-brand-dark truncate">{selectedLead.proposalFileName || "הצעת מחיר.pdf"}</p>
+                        <p className="text-xs text-brand-muted">PDF</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setProposalViewOpen(true)}
+                          className="rounded-lg p-2 text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
+                          title="צפה"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <a
+                          href={selectedLead.proposalUrl}
+                          download
+                          className="rounded-lg p-2 text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
+                          title="הורד"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </a>
+                        <button
+                          onClick={handleDeleteProposal}
+                          className="rounded-lg p-2 text-brand-muted hover:bg-red-50 hover:text-brand-danger"
+                          title="מחק"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-brand-gold hover:underline">
+                      <input type="file" accept=".pdf" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handleUploadProposal(e.target.files[0]); }} />
+                      החלף הצעה
+                    </label>
+                  </div>
+                ) : (
+                  <label
+                    className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-brand-border p-6 text-center transition-colors hover:border-brand-gold hover:bg-brand-gold/5"
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f && f.type === "application/pdf") handleUploadProposal(f); }}
+                  >
+                    <FileText className="h-8 w-8 text-brand-muted" />
+                    <span className="text-sm font-medium text-brand-dark">העלה הצעת מחיר</span>
+                    <span className="text-xs text-brand-muted">גרור PDF לכאן או לחץ לבחירה</span>
+                    <input type="file" accept=".pdf" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handleUploadProposal(e.target.files[0]); }} />
+                  </label>
+                )}
               </div>
             </div>
 
@@ -1893,6 +1950,38 @@ export default function CrmPage() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* PDF Viewer Modal */}
+      <Modal isOpen={proposalViewOpen} onClose={() => setProposalViewOpen(false)} title={selectedLead?.proposalFileName || "הצעת מחיר"} size="lg">
+        {selectedLead?.proposalUrl && (
+          <div className="space-y-3">
+            <div className="h-[70vh] w-full overflow-hidden rounded-lg border border-brand-border">
+              <iframe
+                src={selectedLead.proposalUrl}
+                className="h-full w-full"
+                title="PDF Viewer"
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <a
+                href={selectedLead.proposalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg"
+              >
+                פתח בטאב חדש
+              </a>
+              <a
+                href={selectedLead.proposalUrl}
+                download
+                className={btnPrimary}
+              >
+                הורד
+              </a>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

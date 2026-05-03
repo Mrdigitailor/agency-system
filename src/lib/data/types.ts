@@ -138,6 +138,7 @@ export interface Lead {
   churnReason: string;
   churnDetails: string;
   proposalDetails: string;
+  proposalUploadedAt: string;
   createdAt: string;
   calls: LeadCall[];
 }
