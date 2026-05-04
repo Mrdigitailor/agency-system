@@ -161,6 +161,7 @@ function mapLead(l: Record<string, unknown>): Lead {
     churnDetails: (l.churnDetails as string) ?? "",
     proposalDetails: (l.proposalDetails as string) ?? "",
     proposalUploadedAt: (l.proposalUploadedAt as string) ?? "",
+    proposalFileData: "", // never send base64 to client — too large
     createdAt: (l.createdAt as string) ?? "",
     calls: ((l.calls as Record<string, unknown>[]) ?? []).map((c) => ({
       id: c.id as string,

@@ -242,6 +242,7 @@ model Lead {
   proposalFileName   String   @default("")
   proposalUrl        String   @default("")
   proposalUploadedAt String   @default("")
+  proposalFileData   String   @default("") // base64 encoded PDF
   internalNotes      String   @default("")
   quality            String   @default("")
   priority           String   @default("")

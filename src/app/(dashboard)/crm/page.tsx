@@ -395,6 +395,7 @@ export default function CrmPage() {
       churnDetails: "",
       proposalDetails: "",
       proposalUploadedAt: "",
+      proposalFileData: "",
     });
     resetForm();
     setIsModalOpen(false);
@@ -482,23 +483,37 @@ export default function CrmPage() {
   }
 
   const [proposalViewOpen, setProposalViewOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   async function handleUploadProposal(file: File) {
     if (!selectedLead) return;
-    const formData = new FormData();
-    formData.append("file", file);
-    const res = await fetch("/api/upload", { method: "POST", body: formData });
-    if (res.ok) {
-      const { url, originalName } = await res.json();
-      const now = new Date().toISOString();
-      updateLead(selectedLead.id, { proposalUrl: url, proposalFileName: originalName ?? file.name, proposalUploadedAt: now } as Partial<Lead>);
-      setSelectedLead((p) => p ? { ...p, proposalUrl: url, proposalFileName: originalName ?? file.name } : null);
+    console.log(`[Proposal] Uploading: ${file.name} (${(file.size / 1024).toFixed(0)}KB)`);
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("leadId", selectedLead.id);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      console.log(`[Proposal] Response:`, res.status, data);
+      if (res.ok) {
+        // Use API endpoint URL for viewing (not data URL which is too large for state)
+        const viewUrl = `/api/upload?leadId=${selectedLead.id}`;
+        setSelectedLead((p) => p ? { ...p, proposalUrl: viewUrl, proposalFileName: data.originalName ?? file.name } : null);
+      } else {
+        alert(data.error ?? "שגיאה בהעלאה");
+      }
+    } catch (err) {
+      console.error("[Proposal] Upload error:", err);
+      alert("שגיאה בהעלאה");
+    } finally {
+      setUploading(false);
     }
   }
 
   async function handleDeleteProposal() {
     if (!selectedLead) return;
-    updateLead(selectedLead.id, { proposalUrl: "", proposalFileName: "" } as Partial<Lead>);
+    await updateLead(selectedLead.id, { proposalUrl: "", proposalFileName: "", proposalFileData: "" } as Partial<Lead>);
     setSelectedLead((p) => p ? { ...p, proposalUrl: "", proposalFileName: "" } : null);
   }
 
@@ -1566,13 +1581,22 @@ export default function CrmPage() {
                   </div>
                 ) : (
                   <label
-                    className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-brand-border p-6 text-center transition-colors hover:border-brand-gold hover:bg-brand-gold/5"
+                    className={`flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-brand-border p-6 text-center transition-colors hover:border-brand-gold hover:bg-brand-gold/5 ${uploading ? "opacity-50 pointer-events-none" : ""}`}
                     onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f && f.type === "application/pdf") handleUploadProposal(f); }}
                   >
-                    <FileText className="h-8 w-8 text-brand-muted" />
-                    <span className="text-sm font-medium text-brand-dark">העלה הצעת מחיר</span>
-                    <span className="text-xs text-brand-muted">גרור PDF לכאן או לחץ לבחירה</span>
+                    {uploading ? (
+                      <>
+                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-gold border-t-transparent" />
+                        <span className="text-sm font-medium text-brand-dark">מעלה...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="h-8 w-8 text-brand-muted" />
+                        <span className="text-sm font-medium text-brand-dark">העלה הצעת מחיר</span>
+                        <span className="text-xs text-brand-muted">גרור PDF לכאן או לחץ לבחירה</span>
+                      </>
+                    )}
                     <input type="file" accept=".pdf" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handleUploadProposal(e.target.files[0]); }} />
                   </label>
                 )}
@@ -1958,26 +1982,19 @@ export default function CrmPage() {
           <div className="space-y-3">
             <div className="h-[70vh] w-full overflow-hidden rounded-lg border border-brand-border">
               <iframe
-                src={selectedLead.proposalUrl}
+                src={`/api/upload?leadId=${selectedLead.id}`}
                 className="h-full w-full"
                 title="PDF Viewer"
               />
             </div>
             <div className="flex justify-end gap-3">
               <a
-                href={selectedLead.proposalUrl}
+                href={`/api/upload?leadId=${selectedLead.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg"
               >
                 פתח בטאב חדש
-              </a>
-              <a
-                href={selectedLead.proposalUrl}
-                download
-                className={btnPrimary}
-              >
-                הורד
               </a>
             </div>
           </div>

@@ -139,6 +139,7 @@ export interface Lead {
   churnDetails: string;
   proposalDetails: string;
   proposalUploadedAt: string;
+  proposalFileData: string;
   createdAt: string;
   calls: LeadCall[];
 }
