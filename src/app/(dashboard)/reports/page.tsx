@@ -421,8 +421,18 @@ export default function ReportsPage() {
                         )}
                         <span className="text-xs text-brand-muted">{currentWeekPeriod}</span>
                         {weeklySent && tracker.weeklyContent && (
-                          <button onClick={() => openViewModal(tracker, "weekly")} className="rounded p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark" title={t('viewReport')}>
-                            <Eye className="h-3.5 w-3.5" />
+                          <>
+                            <button onClick={() => openViewModal(tracker, "weekly")} className="rounded p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark" title={t('viewReport')}>
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => openEditModal(tracker, "weekly")} className="rounded p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark" title={t('edit')}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                        {weeklySent && !tracker.weeklyContent && (
+                          <button onClick={() => openEditModal(tracker, "weekly")} className="rounded-lg border border-brand-border px-2 py-1 text-xs text-brand-muted hover:bg-brand-bg hover:text-brand-dark" title={t('edit')}>
+                            {t('edit')}
                           </button>
                         )}
                         {canMarkAsSent && !weeklySent && (
@@ -440,13 +450,18 @@ export default function ReportsPage() {
                         {monthlySent ? (
                           <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">{t('sent')}</span>
                         ) : (
-                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">לא {t('sent')}</span>
+                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">{t('notSent')}</span>
                         )}
                         <span className="text-xs text-brand-muted">{getMonthlyPeriod(tracker.monthlyLastSent)}</span>
                         {monthlySent && tracker.monthlyContent && (
-                          <button onClick={() => openViewModal(tracker, "monthly")} className="rounded p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark" title="צפה בדוח">
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
+                          <>
+                            <button onClick={() => openViewModal(tracker, "monthly")} className="rounded p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark" title={t('viewReport')}>
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => openEditModal(tracker, "monthly")} className="rounded p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark" title={t('edit')}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          </>
                         )}
                         {canMarkAsSent && !monthlySent && (
                           <button onClick={() => openContentModal(client.id, "monthly")} className="rounded-lg border border-brand-border px-2 py-1 text-xs text-brand-muted hover:bg-brand-bg hover:text-brand-dark">
