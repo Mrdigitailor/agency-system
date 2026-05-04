@@ -495,11 +495,10 @@ export default function CrmPage() {
       formData.append("leadId", selectedLead.id);
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
-      console.log(`[Proposal] Response:`, res.status, data);
-      if (res.ok) {
-        // Use API endpoint URL for viewing (not data URL which is too large for state)
+      console.log(`[Proposal] Response: ${res.status}`, data);
+      if (res.ok && data.success) {
         const viewUrl = `/api/upload?leadId=${selectedLead.id}`;
-        setSelectedLead((p) => p ? { ...p, proposalUrl: viewUrl, proposalFileName: data.originalName ?? file.name } : null);
+        setSelectedLead((p) => p ? { ...p, proposalUrl: viewUrl, proposalFileName: data.fileName ?? file.name } : null);
       } else {
         alert(data.error ?? "שגיאה בהעלאה");
       }

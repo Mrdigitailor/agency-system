@@ -33,27 +33,28 @@ export async function POST(req: Request) {
     // Convert to base64
     const bytes = await file.arrayBuffer();
     const base64 = Buffer.from(bytes).toString("base64");
-    const dataUrl = `data:application/pdf;base64,${base64}`;
 
     console.log(`[Upload] Converted to base64: ${(base64.length / 1024).toFixed(0)}KB`);
 
-    // If leadId provided, save directly to lead
-    if (leadId) {
-      await prisma.lead.update({
-        where: { id: leadId },
-        data: {
-          proposalFileData: base64,
-          proposalFileName: file.name,
-          proposalUrl: dataUrl,
-          proposalUploadedAt: new Date().toISOString(),
-        },
-      });
-      console.log(`[Upload] Saved to lead ${leadId}`);
+    if (!leadId) {
+      return NextResponse.json({ error: "Missing leadId" }, { status: 400 });
     }
 
+    // Save to DB
+    await prisma.lead.update({
+      where: { id: leadId },
+      data: {
+        proposalFileData: base64,
+        proposalFileName: file.name,
+        proposalUrl: `/api/upload?leadId=${leadId}`, // reference URL, not data URL
+        proposalUploadedAt: new Date().toISOString(),
+      },
+    });
+    console.log(`[Upload] ✅ Saved to lead ${leadId}`);
+
     return NextResponse.json({
-      url: dataUrl,
-      originalName: file.name,
+      success: true,
+      fileName: file.name,
       size: file.size,
     });
   } catch (err) {
