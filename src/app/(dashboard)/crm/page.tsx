@@ -493,20 +493,30 @@ export default function CrmPage() {
     console.log(`[Proposal] Uploading: ${file.name} (${(file.size / 1024).toFixed(0)}KB)`);
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("leadId", selectedLead.id);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
-      console.log(`[Proposal] Response: ${res.status}`, data);
-      if (res.ok && data.success) {
-        setSelectedLead((p) => p ? { ...p, proposalUrl: data.url, proposalFileName: data.fileName ?? file.name } : null);
-      } else {
-        alert(data.error ?? "שגיאה בהעלאה");
-      }
+      // Client-side upload directly to Vercel Blob (bypasses 4.5MB server limit)
+      const { upload } = await import("@vercel/blob/client");
+      const blob = await upload(
+        `proposals/${selectedLead.id}_${Date.now()}_${file.name}`,
+        file,
+        { access: "public", handleUploadUrl: "/api/upload" }
+      );
+      console.log(`[Proposal] Blob URL: ${blob.url}`);
+
+      // Save URL to DB
+      await fetch(`/api/leads/${selectedLead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proposalUrl: blob.url,
+          proposalFileName: file.name,
+          proposalUploadedAt: new Date().toISOString(),
+        }),
+      });
+
+      setSelectedLead((p) => p ? { ...p, proposalUrl: blob.url, proposalFileName: file.name } : null);
     } catch (err) {
       console.error("[Proposal] Upload error:", err);
-      alert("שגיאה בהעלאה");
+      alert(err instanceof Error ? err.message : "שגיאה בהעלאה");
     } finally {
       setUploading(false);
     }
