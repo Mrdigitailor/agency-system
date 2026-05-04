@@ -1,38 +1,36 @@
+import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
-import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
-import { requireAuth } from "@/lib/auth/api-guard";
 
-/**
- * POST /api/upload — Vercel Blob client-side upload handler
- * The browser uploads directly to Blob Storage (no 4.5MB limit).
- * This endpoint only generates the upload token.
- */
+// Edge runtime — no 4.5MB body limit
+export const runtime = "edge";
+
 export async function POST(req: Request) {
-  const auth = await requireAuth();
-  if (auth instanceof NextResponse) return auth;
-
   try {
-    const body = (await req.json()) as HandleUploadBody;
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    const leadId = formData.get("leadId") as string | null;
 
-    const jsonResponse = await handleUpload({
-      body,
-      request: req,
-      onBeforeGenerateToken: async () => {
-        return {
-          allowedContentTypes: ["application/pdf"],
-          maximumSizeInBytes: 25 * 1024 * 1024, // 25MB
-        };
-      },
-      onUploadCompleted: async ({ blob }) => {
-        console.log(`[Upload] Blob completed: ${blob.url} (${blob.pathname})`);
-      },
+    if (!file || !leadId) {
+      return NextResponse.json({ error: "Missing file or leadId" }, { status: 400 });
+    }
+
+    if (file.size > 25 * 1024 * 1024) {
+      return NextResponse.json({ error: "File too large (max 25MB)" }, { status: 400 });
+    }
+
+    const blob = await put(
+      `proposals/${leadId}_${Date.now()}_${file.name}`,
+      file,
+      { access: "public" }
+    );
+
+    return NextResponse.json({
+      success: true,
+      url: blob.url,
+      fileName: file.name,
     });
-
-    return NextResponse.json(jsonResponse);
-  } catch (err) {
-    console.error("[Upload] Error:", err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Upload failed" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Upload failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-
-export const dynamic = "force-dynamic";
