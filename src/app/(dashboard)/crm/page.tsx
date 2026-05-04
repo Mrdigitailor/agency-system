@@ -395,7 +395,6 @@ export default function CrmPage() {
       churnDetails: "",
       proposalDetails: "",
       proposalUploadedAt: "",
-      proposalFileData: "",
     });
     resetForm();
     setIsModalOpen(false);
@@ -487,6 +486,10 @@ export default function CrmPage() {
 
   async function handleUploadProposal(file: File) {
     if (!selectedLead) return;
+    if (file.size > 25 * 1024 * 1024) {
+      alert("הקובץ גדול מדי. מקסימום 25MB");
+      return;
+    }
     console.log(`[Proposal] Uploading: ${file.name} (${(file.size / 1024).toFixed(0)}KB)`);
     setUploading(true);
     try {
@@ -497,8 +500,7 @@ export default function CrmPage() {
       const data = await res.json();
       console.log(`[Proposal] Response: ${res.status}`, data);
       if (res.ok && data.success) {
-        const viewUrl = `/api/upload?leadId=${selectedLead.id}`;
-        setSelectedLead((p) => p ? { ...p, proposalUrl: viewUrl, proposalFileName: data.fileName ?? file.name } : null);
+        setSelectedLead((p) => p ? { ...p, proposalUrl: data.url, proposalFileName: data.fileName ?? file.name } : null);
       } else {
         alert(data.error ?? "שגיאה בהעלאה");
       }
@@ -1981,19 +1983,26 @@ export default function CrmPage() {
           <div className="space-y-3">
             <div className="h-[70vh] w-full overflow-hidden rounded-lg border border-brand-border">
               <iframe
-                src={`/api/upload?leadId=${selectedLead.id}`}
+                src={selectedLead.proposalUrl}
                 className="h-full w-full"
                 title="PDF Viewer"
               />
             </div>
             <div className="flex justify-end gap-3">
               <a
-                href={`/api/upload?leadId=${selectedLead.id}`}
+                href={selectedLead.proposalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg"
               >
                 פתח בטאב חדש
+              </a>
+              <a
+                href={selectedLead.proposalUrl}
+                download={selectedLead.proposalFileName}
+                className={btnPrimary}
+              >
+                הורד
               </a>
             </div>
           </div>

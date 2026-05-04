@@ -6,10 +6,10 @@ export async function GET() {
     include: { calls: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "desc" },
   });
-  const parsed = leads.map((l) => {
-    const { proposalFileData: _, ...rest } = l; // exclude base64 data from API response
-    return { ...rest, interestedServices: JSON.parse(l.interestedServices) };
-  });
+  const parsed = leads.map((l) => ({
+    ...l,
+    interestedServices: JSON.parse(l.interestedServices),
+  }));
   return NextResponse.json(parsed);
 }
 
