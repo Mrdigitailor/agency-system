@@ -55,6 +55,7 @@ export interface Client {
   currentMonthConversions?: number;
   currentMonthCostPerConv?: number;
   hasMetaData?: boolean;
+  platformSyncs?: Array<{ platform: string; lastSyncAt: string | null }>;
 }
 
 // ==================== משימות ====================

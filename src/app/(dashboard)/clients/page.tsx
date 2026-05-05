@@ -300,7 +300,7 @@ export default function ClientsPage() {
                     <td className="px-4 py-4 text-xs text-brand-muted">{formatDate(p.lastOptimization)}</td>
                     <td className="px-4 py-4">
                       {(() => {
-                        const syncs = (client as any).platformSyncs as Array<{ platform: string; lastSyncAt: string | null }> | undefined;
+                        const syncs = client.platformSyncs;
                         if (!syncs || syncs.length === 0) return <span className="text-xs text-brand-muted">—</span>;
                         const dates = syncs.filter((s) => s.lastSyncAt).map((s) => new Date(s.lastSyncAt!));
                         if (dates.length === 0) return <span className="text-xs text-brand-muted">—</span>;

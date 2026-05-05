@@ -84,6 +84,7 @@ function mapClient(c: Record<string, unknown>): Client {
     currentMonthConversions: (c.currentMonthConversions as number) ?? 0,
     currentMonthCostPerConv: (c.currentMonthCostPerConv as number) ?? 0,
     hasMetaData: (c.hasMetaData as boolean) ?? false,
+    platformSyncs: (c.platformSyncs as Array<{ platform: string; lastSyncAt: string | null }>) ?? [],
     performance: {
       budgetUsed: c.budgetUsed as number,
       avgCostPerConversion: c.avgCostPerConversion as number,
