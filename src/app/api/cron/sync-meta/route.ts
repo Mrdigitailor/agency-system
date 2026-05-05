@@ -10,17 +10,15 @@ import { syncClientTikTok } from "@/lib/api/tiktok/sync";
  * With 24 runs/day and 21 clients, each client syncs ~1x/day.
  */
 export async function GET(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  const { searchParams } = new URL(req.url);
-  const querySecret = searchParams.get("secret");
-
-  const expected = process.env.CRON_SECRET;
-  const provided = authHeader?.replace("Bearer ", "") ?? querySecret;
-
   console.log(`[Cron] Route hit at ${new Date().toISOString()}`);
 
-  if (expected && provided !== expected) {
-    console.error("[Cron] Auth FAILED");
+  const authHeader = req.headers.get("authorization")?.replace("Bearer ", "");
+  const querySecret = new URL(req.url).searchParams.get("secret");
+  const expected = process.env.CRON_SECRET;
+
+  // Accept auth from header OR query param
+  if (expected && authHeader !== expected && querySecret !== expected) {
+    console.error(`[Cron] Auth FAILED (header=${!!authHeader}, query=${!!querySecret})`);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -68,6 +66,13 @@ export async function GET(req: Request) {
   } catch {}
 
   // === Find the ONE client to sync (oldest lastSyncAt) ===
+  // Skip inactive clients
+  const inactiveClients = await prisma.client.findMany({
+    where: { status: "inactive" },
+    select: { id: true },
+  });
+  const inactiveIds = new Set(inactiveClients.map((c) => c.id));
+
   const allConnections = await prisma.platformConnection.findMany({
     where: { isActive: true },
     select: { clientId: true, platform: true, lastSyncAt: true },
@@ -75,6 +80,7 @@ export async function GET(req: Request) {
 
   const clientMap = new Map<string, { platforms: string[]; oldestSync: Date | null }>();
   for (const conn of allConnections) {
+    if (inactiveIds.has(conn.clientId)) continue; // skip inactive
     const existing = clientMap.get(conn.clientId);
     if (existing) {
       existing.platforms.push(conn.platform);

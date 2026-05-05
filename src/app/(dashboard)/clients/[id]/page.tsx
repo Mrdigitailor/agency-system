@@ -48,7 +48,7 @@ import OptimizationsTab from "@/components/ui/OptimizationsTab";
 import CreativesTab from "@/components/ui/CreativesTab";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
-import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset } from "@/lib/data/types";
+import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset, type Client } from "@/lib/data/types";
 import { CURRENCIES, getCurrencySymbol } from "@/lib/utils/currency";
 import { getWeekRangeBack } from "@/lib/utils/dates";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
@@ -203,7 +203,7 @@ export default function ClientDetailPage() {
     campaignManager: "",
     accountManager: "",
     clientType: "",
-    status: "active" as "active" | "at_risk" | "upsell",
+    status: "active" as Client["status"],
     monthlyBudget: "" as string | number,
     currency: "ILS",
     contactEmail: "",
@@ -1142,7 +1142,7 @@ export default function ClientDetailPage() {
                   onChange={(e) =>
                     setEditForm((p) => ({
                       ...p,
-                      status: e.target.value as "active" | "at_risk" | "upsell",
+                      status: e.target.value as Client["status"],
                     }))
                   }
                 >

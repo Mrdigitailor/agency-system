@@ -27,7 +27,7 @@ function daysLeftInMonth() {
 
 export default function ClientsPage() {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { clients, addClient, employees, refreshClients } = useApp();
   const [dateRange, setDateRange] = useState<DateRange>(() => getPresetRange("this_month"));
 
@@ -39,7 +39,8 @@ export default function ClientsPage() {
   const managers = employees.filter((e) => e.role === "manager" || e.role === "admin");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // סינונים
+  // סינונים + טאבים
+  const [clientTab, setClientTab] = useState<"active" | "inactive">("active");
   const [searchText, setSearchText] = useState("");
   const [filterCM, setFilterCM] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -59,7 +60,9 @@ export default function ClientsPage() {
   const remaining = daysLeftInMonth();
 
   const filteredAndSorted = useMemo(() => {
-    let result = [...clients];
+    let result = [...clients].filter((c) =>
+      clientTab === "inactive" ? c.status === "inactive" : c.status !== "inactive"
+    );
 
     // סינון חיפוש
     if (searchText.trim()) {
@@ -99,7 +102,7 @@ export default function ClientsPage() {
     }
 
     return result;
-  }, [clients, searchText, filterCM, filterStatus, sortCol, sortDir, employees]);
+  }, [clients, searchText, filterCM, filterStatus, sortCol, sortDir, employees, clientTab]);
 
   const hasFilters = searchText || filterCM !== "all" || filterStatus !== "all";
 
@@ -126,10 +129,18 @@ export default function ClientsPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleDeactivate = async (id: string) => {
-    await fetch(`/api/clients/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "paused" }) });
+  const [deactivateTarget, setDeactivateTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const handleDeactivate = async () => {
+    if (!deactivateTarget) return;
+    await fetch(`/api/clients/${deactivateTarget.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "inactive" }) });
     await refreshClients();
-    setOpenMenuId(null);
+    setDeactivateTarget(null);
+  };
+
+  const handleReactivate = async (id: string) => {
+    await fetch(`/api/clients/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "active" }) });
+    await refreshClients();
   };
 
   const handleDelete = async () => {
@@ -177,7 +188,17 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-brand-dark">{t('clients')}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold text-brand-dark">{t('clients')}</h1>
+          <div className="flex rounded-lg border border-brand-border overflow-hidden">
+            <button onClick={() => setClientTab("active")} className={`px-3 py-1 text-xs font-medium transition-colors ${clientTab === "active" ? "bg-brand-gold text-brand-dark" : "bg-brand-light text-brand-muted hover:bg-brand-bg"}`}>
+              {t('active')} ({clients.filter((c) => c.status !== "inactive").length})
+            </button>
+            <button onClick={() => setClientTab("inactive")} className={`px-3 py-1 text-xs font-medium transition-colors ${clientTab === "inactive" ? "bg-gray-500 text-white" : "bg-brand-light text-brand-muted hover:bg-brand-bg"}`}>
+              {t('paused')} ({clients.filter((c) => c.status === "inactive").length})
+            </button>
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           <DateRangePicker value={dateRange} onChange={setDateRange} />
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="flex items-center gap-2 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80">
@@ -332,7 +353,7 @@ export default function ClientsPage() {
                         {openMenuId === client.id && (
                           <div className="absolute left-0 top-full z-50 mt-1 w-44 rounded-lg border border-brand-border bg-brand-light py-1 shadow-lg">
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleDeactivate(client.id); }}
+                              onClick={(e) => { e.stopPropagation(); setDeactivateTarget({ id: client.id, name: client.name }); setOpenMenuId(null); }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
                             >
                               <PauseCircle className="h-4 w-4" />
@@ -453,6 +474,21 @@ export default function ClientsPage() {
             <button onClick={handleDelete} disabled={deleting} className="rounded-lg bg-brand-danger px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50">
               {deleting ? "מוחק..." : "אשר מחיקה"}
             </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* מודל אישור השבתה */}
+      <Modal isOpen={!!deactivateTarget} onClose={() => setDeactivateTarget(null)} title={t('deactivateClient')} size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-brand-muted">
+            {lang === "he"
+              ? `להעביר את "${deactivateTarget?.name}" ללא פעיל? הסנכרון האוטומטי יופסק.`
+              : `Deactivate "${deactivateTarget?.name}"? Auto-sync will stop.`}
+          </p>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setDeactivateTarget(null)} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg">{t('cancel')}</button>
+            <button onClick={handleDeactivate} className="rounded-lg bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700">{t('deactivateClient')}</button>
           </div>
         </div>
       </Modal>

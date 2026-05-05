@@ -42,7 +42,7 @@ export interface Client {
   currency: string;
   metaConversionEvent: string;
   clientType: string;
-  status: "active" | "at_risk" | "upsell";
+  status: "active" | "at_risk" | "upsell" | "inactive";
   contactEmail: string;
   contactPhone: string;
   notes: string;
@@ -185,6 +185,7 @@ export const CLIENT_STATUSES = [
   { value: "active" as const, label: "תקין", color: "bg-brand-success" },
   { value: "at_risk" as const, label: "בסיכון", color: "bg-brand-warning" },
   { value: "upsell" as const, label: "מוכן לאפסייל", color: "bg-brand-info" },
+  { value: "inactive" as const, label: "לא פעיל", color: "bg-gray-400" },
 ];
 
 export const PRIORITIES = [
