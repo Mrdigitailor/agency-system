@@ -228,13 +228,14 @@ export default function ClientsPage() {
                 <th className="min-w-[160px] px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("cpa")}>{t('costPerConversion')} <SortIcon col="cpa" /></th>
                 <th className="min-w-[160px] px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("conversions")}>{t('conversions')} <SortIcon col="conversions" /></th>
                 <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('optimization')}</th>
+                <th className="px-4 py-3 text-right font-medium text-brand-muted">{t('lastSync')}</th>
                 <th className="px-4 py-3 text-right font-medium text-brand-muted cursor-pointer select-none" onClick={() => toggleSort("status")}>{t('status')} <SortIcon col="status" /></th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {filteredAndSorted.length === 0 && (
-                <tr><td colSpan={9} className="px-6 py-12 text-center text-brand-muted">{hasFilters ? t('noMatchingClients') : t('noClients')}</td></tr>
+                <tr><td colSpan={10} className="px-6 py-12 text-center text-brand-muted">{hasFilters ? t('noMatchingClients') : t('noClients')}</td></tr>
               )}
               {filteredAndSorted.map((client) => {
                 const statusInfo = getStatusInfo(client.status);
@@ -297,6 +298,26 @@ export default function ClientsPage() {
                       )}
                     </td>
                     <td className="px-4 py-4 text-xs text-brand-muted">{formatDate(p.lastOptimization)}</td>
+                    <td className="px-4 py-4">
+                      {(() => {
+                        const syncs = (client as any).platformSyncs as Array<{ platform: string; lastSyncAt: string | null }> | undefined;
+                        if (!syncs || syncs.length === 0) return <span className="text-xs text-brand-muted">—</span>;
+                        const dates = syncs.filter((s) => s.lastSyncAt).map((s) => new Date(s.lastSyncAt!));
+                        if (dates.length === 0) return <span className="text-xs text-brand-muted">—</span>;
+                        const oldest = new Date(Math.min(...dates.map((d) => d.getTime())));
+                        const now = new Date();
+                        const diffH = (now.getTime() - oldest.getTime()) / (1000 * 60 * 60);
+                        const timeStr = oldest.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+                        const dateStr = oldest.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" });
+                        const isToday = oldest.toDateString() === now.toDateString();
+                        const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+                        const isYesterday = oldest.toDateString() === yesterday.toDateString();
+                        const color = isToday ? "text-brand-success" : isYesterday ? "text-brand-warning" : "text-brand-danger";
+                        const label = isToday ? timeStr : isYesterday ? `אתמול ${timeStr}` : `${dateStr} ${timeStr}`;
+                        const tooltip = syncs.map((s) => `${s.platform}: ${s.lastSyncAt ? new Date(s.lastSyncAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}`).join("\n");
+                        return <span className={`text-xs font-medium ${color}`} title={tooltip}>{label}</span>;
+                      })()}
+                    </td>
                     <td className="px-4 py-4">
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-bg px-2.5 py-1 text-xs font-medium">
                         <span className={`h-2 w-2 rounded-full ${statusInfo.color}`} />

@@ -60,6 +60,18 @@ export async function GET(req: Request) {
     }),
   ]) : [[], [], []];
 
+  // שליפת lastSyncAt לכל חיבור
+  const connections = clientIds.length > 0 ? await prisma.platformConnection.findMany({
+    where: { clientId: { in: clientIds }, isActive: true },
+    select: { clientId: true, platform: true, lastSyncAt: true },
+  }) : [];
+
+  const syncByClient = new Map<string, Array<{ platform: string; lastSyncAt: Date | null }>>();
+  for (const conn of connections) {
+    if (!syncByClient.has(conn.clientId)) syncByClient.set(conn.clientId, []);
+    syncByClient.get(conn.clientId)!.push({ platform: conn.platform, lastSyncAt: conn.lastSyncAt });
+  }
+
   // קיבוץ לפי clientId
   const metaByClient = new Map<string, typeof metaInsights>();
   for (const ins of metaInsights) {
@@ -100,6 +112,7 @@ export async function GET(req: Request) {
       currentMonthConversions: totalConv,
       currentMonthCostPerConv: costPerConv,
       hasMetaData: clientMetaInsights.length > 0 || gadsInsights.length > 0 || ttInsights.length > 0,
+      platformSyncs: (syncByClient.get(c.id) ?? []).map((s) => ({ platform: s.platform, lastSyncAt: s.lastSyncAt?.toISOString() ?? null })),
     };
   });
 
