@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { syncClientMeta } from "@/lib/api/meta/sync";
-import { syncClientGoogleAds } from "@/lib/api/google-ads/sync";
-import { syncClientTikTok } from "@/lib/api/tiktok/sync";
+import { fetchAdInsights, extractMetrics } from "@/lib/api/meta/ad-insights";
+import { searchStream, refreshGoogleToken } from "@/lib/api/google-ads/client";
+import { fetchCampaignReport } from "@/lib/api/tiktok/client";
+import type { MetaInsight } from "@/lib/api/meta/ad-insights";
 
 /**
- * Cron — runs hourly. Syncs ONE connection (client+platform) per run.
- * Picks the oldest lastSyncAt. Each run takes 5-15 seconds.
+ * Cron — runs hourly. Syncs ONE connection, ONE day (yesterday).
+ * Designed for Vercel Hobby 10-second limit.
+ * No posts, no IG, no page sync — just ad insights.
  */
 export async function GET(req: Request) {
-  console.log(`[Cron] Route hit at ${new Date().toISOString()}`);
+  console.log(`[Cron] Hit at ${new Date().toISOString()}`);
 
   const authHeader = req.headers.get("authorization")?.replace("Bearer ", "");
   const querySecret = new URL(req.url).searchParams.get("secret");
@@ -21,123 +23,222 @@ export async function GET(req: Request) {
 
   const startTime = Date.now();
 
-  // === Token renewal (fast) ===
-  let tokensRenewed = 0;
-  try {
-    // Meta — renew if expiring within 14 days
-    const metaExpiring = await prisma.platformConnection.findMany({
-      where: { platform: "meta", isActive: true, tokenExpiry: { not: null, lt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) } },
-      select: { id: true, accessToken: true },
-    });
-    for (const conn of metaExpiring) {
-      try {
-        const res = await fetch(`https://graph.facebook.com/${process.env.META_API_VERSION ?? "v21.0"}/oauth/access_token?grant_type=fb_exchange_token&client_id=${process.env.META_APP_ID}&client_secret=${process.env.META_APP_SECRET}&fb_exchange_token=${conn.accessToken}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.access_token) {
-            await prisma.platformConnection.update({ where: { id: conn.id }, data: { accessToken: data.access_token, tokenExpiry: new Date(Date.now() + (data.expires_in ?? 5184000) * 1000) } });
-            tokensRenewed++;
-          }
-        }
-      } catch {}
-    }
+  // Yesterday's date
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dateStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
 
-    // Google — refresh expired tokens
-    const googleExpired = await prisma.platformConnection.findMany({
-      where: { platform: "google_ads", isActive: true, refreshToken: { not: "" }, tokenExpiry: { lt: new Date() } },
-      select: { id: true, refreshToken: true },
-    });
-    for (const conn of googleExpired) {
-      try {
-        const res = await fetch("https://oauth2.googleapis.com/token", {
-          method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ client_id: process.env.GOOGLE_CLIENT_ID ?? "", client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "", refresh_token: conn.refreshToken, grant_type: "refresh_token" }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.access_token) {
-            await prisma.platformConnection.update({ where: { id: conn.id }, data: { accessToken: data.access_token, tokenExpiry: new Date(Date.now() + (data.expires_in ?? 3600) * 1000) } });
-            tokensRenewed++;
-          }
-        }
-      } catch {}
-    }
-  } catch {}
-
-  // === Find ONE connection to sync (oldest lastSyncAt, skip inactive clients) ===
-  const connection = await prisma.platformConnection.findFirst({
+  // Find oldest connection (skip inactive clients)
+  const conn = await prisma.platformConnection.findFirst({
     where: {
       isActive: true,
       client: { status: { not: "inactive" }, deletedAt: null },
     },
     orderBy: { lastSyncAt: { sort: "asc", nulls: "first" } },
-    include: { client: { select: { name: true } } },
+    include: { client: { select: { name: true } }, assets: { where: { isSelected: true } } },
   });
 
-  if (!connection) {
-    return NextResponse.json({ ok: true, message: "No connections to sync", tokensRenewed });
+  if (!conn) {
+    return NextResponse.json({ ok: true, message: "No connections" });
   }
 
-  const clientName = connection.client?.name ?? connection.clientId;
-  console.log(`[Cron] Syncing: ${clientName} / ${connection.platform} (lastSync: ${connection.lastSyncAt?.toISOString() ?? "never"})`);
+  const clientName = conn.client?.name ?? conn.clientId;
+  console.log(`[Cron] ${clientName} / ${conn.platform} / ${dateStr}`);
 
-  // === Sync the single connection ===
   let rows = 0;
-  const errors: string[] = [];
+  let error = "";
 
   try {
-    if (connection.platform === "meta") {
-      const stats = await syncClientMeta(connection.clientId, 3);
-      rows = stats.adInsightsFetched;
-      errors.push(...stats.errors);
-    } else if (connection.platform === "google_ads") {
-      const stats = await syncClientGoogleAds(connection.clientId, 3);
-      rows = stats.fetched;
-      errors.push(...stats.errors);
-    } else if (connection.platform === "tiktok") {
-      const stats = await syncClientTikTok(connection.clientId);
-      rows = stats.fetched;
-      errors.push(...stats.errors);
+    if (conn.platform === "meta") {
+      rows = await syncMetaQuick(conn.clientId, conn.accessToken, conn.assets, dateStr);
+    } else if (conn.platform === "google_ads") {
+      rows = await syncGoogleQuick(conn.clientId, conn.accessToken, conn.refreshToken, conn.assets, dateStr);
+    } else if (conn.platform === "tiktok") {
+      rows = await syncTikTokQuick(conn.clientId, conn.accessToken, conn.assets, dateStr);
     }
   } catch (err) {
-    errors.push(err instanceof Error ? err.message : String(err));
+    error = err instanceof Error ? err.message : String(err);
+    console.error(`[Cron] Error: ${error}`);
   }
 
-  // Update lastSyncAt regardless of success (so we move to next connection)
+  // Always update lastSyncAt to rotate
   await prisma.platformConnection.update({
-    where: { id: connection.id },
+    where: { id: conn.id },
     data: { lastSyncAt: new Date() },
   });
 
-  // Alert on token expired
-  if (errors.some((e) => e.includes("TOKEN_EXPIRED"))) {
-    const admins = await prisma.user.findMany({ where: { role: "admin", isActive: true }, select: { id: true } });
-    for (const admin of admins) {
-      await prisma.alert.create({
-        data: { type: "performance_drop", title: `חיבור פג — ${clientName}`, message: "יש לחבר מחדש", link: `/clients/${connection.clientId}`, userId: admin.id, clientId: connection.clientId },
-      }).catch(() => {});
-    }
-  }
-
   const dur = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log(`[Cron] Done: ${clientName}/${connection.platform} = ${rows} rows in ${dur}s | errors: ${errors.length}`);
-
-  // Count total connections for info
-  const totalConns = await prisma.platformConnection.count({
-    where: { isActive: true, client: { status: { not: "inactive" }, deletedAt: null } },
-  });
+  console.log(`[Cron] Done: ${rows} rows in ${dur}s`);
 
   return NextResponse.json({
-    ok: true,
+    ok: !error,
     client: clientName,
-    platform: connection.platform,
+    platform: conn.platform,
+    date: dateStr,
     rows,
-    errors: errors.length,
-    tokensRenewed,
+    error: error || undefined,
     duration: dur,
-    totalConnections: totalConns,
   });
 }
 
+// === Quick sync functions — single API call each ===
+
+async function syncMetaQuick(
+  clientId: string,
+  accessToken: string,
+  assets: Array<{ id: string; assetType: string; externalId: string }>,
+  date: string,
+): Promise<number> {
+  const adAccount = assets.find((a) => a.assetType === "ad_account");
+  if (!adAccount) return 0;
+
+  const insights: MetaInsight[] = await fetchAdInsights(
+    adAccount.externalId, accessToken, "campaign", date, date, true
+  );
+
+  for (const ins of insights) {
+    const m = extractMetrics(ins);
+    await prisma.metaInsightDaily.upsert({
+      where: {
+        assetId_level_externalId_date: {
+          assetId: adAccount.id, level: "campaign",
+          externalId: ins.campaign_id ?? "", date: ins.date_start,
+        },
+      },
+      update: {
+        name: ins.campaign_name ?? "",
+        spend: parseFloat(ins.spend) || 0,
+        impressions: parseInt(ins.impressions) || 0,
+        clicks: parseInt(ins.clicks) || 0,
+        reach: parseInt(ins.reach) || 0,
+        conversions: m.conversions,
+        costPerConversion: m.costPerConversion,
+        purchaseValue: m.purchaseValue,
+        roas: m.roas,
+        leads: m.leads,
+        costPerLead: m.costPerLead,
+        purchases: m.purchases,
+        actionsJson: JSON.stringify(ins),
+      },
+      create: {
+        clientId, assetId: adAccount.id, level: "campaign",
+        externalId: ins.campaign_id ?? "", parentId: "",
+        date: ins.date_start,
+        name: ins.campaign_name ?? "",
+        spend: parseFloat(ins.spend) || 0,
+        impressions: parseInt(ins.impressions) || 0,
+        clicks: parseInt(ins.clicks) || 0,
+        reach: parseInt(ins.reach) || 0,
+        conversions: m.conversions,
+        costPerConversion: m.costPerConversion,
+        purchaseValue: m.purchaseValue,
+        roas: m.roas,
+        leads: m.leads,
+        costPerLead: m.costPerLead,
+        purchases: m.purchases,
+        actionsJson: JSON.stringify(ins),
+      },
+    });
+  }
+
+  return insights.length;
+}
+
+async function syncGoogleQuick(
+  clientId: string,
+  accessToken: string,
+  refreshToken: string,
+  assets: Array<{ id: string; assetType: string; externalId: string; extraData: string }>,
+  date: string,
+): Promise<number> {
+  const account = assets.find((a) => a.assetType === "google_ads_account");
+  if (!account) return 0;
+
+  // Refresh token if needed
+  let token = accessToken;
+  if (refreshToken) {
+    const refreshed = await refreshGoogleToken(refreshToken);
+    if (refreshed) token = refreshed.access_token;
+  }
+
+  const extra = JSON.parse(account.extraData || "{}");
+  const mccId = extra.mccId ?? "";
+
+  const query = `SELECT campaign.id, campaign.name, campaign.status,
+    metrics.cost_micros, metrics.impressions, metrics.clicks,
+    metrics.conversions, metrics.conversions_value, segments.date
+    FROM campaign WHERE segments.date = '${date}'`;
+
+  const results = await searchStream(account.externalId, query, {
+    accessToken: token, loginCustomerId: mccId || undefined,
+  });
+
+  for (const row of results) {
+    const c = row.campaign ?? {};
+    const m = row.metrics ?? {};
+    const campaignId = String(c.id ?? "");
+    if (!campaignId) continue;
+
+    await prisma.googleAdsInsightDaily.upsert({
+      where: { assetId_campaignId_date: { assetId: account.id, campaignId, date } },
+      update: {
+        campaignName: c.name ?? "",
+        spend: Number(m.costMicros ?? 0) / 1_000_000,
+        impressions: Number(m.impressions ?? 0),
+        clicks: Number(m.clicks ?? 0),
+        conversions: Number(m.conversions ?? 0),
+        conversionsValue: Number(m.conversionsValue ?? 0),
+      },
+      create: {
+        clientId, assetId: account.id, campaignId, date,
+        campaignName: c.name ?? "",
+        spend: Number(m.costMicros ?? 0) / 1_000_000,
+        impressions: Number(m.impressions ?? 0),
+        clicks: Number(m.clicks ?? 0),
+        conversions: Number(m.conversions ?? 0),
+        conversionsValue: Number(m.conversionsValue ?? 0),
+      },
+    });
+  }
+
+  return results.length;
+}
+
+async function syncTikTokQuick(
+  clientId: string,
+  accessToken: string,
+  assets: Array<{ id: string; assetType: string; externalId: string }>,
+  date: string,
+): Promise<number> {
+  const account = assets.find((a) => a.assetType === "tiktok_ad_account");
+  if (!account) return 0;
+
+  const rows = await fetchCampaignReport(account.externalId, accessToken, date, date);
+
+  for (const row of rows) {
+    const campaignId = String(row.campaign_id ?? "");
+    const rowDate = String(row.stat_time_day ?? "").split(" ")[0];
+    if (!campaignId || !rowDate) continue;
+
+    await prisma.tikTokInsightDaily.upsert({
+      where: { assetId_campaignId_date: { assetId: account.id, campaignId, date: rowDate } },
+      update: {
+        spend: parseFloat(String(row.spend ?? "0")) || 0,
+        impressions: parseInt(String(row.impressions ?? "0")) || 0,
+        clicks: parseInt(String(row.clicks ?? "0")) || 0,
+        conversions: parseInt(String(row.conversion ?? "0")) || 0,
+      },
+      create: {
+        clientId, assetId: account.id, campaignId, date: rowDate,
+        spend: parseFloat(String(row.spend ?? "0")) || 0,
+        impressions: parseInt(String(row.impressions ?? "0")) || 0,
+        clicks: parseInt(String(row.clicks ?? "0")) || 0,
+        conversions: parseInt(String(row.conversion ?? "0")) || 0,
+      },
+    });
+  }
+
+  return rows.length;
+}
+
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
