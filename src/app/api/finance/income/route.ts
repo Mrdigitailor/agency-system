@@ -10,6 +10,38 @@ export async function GET(req: Request) {
   const month = parseInt(searchParams.get("month") ?? String(new Date().getMonth() + 1));
   const year = parseInt(searchParams.get("year") ?? String(new Date().getFullYear()));
 
+  // Auto-generate rows for active clients that don't have one yet
+  const activeClients = await prisma.client.findMany({
+    where: { status: { not: "inactive" }, deletedAt: null },
+    select: { id: true, name: true, monthlyRetainer: true },
+  });
+
+  const existingRows = await prisma.income.findMany({
+    where: { month, year },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const existingClientNames = new Set(existingRows.map((r) => r.clientName));
+  const existingClientIds = new Set(existingRows.filter((r) => r.clientId).map((r) => r.clientId));
+
+  const toCreate: Array<{ month: number; year: number; clientId: string; clientName: string; amount: number; vat: number }> = [];
+  for (const client of activeClients) {
+    if (existingClientIds.has(client.id) || existingClientNames.has(client.name)) continue;
+    const amount = client.monthlyRetainer ?? 0;
+    toCreate.push({
+      month, year,
+      clientId: client.id,
+      clientName: client.name,
+      amount,
+      vat: Math.round(amount * 0.18 * 100) / 100,
+    });
+  }
+
+  if (toCreate.length > 0) {
+    await prisma.income.createMany({ data: toCreate });
+  }
+
+  // Re-fetch with auto-generated rows
   const rows = await prisma.income.findMany({
     where: { month, year },
     orderBy: { createdAt: "desc" },

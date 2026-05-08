@@ -163,6 +163,8 @@ export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { data: session } = useSession();
+  const userRole = (session?.user as { role?: string })?.role ?? "";
+  const isAdmin = userRole === "admin";
   const { t, lang } = useLanguage();
   const { getClient, tasks, addTask, updateTask, addTaskNote, clients, employees, settings, updateClient } = useApp();
   const client = getClient(params.id as string);
@@ -617,6 +619,134 @@ export default function ClientDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* תנאי התקשרות — admin only */}
+          {isAdmin && (
+            <div className={cardClass}>
+              <h2 className="mb-4 text-lg font-semibold text-brand-dark">
+                {lang === "he" ? "תנאי התקשרות" : "Deal Terms"}
+              </h2>
+              {(() => {
+                const raw = client as unknown as Record<string, unknown>;
+                const dealType = (raw.dealType as string) ?? "";
+                const monthlyRetainer = (raw.monthlyRetainer as number) ?? 0;
+                const percentageRate = (raw.percentageRate as number) ?? 0;
+                const percentageBase = (raw.percentageBase as string) ?? "";
+                const specialTerms = (raw.specialTerms as string) ?? "";
+                const contractStart = (raw.contractStartDate as string) ?? "";
+                const contractEnd = (raw.contractEndDate as string) ?? "";
+
+                const DEAL_TYPES: Record<string, string> = {
+                  retainer: "ריטיינר",
+                  retainer_plus_percentage: "ריטיינר + אחוזים",
+                  percentage_only: "אחוזים בלבד",
+                  project: "פרויקט",
+                  other: "אחר",
+                };
+                const BASES: Record<string, string> = {
+                  ad_spend: "תקציב פרסום",
+                  revenue: "הכנסות",
+                  profit: "רווח",
+                };
+
+                const monthsWorked = contractStart
+                  ? Math.max(0, Math.round((Date.now() - new Date(contractStart).getTime()) / (30.44 * 24 * 60 * 60 * 1000)))
+                  : 0;
+                const ltv = monthlyRetainer * monthsWorked;
+                const sym = getCurrencySymbol(client.currency);
+
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      <div className="rounded-lg bg-brand-bg p-3">
+                        <p className="text-xs text-brand-muted">{lang === "he" ? "סוג עסקה" : "Deal Type"}</p>
+                        <select
+                          className="mt-1 w-full rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
+                          value={dealType}
+                          onChange={(e) => updateClient(client.id, { dealType: e.target.value } as Partial<typeof client>)}
+                        >
+                          <option value="">—</option>
+                          {Object.entries(DEAL_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                        </select>
+                      </div>
+                      <div className="rounded-lg bg-brand-bg p-3">
+                        <p className="text-xs text-brand-muted">{lang === "he" ? "ריטיינר חודשי" : "Monthly Retainer"}</p>
+                        <div className="mt-1 flex items-center gap-1">
+                          <span className="text-xs text-brand-muted">{sym}</span>
+                          <input
+                            type="number"
+                            className="w-full rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
+                            value={monthlyRetainer || ""}
+                            onChange={(e) => updateClient(client.id, { monthlyRetainer: Number(e.target.value) || 0 } as Partial<typeof client>)}
+                          />
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-brand-bg p-3">
+                        <p className="text-xs text-brand-muted">{lang === "he" ? "אחוזים" : "Percentage"}</p>
+                        <div className="mt-1 flex items-center gap-1">
+                          <input
+                            type="number"
+                            className="w-20 rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
+                            value={percentageRate || ""}
+                            onChange={(e) => updateClient(client.id, { percentageRate: Number(e.target.value) || 0 } as Partial<typeof client>)}
+                          />
+                          <span className="text-xs text-brand-muted">%</span>
+                          <select
+                            className="flex-1 rounded border border-brand-border bg-brand-light px-2 py-1 text-xs text-brand-dark"
+                            value={percentageBase}
+                            onChange={(e) => updateClient(client.id, { percentageBase: e.target.value } as Partial<typeof client>)}
+                          >
+                            <option value="">—</option>
+                            {Object.entries(BASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="rounded-lg bg-brand-bg p-3">
+                        <p className="text-xs text-brand-muted">{lang === "he" ? "תחילת התקשרות" : "Start Date"}</p>
+                        <input
+                          type="date"
+                          className="mt-1 w-full rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
+                          value={contractStart}
+                          onChange={(e) => updateClient(client.id, { contractStartDate: e.target.value } as Partial<typeof client>)}
+                        />
+                      </div>
+                      <div className="rounded-lg bg-brand-bg p-3">
+                        <p className="text-xs text-brand-muted">{lang === "he" ? "סיום התקשרות" : "End Date"}</p>
+                        <input
+                          type="date"
+                          className="mt-1 w-full rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
+                          value={contractEnd}
+                          onChange={(e) => updateClient(client.id, { contractEndDate: e.target.value } as Partial<typeof client>)}
+                        />
+                      </div>
+                      <div className="rounded-lg bg-brand-bg p-3">
+                        <p className="text-xs text-brand-muted">{lang === "he" ? "חודשי עבודה" : "Months"}</p>
+                        <p className="mt-1 text-lg font-semibold text-brand-dark">{monthsWorked}</p>
+                      </div>
+                      <div className="rounded-lg bg-brand-bg p-3">
+                        <p className="text-xs text-brand-muted">LTV</p>
+                        <p className="mt-1 text-lg font-semibold text-brand-dark">{sym}{ltv.toLocaleString()}</p>
+                      </div>
+                    </div>
+                    {(specialTerms || true) && (
+                      <div className="rounded-lg bg-brand-bg p-3">
+                        <p className="text-xs text-brand-muted">{lang === "he" ? "תנאים מיוחדים" : "Special Terms"}</p>
+                        <textarea
+                          className="mt-1 w-full rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
+                          rows={2}
+                          value={specialTerms}
+                          onChange={(e) => updateClient(client.id, { specialTerms: e.target.value } as Partial<typeof client>)}
+                          placeholder={lang === "he" ? "תנאים מיוחדים..." : "Special terms..."}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           {/* פרופיל מהיר */}
           <div className={cardClass}>
