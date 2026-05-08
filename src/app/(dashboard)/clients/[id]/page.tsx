@@ -225,6 +225,13 @@ export default function ClientDetailPage() {
     customAssets: [] as CustomAsset[],
     targetConversions: "" as string | number,
     targetCostPerConversion: "" as string | number,
+    dealType: "",
+    monthlyRetainer: 0 as number,
+    percentageRate: 0 as number,
+    percentageBase: "",
+    specialTerms: "",
+    contractStartDate: "",
+    contractEndDate: "",
   });
 
   useEffect(() => {
@@ -251,6 +258,13 @@ export default function ClientDetailPage() {
         customAssets: c.customAssets ?? [],
         targetConversions: c.performance.targetConversions,
         targetCostPerConversion: c.performance.targetCostPerConversion,
+        dealType: String((c as unknown as Record<string, unknown>).dealType ?? ""),
+        monthlyRetainer: Number((c as unknown as Record<string, unknown>).monthlyRetainer ?? 0),
+        percentageRate: Number((c as unknown as Record<string, unknown>).percentageRate ?? 0),
+        percentageBase: String((c as unknown as Record<string, unknown>).percentageBase ?? ""),
+        specialTerms: String((c as unknown as Record<string, unknown>).specialTerms ?? ""),
+        contractStartDate: String((c as unknown as Record<string, unknown>).contractStartDate ?? ""),
+        contractEndDate: String((c as unknown as Record<string, unknown>).contractEndDate ?? ""),
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -353,7 +367,7 @@ export default function ClientDetailPage() {
 
   async function handleUpdateClient() {
     if (!client) return;
-    await updateClient(client.id, {
+    await updateClient(client.id, ({
       name: editForm.name,
       campaignManager: editForm.campaignManager,
       accountManager: editForm.accountManager,
@@ -379,7 +393,15 @@ export default function ClientDetailPage() {
         targetConversions: Number(editForm.targetConversions) || 0,
         targetCostPerConversion: Number(editForm.targetCostPerConversion) || 0,
       },
-    });
+      // deal terms (admin only — API will filter for non-admin)
+      dealType: editForm.dealType,
+      monthlyRetainer: Number(editForm.monthlyRetainer) || 0,
+      percentageRate: Number(editForm.percentageRate) || 0,
+      percentageBase: editForm.percentageBase,
+      specialTerms: editForm.specialTerms,
+      contractStartDate: editForm.contractStartDate,
+      contractEndDate: editForm.contractEndDate,
+    }) as Partial<Client>);
     setIsEditOpen(false);
   }
 
@@ -544,6 +566,57 @@ export default function ClientDetailPage() {
                     <p className="text-sm text-brand-dark">{client.notes}</p>
                   </div>
                 )}
+                {/* תנאי התקשרות — admin only, inside general details */}
+                {isAdmin && (() => {
+                  const raw = client as unknown as Record<string, unknown>;
+                  const dealType = (raw.dealType as string) ?? "";
+                  const monthlyRetainer = (raw.monthlyRetainer as number) ?? 0;
+                  const percentageRate = (raw.percentageRate as number) ?? 0;
+                  const percentageBase = (raw.percentageBase as string) ?? "";
+                  const contractStart = (raw.contractStartDate as string) ?? "";
+                  const sym = getCurrencySymbol(client.currency);
+
+                  const DEAL_LABELS: Record<string, string> = { retainer: "ריטיינר", retainer_plus_percentage: "ריטיינר + אחוזים", percentage_only: "אחוזים בלבד", project: "פרויקט", other: "אחר" };
+                  const BASE_LABELS: Record<string, string> = { ad_spend: "תקציב פרסום", revenue: "הכנסות", profit: "רווח" };
+
+                  const monthsWorked = contractStart ? Math.max(0, Math.round((Date.now() - new Date(contractStart).getTime()) / (30.44 * 24 * 60 * 60 * 1000))) : 0;
+                  const retainerLtv = monthlyRetainer * monthsWorked;
+                  const totalSpend = (metaPerf?.totalSpend ?? 0);
+                  const percentageLtv = percentageRate > 0 ? (percentageRate / 100) * totalSpend : 0;
+                  const totalLtv = retainerLtv + percentageLtv;
+
+                  const dealLabel = dealType
+                    ? `${DEAL_LABELS[dealType] ?? dealType}${percentageRate > 0 ? ` + ${percentageRate}% ${BASE_LABELS[percentageBase] ?? ""}` : ""}`
+                    : "";
+
+                  if (!dealType && !monthlyRetainer) return null;
+
+                  return (
+                    <div className="border-t border-brand-border pt-3">
+                      <p className="mb-2 text-xs font-medium text-brand-muted">{lang === "he" ? "תנאי התקשרות" : "Deal Terms"}</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {dealLabel && (
+                          <div>
+                            <p className="text-xs text-brand-muted">{lang === "he" ? "תנאי עסקה" : "Deal"}</p>
+                            <p className="text-sm font-medium text-brand-dark">{dealLabel}</p>
+                          </div>
+                        )}
+                        {monthlyRetainer > 0 && (
+                          <div>
+                            <p className="text-xs text-brand-muted">{lang === "he" ? "ריטיינר" : "Retainer"}</p>
+                            <p className="text-sm font-semibold text-brand-dark">{sym}{monthlyRetainer.toLocaleString()}</p>
+                          </div>
+                        )}
+                        {totalLtv > 0 && (
+                          <div>
+                            <p className="text-xs text-brand-muted">{lang === "he" ? "הכנסות מצטברות" : "Total Revenue"}</p>
+                            <p className="text-sm font-semibold text-brand-success">{sym}{Math.round(totalLtv).toLocaleString()}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -619,134 +692,6 @@ export default function ClientDetailPage() {
               </div>
             </div>
           </div>
-
-          {/* תנאי התקשרות — admin only */}
-          {isAdmin && (
-            <div className={cardClass}>
-              <h2 className="mb-4 text-lg font-semibold text-brand-dark">
-                {lang === "he" ? "תנאי התקשרות" : "Deal Terms"}
-              </h2>
-              {(() => {
-                const raw = client as unknown as Record<string, unknown>;
-                const dealType = (raw.dealType as string) ?? "";
-                const monthlyRetainer = (raw.monthlyRetainer as number) ?? 0;
-                const percentageRate = (raw.percentageRate as number) ?? 0;
-                const percentageBase = (raw.percentageBase as string) ?? "";
-                const specialTerms = (raw.specialTerms as string) ?? "";
-                const contractStart = (raw.contractStartDate as string) ?? "";
-                const contractEnd = (raw.contractEndDate as string) ?? "";
-
-                const DEAL_TYPES: Record<string, string> = {
-                  retainer: "ריטיינר",
-                  retainer_plus_percentage: "ריטיינר + אחוזים",
-                  percentage_only: "אחוזים בלבד",
-                  project: "פרויקט",
-                  other: "אחר",
-                };
-                const BASES: Record<string, string> = {
-                  ad_spend: "תקציב פרסום",
-                  revenue: "הכנסות",
-                  profit: "רווח",
-                };
-
-                const monthsWorked = contractStart
-                  ? Math.max(0, Math.round((Date.now() - new Date(contractStart).getTime()) / (30.44 * 24 * 60 * 60 * 1000)))
-                  : 0;
-                const ltv = monthlyRetainer * monthsWorked;
-                const sym = getCurrencySymbol(client.currency);
-
-                return (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      <div className="rounded-lg bg-brand-bg p-3">
-                        <p className="text-xs text-brand-muted">{lang === "he" ? "סוג עסקה" : "Deal Type"}</p>
-                        <select
-                          className="mt-1 w-full rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
-                          value={dealType}
-                          onChange={(e) => updateClient(client.id, { dealType: e.target.value } as Partial<typeof client>)}
-                        >
-                          <option value="">—</option>
-                          {Object.entries(DEAL_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                        </select>
-                      </div>
-                      <div className="rounded-lg bg-brand-bg p-3">
-                        <p className="text-xs text-brand-muted">{lang === "he" ? "ריטיינר חודשי" : "Monthly Retainer"}</p>
-                        <div className="mt-1 flex items-center gap-1">
-                          <span className="text-xs text-brand-muted">{sym}</span>
-                          <input
-                            type="number"
-                            className="w-full rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
-                            value={monthlyRetainer || ""}
-                            onChange={(e) => updateClient(client.id, { monthlyRetainer: Number(e.target.value) || 0 } as Partial<typeof client>)}
-                          />
-                        </div>
-                      </div>
-                      <div className="rounded-lg bg-brand-bg p-3">
-                        <p className="text-xs text-brand-muted">{lang === "he" ? "אחוזים" : "Percentage"}</p>
-                        <div className="mt-1 flex items-center gap-1">
-                          <input
-                            type="number"
-                            className="w-20 rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
-                            value={percentageRate || ""}
-                            onChange={(e) => updateClient(client.id, { percentageRate: Number(e.target.value) || 0 } as Partial<typeof client>)}
-                          />
-                          <span className="text-xs text-brand-muted">%</span>
-                          <select
-                            className="flex-1 rounded border border-brand-border bg-brand-light px-2 py-1 text-xs text-brand-dark"
-                            value={percentageBase}
-                            onChange={(e) => updateClient(client.id, { percentageBase: e.target.value } as Partial<typeof client>)}
-                          >
-                            <option value="">—</option>
-                            {Object.entries(BASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <div className="rounded-lg bg-brand-bg p-3">
-                        <p className="text-xs text-brand-muted">{lang === "he" ? "תחילת התקשרות" : "Start Date"}</p>
-                        <input
-                          type="date"
-                          className="mt-1 w-full rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
-                          value={contractStart}
-                          onChange={(e) => updateClient(client.id, { contractStartDate: e.target.value } as Partial<typeof client>)}
-                        />
-                      </div>
-                      <div className="rounded-lg bg-brand-bg p-3">
-                        <p className="text-xs text-brand-muted">{lang === "he" ? "סיום התקשרות" : "End Date"}</p>
-                        <input
-                          type="date"
-                          className="mt-1 w-full rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
-                          value={contractEnd}
-                          onChange={(e) => updateClient(client.id, { contractEndDate: e.target.value } as Partial<typeof client>)}
-                        />
-                      </div>
-                      <div className="rounded-lg bg-brand-bg p-3">
-                        <p className="text-xs text-brand-muted">{lang === "he" ? "חודשי עבודה" : "Months"}</p>
-                        <p className="mt-1 text-lg font-semibold text-brand-dark">{monthsWorked}</p>
-                      </div>
-                      <div className="rounded-lg bg-brand-bg p-3">
-                        <p className="text-xs text-brand-muted">LTV</p>
-                        <p className="mt-1 text-lg font-semibold text-brand-dark">{sym}{ltv.toLocaleString()}</p>
-                      </div>
-                    </div>
-                    {(specialTerms || true) && (
-                      <div className="rounded-lg bg-brand-bg p-3">
-                        <p className="text-xs text-brand-muted">{lang === "he" ? "תנאים מיוחדים" : "Special Terms"}</p>
-                        <textarea
-                          className="mt-1 w-full rounded border border-brand-border bg-brand-light px-2 py-1 text-sm text-brand-dark"
-                          rows={2}
-                          value={specialTerms}
-                          onChange={(e) => updateClient(client.id, { specialTerms: e.target.value } as Partial<typeof client>)}
-                          placeholder={lang === "he" ? "תנאים מיוחדים..." : "Special terms..."}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          )}
 
           {/* פרופיל מהיר */}
           <div className={cardClass}>
@@ -1408,6 +1353,55 @@ export default function ClientDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* תנאי התקשרות — admin only */}
+          {isAdmin && (
+            <div className="space-y-4 border-t border-brand-border pt-4">
+              <h3 className="text-sm font-semibold text-brand-dark">{lang === "he" ? "תנאי התקשרות" : "Deal Terms"}</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "סוג עסקה" : "Deal Type"}</label>
+                  <select className={inputClass} value={editForm.dealType ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, dealType: e.target.value } as typeof p))}>
+                    <option value="">—</option>
+                    <option value="retainer">ריטיינר</option>
+                    <option value="retainer_plus_percentage">ריטיינר + אחוזים</option>
+                    <option value="percentage_only">אחוזים בלבד</option>
+                    <option value="project">פרויקט</option>
+                    <option value="other">אחר</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "ריטיינר חודשי (₪)" : "Monthly Retainer (₪)"}</label>
+                  <input type="number" className={inputClass} value={editForm.monthlyRetainer ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, monthlyRetainer: Number(e.target.value) || 0 } as typeof p))} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "אחוזים (%)" : "Percentage (%)"}</label>
+                  <input type="number" className={inputClass} value={editForm.percentageRate ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, percentageRate: Number(e.target.value) || 0 } as typeof p))} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "בסיס אחוזים" : "Percentage Base"}</label>
+                  <select className={inputClass} value={editForm.percentageBase ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, percentageBase: e.target.value } as typeof p))}>
+                    <option value="">—</option>
+                    <option value="ad_spend">תקציב פרסום</option>
+                    <option value="revenue">הכנסות</option>
+                    <option value="profit">רווח</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "תחילת התקשרות" : "Contract Start"}</label>
+                  <input type="date" className={inputClass} value={editForm.contractStartDate ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, contractStartDate: e.target.value } as typeof p))} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "סיום התקשרות" : "Contract End"}</label>
+                  <input type="date" className={inputClass} value={editForm.contractEndDate ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, contractEndDate: e.target.value } as typeof p))} />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "תנאים מיוחדים" : "Special Terms"}</label>
+                <textarea className={inputClass} rows={2} value={editForm.specialTerms ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, specialTerms: e.target.value } as typeof p))} />
+              </div>
+            </div>
+          )}
 
           {/* נכסים דיגיטליים מותאמים */}
           <div className="space-y-3 border-t border-brand-border pt-4">
