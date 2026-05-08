@@ -35,7 +35,7 @@ export default function TasksPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("open");
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [noteText, setNoteText] = useState("");
@@ -71,6 +71,7 @@ export default function TasksPage() {
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
+      if (filterStatus === "open") return t.status !== "done"; // pending + in_progress + overdue
       if (filterStatus === "overdue") return isOverdue(t);
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterPriority !== "all" && t.priority !== filterPriority) return false;
@@ -183,6 +184,7 @@ export default function TasksPage() {
       <div className="flex flex-wrap items-center gap-3">
         <Filter className="h-4 w-4 text-brand-muted" />
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none">
+          <option value="open">{t('openTasks')}</option>
           <option value="all">{t('allStatuses')}</option>
           {TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           <option value="overdue">{t('overdue')}</option>

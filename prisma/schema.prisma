@@ -60,6 +60,15 @@ model Client {
   updatedAt     DateTime @updatedAt
   deletedAt     DateTime?
 
+  // תנאי התקשרות (admin only)
+  dealType          String   @default("") // retainer / retainer_plus_percentage / percentage_only / project / other
+  monthlyRetainer   Float    @default(0)
+  percentageRate    Float    @default(0)
+  percentageBase    String   @default("") // ad_spend / revenue / profit
+  specialTerms      String   @default("")
+  contractStartDate String   @default("")
+  contractEndDate   String   @default("")
+
   // נכסים דיגיטליים
   metaAdAccount   String @default("")
   googleAdAccount String @default("")
@@ -805,6 +814,28 @@ model TikTokInsightDaily {
   @@unique([assetId, campaignId, date])
   @@index([clientId, date])
   @@map("tiktok_insight_daily")
+}
+
+// ==================== נתוני Google Analytics ====================
+
+model GoogleAnalyticsDaily {
+  id                  String   @id @default(cuid())
+  clientId            String
+  propertyId          String
+  date                String
+  sessions            Int      @default(0)
+  users               Int      @default(0)
+  newUsers            Int      @default(0)
+  bounceRate          Float    @default(0)
+  avgSessionDuration  Float    @default(0)
+  pageViews           Int      @default(0)
+  conversions         Int      @default(0)
+  events              Int      @default(0)
+  createdAt           DateTime @default(now())
+
+  @@unique([clientId, propertyId, date])
+  @@index([clientId, date])
+  @@map("google_analytics_daily")
 }
 
 // לוג סנכרון — תיעוד כל ריצה של שליפת נתונים

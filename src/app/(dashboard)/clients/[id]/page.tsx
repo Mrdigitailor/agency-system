@@ -169,9 +169,13 @@ export default function ClientDetailPage() {
 
   // נתוני ביצועים מ-Meta (החודש הנוכחי)
   const [metaPerf, setMetaPerf] = useState<{ totalSpend: number; totalConversions: number; avgCostPerConv: number; hasMetaData: boolean; lastOptimization: string | null; lastSync?: string | null; metaSpend?: number; metaConversions?: number; gadsSpend?: number; gadsConversions?: number; ttSpend?: number; ttConversions?: number } | null>(null);
+  const [connectedPlatforms, setConnectedPlatforms] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (!client?.id) return;
     fetch(`/api/clients/${client.id}/performance`).then((r) => r.json()).then(setMetaPerf).catch(() => {});
+    fetch(`/api/clients/${client.id}/connections`).then((r) => r.json()).then((conns: Array<{ platform: string }>) => {
+      setConnectedPlatforms(new Set(conns.map((c) => c.platform)));
+    }).catch(() => {});
   }, [client?.id]);
 
   const [activeTab, setActiveTab] = useState<TabId>("overview");
@@ -642,9 +646,14 @@ export default function ClientDetailPage() {
       {/* ===== טאב 2 — קמפיינים ===== */}
       {activeTab === "campaigns" && (
         <div className="space-y-8">
-          <MetaCampaignsTab clientId={client.id} currency={client.currency ?? "ILS"} />
-          <GoogleAdsCampaignsTab clientId={client.id} currency={client.currency ?? "ILS"} />
-          <TikTokCampaignsTab clientId={client.id} currency={client.currency ?? "ILS"} />
+          {connectedPlatforms.has("meta") && <MetaCampaignsTab clientId={client.id} currency={client.currency ?? "ILS"} />}
+          {connectedPlatforms.has("google_ads") && <GoogleAdsCampaignsTab clientId={client.id} currency={client.currency ?? "ILS"} />}
+          {connectedPlatforms.has("tiktok") && <TikTokCampaignsTab clientId={client.id} currency={client.currency ?? "ILS"} />}
+          {connectedPlatforms.size === 0 && (
+            <div className="rounded-lg border border-brand-border bg-brand-light p-8 text-center">
+              <p className="text-sm text-brand-muted">{t("noData")}</p>
+            </div>
+          )}
         </div>
       )}
 

@@ -29,6 +29,7 @@ const PLATFORMS = [
   { id: "meta", label: "Meta (Facebook + Instagram)", color: "#0081FB", icon: "M" },
   { id: "google_ads", label: "Google Ads", color: "#4285F4", icon: "G" },
   { id: "tiktok", label: "TikTok Ads", color: "#000000", icon: "T" },
+  { id: "ga4", label: "Google Analytics", color: "#E37400", icon: "A" },
 ];
 
 function getAssetTypeLabels(t: (key: string) => string): Record<string, string> {
@@ -122,6 +123,13 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
           window.location.href = data.authUrl;
           return;
         }
+      }
+
+      // Google Analytics — OAuth
+      if (platform === "ga4") {
+        const res = await fetch(`/api/platforms/google-analytics/connect?clientId=${clientId}`);
+        const data = await res.json();
+        if (data.authUrl) { window.location.href = data.authUrl; return; }
       }
 
       // פלטפורמות אחרות — דמו
