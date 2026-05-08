@@ -68,6 +68,8 @@ model Client {
   specialTerms      String   @default("")
   contractStartDate String   @default("")
   contractEndDate   String   @default("")
+  publicDashboardToken   String?  @unique
+  publicDashboardEnabled Boolean  @default(false)
 
   // נכסים דיגיטליים
   metaAdAccount   String @default("")
@@ -814,6 +816,26 @@ model TikTokInsightDaily {
   @@unique([assetId, campaignId, date])
   @@index([clientId, date])
   @@map("tiktok_insight_daily")
+}
+
+// ==================== Dashboard Widgets ====================
+
+model DashboardWidget {
+  id          String   @id @default(cuid())
+  clientId    String
+  sortOrder   Int      @default(0)
+  platform    String   @default("meta") // meta | google_ads | tiktok | ga4 | all
+  dataLevel   String   @default("campaign") // campaign | adset | ad | account | etc
+  metrics     String   @default("[]") // JSON array of metric IDs
+  dimension   String   @default("date") // date | week | month | gender | age | device
+  filters     String   @default("[]") // JSON array of { field, operator, value }
+  displayType String   @default("table") // table | kpi | line | bar | pie | area
+  size        String   @default("full") // full | half | third
+  title       String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([clientId, sortOrder])
+  @@map("dashboard_widgets")
 }
 
 // ==================== נתוני Google Analytics ====================
