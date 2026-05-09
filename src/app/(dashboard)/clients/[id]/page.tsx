@@ -517,56 +517,50 @@ export default function ClientDetailPage() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* פרטים כלליים */}
             <div className={cardClass}>
-              <h2 className="mb-4 text-lg font-semibold text-brand-dark">פרטים כלליים</h2>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Mail className="h-4 w-4 text-brand-muted" />
-                  <span className="text-sm text-brand-dark">{client.contactEmail || "—"}</span>
+              <h2 className="mb-4 text-lg font-semibold text-brand-dark">{t("clientDetails")}</h2>
+              <div className="space-y-4">
+                {/* שורה 1 — פרטי קשר */}
+                <div className="grid grid-cols-3 gap-3 rounded-lg bg-brand-bg p-3">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-brand-muted" />
+                    <div>
+                      <p className="text-[10px] text-brand-muted">{t("email")}</p>
+                      <p className="text-sm text-brand-dark">{client.contactEmail || "—"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-brand-muted" />
+                    <div>
+                      <p className="text-[10px] text-brand-muted">{t("phone")}</p>
+                      <p className="text-sm text-brand-dark">{client.contactPhone || "—"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-brand-muted" />
+                    <div>
+                      <p className="text-[10px] text-brand-muted">{t("joined")}</p>
+                      <p className="text-sm text-brand-dark">{formatDate(client.createdAt)}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Phone className="h-4 w-4 text-brand-muted" />
-                  <span className="text-sm text-brand-dark">{client.contactPhone || "—"}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Calendar className="h-4 w-4 text-brand-muted" />
-                  <span className="text-sm text-brand-dark">הצטרף: {formatDate(client.createdAt)}</span>
-                </div>
-                <div className="border-t border-brand-border pt-3">
-                  <p className="mb-1 text-xs font-medium text-brand-muted">תקציב חודשי</p>
-                  <p className="text-2xl font-semibold text-brand-dark">
-                    {getCurrencySymbol(client.currency)} {client.monthlyBudget.toLocaleString()}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3 border-t border-brand-border pt-3">
+
+                {/* שורה 2 — יעדי פרסום */}
+                <div className="grid grid-cols-3 gap-3 rounded-lg bg-brand-bg p-3">
                   <div>
-                    <p className="text-xs font-medium text-brand-muted">יעד המרות</p>
-                    <p className="mt-0.5 text-sm font-semibold text-brand-dark">{perf.targetConversions.toLocaleString()}</p>
+                    <p className="text-[10px] text-brand-muted">{t("monthlyBudget")}</p>
+                    <p className="text-lg font-semibold text-brand-gold">{getCurrencySymbol(client.currency)}{client.monthlyBudget.toLocaleString()}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-brand-muted">יעד עלות להמרה</p>
-                    <p className="mt-0.5 text-sm font-semibold text-brand-dark">{getCurrencySymbol(client.currency)} {perf.targetCostPerConversion}</p>
+                    <p className="text-[10px] text-brand-muted">{t("targetConversions")}</p>
+                    <p className="text-lg font-semibold text-brand-dark">{perf.targetConversions > 0 ? perf.targetConversions.toLocaleString() : "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-brand-muted">{t("targetCPA")}</p>
+                    <p className="text-lg font-semibold text-brand-dark">{perf.targetCostPerConversion > 0 ? `${getCurrencySymbol(client.currency)}${perf.targetCostPerConversion}` : "—"}</p>
                   </div>
                 </div>
-                <div className="border-t border-brand-border pt-3">
-                  <p className="mb-2 text-xs font-medium text-brand-muted">פלטפורמות</p>
-                  <div className="flex flex-wrap gap-2">
-                    {client.platforms.map((p) => (
-                      <span
-                        key={p}
-                        className="rounded-lg border border-brand-gold/30 bg-brand-gold/10 px-3 py-1 text-sm text-brand-dark"
-                      >
-                        {p}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                {client.notes && (
-                  <div className="border-t border-brand-border pt-3">
-                    <p className="mb-1 text-xs font-medium text-brand-muted">הערות</p>
-                    <p className="text-sm text-brand-dark">{client.notes}</p>
-                  </div>
-                )}
-                {/* תנאי התקשרות — admin only, inside general details */}
+
+                {/* שורה 3 — תנאי התקשרות (admin only) */}
                 {isAdmin && (() => {
                   const raw = client as unknown as Record<string, unknown>;
                   const dealType = (raw.dealType as string) ?? "";
@@ -574,14 +568,17 @@ export default function ClientDetailPage() {
                   const percentageRate = (raw.percentageRate as number) ?? 0;
                   const percentageBase = (raw.percentageBase as string) ?? "";
                   const contractStart = (raw.contractStartDate as string) ?? "";
+                  const contractEnd = (raw.contractEndDate as string) ?? "";
                   const sym = getCurrencySymbol(client.currency);
 
                   const DEAL_LABELS: Record<string, string> = { retainer: "ריטיינר", retainer_plus_percentage: "ריטיינר + אחוזים", percentage_only: "אחוזים בלבד", project: "פרויקט", other: "אחר" };
-                  const BASE_LABELS: Record<string, string> = { ad_spend: "תקציב פרסום", revenue: "הכנסות", profit: "רווח" };
+                  const BASE_LABELS: Record<string, string> = { ad_spend: "תקציב פרסום", revenue: "הכנסות", profit: "רווח", cashflow: "תזרים" };
 
-                  const monthsWorked = contractStart ? Math.max(0, Math.round((Date.now() - new Date(contractStart).getTime()) / (30.44 * 24 * 60 * 60 * 1000))) : 0;
+                  const endPoint = contractEnd ? new Date(contractEnd) : new Date();
+                  const startPoint = contractStart ? new Date(contractStart) : null;
+                  const monthsWorked = startPoint ? Math.max(0, Math.round((endPoint.getTime() - startPoint.getTime()) / (30.44 * 24 * 60 * 60 * 1000))) : 0;
                   const retainerLtv = monthlyRetainer * monthsWorked;
-                  const totalSpend = (metaPerf?.totalSpend ?? 0);
+                  const totalSpend = metaPerf?.totalSpend ?? 0;
                   const percentageLtv = percentageRate > 0 ? (percentageRate / 100) * totalSpend : 0;
                   const totalLtv = retainerLtv + percentageLtv;
 
@@ -589,30 +586,21 @@ export default function ClientDetailPage() {
                     ? `${DEAL_LABELS[dealType] ?? dealType}${percentageRate > 0 ? ` + ${percentageRate}% ${BASE_LABELS[percentageBase] ?? ""}` : ""}`
                     : "";
 
-                  if (!dealType && !monthlyRetainer) return null;
-
                   return (
-                    <div className="border-t border-brand-border pt-3">
-                      <p className="mb-2 text-xs font-medium text-brand-muted">{lang === "he" ? "תנאי התקשרות" : "Deal Terms"}</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {dealLabel && (
-                          <div>
-                            <p className="text-xs text-brand-muted">{lang === "he" ? "תנאי עסקה" : "Deal"}</p>
-                            <p className="text-sm font-medium text-brand-dark">{dealLabel}</p>
-                          </div>
-                        )}
-                        {monthlyRetainer > 0 && (
-                          <div>
-                            <p className="text-xs text-brand-muted">{lang === "he" ? "ריטיינר" : "Retainer"}</p>
-                            <p className="text-sm font-semibold text-brand-dark">{sym}{monthlyRetainer.toLocaleString()}</p>
-                          </div>
-                        )}
-                        {totalLtv > 0 && (
-                          <div>
-                            <p className="text-xs text-brand-muted">{lang === "he" ? "הכנסות מצטברות" : "Total Revenue"}</p>
-                            <p className="text-sm font-semibold text-brand-success">{sym}{Math.round(totalLtv).toLocaleString()}</p>
-                          </div>
-                        )}
+                    <div className="grid grid-cols-3 gap-3 rounded-lg border border-brand-gold/20 bg-brand-gold/5 p-3">
+                      <div>
+                        <p className="text-[10px] text-brand-muted">{lang === "he" ? "תנאי עסקה" : "Deal"}</p>
+                        <p className="text-sm font-medium text-brand-dark">{dealLabel || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-brand-muted">{lang === "he" ? "ריטיינר חודשי" : "Retainer"}</p>
+                        <p className="text-lg font-semibold text-brand-gold">{monthlyRetainer > 0 ? `${sym}${monthlyRetainer.toLocaleString()}` : "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-brand-muted">LTV</p>
+                        <p className="text-lg font-semibold text-brand-gold">
+                          {monthsWorked > 0 ? `${monthsWorked} ${lang === "he" ? "חודשים" : "months"} · ${sym}${Math.round(totalLtv).toLocaleString()}` : "—"}
+                        </p>
                       </div>
                     </div>
                   );
@@ -1385,6 +1373,7 @@ export default function ClientDetailPage() {
                     <option value="ad_spend">תקציב פרסום</option>
                     <option value="revenue">הכנסות</option>
                     <option value="profit">רווח</option>
+                    <option value="cashflow">תזרים</option>
                   </select>
                 </div>
                 <div>
