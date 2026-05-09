@@ -70,7 +70,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     select: { date: true, createdAt: true },
   });
 
-  console.log(`[Performance] client=${clientId} | event=${selectedEventRaw} | metaSpend=${metaSpend} | gadsSpend=${gadsSpend} | totalSpend=${totalSpend} | conv=${conversions} | CPA=${Math.round(avgCostPerConv)}`);
+  console.log(`[Performance] client=${clientId} | event="${selectedEventRaw}" | range=${since}→${until}`);
+  console.log(`  Meta: spend=${metaSpend.toFixed(2)}, conversions=${metaConversions} (filtered by "${selectedEventRaw || "ALL"}"), raw conversions field=${insights.reduce((s, i) => s + i.conversions, 0)}, purchases=${totalPurchases}, leads=${totalLeads}`);
+  console.log(`  Google: spend=${gadsSpend.toFixed(2)}, conversions=${gadsConversions}`);
+  console.log(`  TikTok: spend=${ttSpend.toFixed(2)}, conversions=${ttConversions}`);
+  console.log(`  Total: spend=${totalSpend.toFixed(2)}, conversions=${conversions}, CPA=${avgCostPerConv.toFixed(2)}`);
 
   return NextResponse.json({
     range: { since, until },

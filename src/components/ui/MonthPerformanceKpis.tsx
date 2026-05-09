@@ -184,6 +184,15 @@ export default function MonthPerformanceKpis({
               <span>{formatCurrency(cpcMaxScale, currency)}</span>
             </div>
           </div>
+          {hasBreakdown && (
+            <div className="mt-2 border-t border-brand-border/60 pt-2 text-[11px] text-brand-muted">
+              {(metaSpend ?? 0) > 0 && <span>Meta: {(metaConversions ?? 0) > 0 ? formatCurrency((metaSpend ?? 0) / (metaConversions ?? 1), currency) : "—"}</span>}
+              {(metaSpend ?? 0) > 0 && (gadsSpend ?? 0) > 0 && <span> · </span>}
+              {(gadsSpend ?? 0) > 0 && <span>Google: {(gadsConversions ?? 0) > 0 ? formatCurrency((gadsSpend ?? 0) / (gadsConversions ?? 1), currency) : "—"}</span>}
+              {((metaSpend ?? 0) > 0 || (gadsSpend ?? 0) > 0) && (ttSpend ?? 0) > 0 && <span> · </span>}
+              {(ttSpend ?? 0) > 0 && <span>TikTok: {(ttConversions ?? 0) > 0 ? formatCurrency((ttSpend ?? 0) / (ttConversions ?? 1), currency) : "—"}</span>}
+            </div>
+          )}
         </div>
 
         {/* ============ קוביית המרות ============ */}
@@ -209,6 +218,15 @@ export default function MonthPerformanceKpis({
               <span className="text-xs font-normal text-brand-muted"> · {daysRemaining} {t('daysRemaining')}</span>
             </p>
           </div>
+          {hasBreakdown && (
+            <div className="mt-2 border-t border-brand-border/60 pt-2 text-[11px] text-brand-muted">
+              {(metaConversions ?? 0) > 0 && <span>Meta: {(metaConversions ?? 0).toLocaleString()}</span>}
+              {(metaConversions ?? 0) > 0 && (gadsConversions ?? 0) > 0 && <span> · </span>}
+              {(gadsConversions ?? 0) > 0 && <span>Google: {(gadsConversions ?? 0).toLocaleString()}</span>}
+              {((metaConversions ?? 0) > 0 || (gadsConversions ?? 0) > 0) && (ttConversions ?? 0) > 0 && <span> · </span>}
+              {(ttConversions ?? 0) > 0 && <span>TikTok: {(ttConversions ?? 0).toLocaleString()}</span>}
+            </div>
+          )}
         </div>
       </div>
     </div>
