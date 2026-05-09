@@ -188,6 +188,7 @@ export default function ClientDetailPage() {
   const [newCampaign, setNewCampaign] = useState({ name: "", platform: "Meta", dailyBudget: "" });
 
   /* משימות — מודל */
+  const [showCompletedTasks, setShowCompletedTasks] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [taskEditForm, setTaskEditForm] = useState({ title: "", description: "", assignee: "", priority: "medium" as string, dueDate: "", status: "pending" as string, taskType: "other" as string, platform: "" });
@@ -842,18 +843,37 @@ export default function ClientDetailPage() {
       )}
 
       {/* ===== טאב 7 — משימות ===== */}
-      {activeTab === "tasks" && (
+      {activeTab === "tasks" && (() => {
+        const activeTasks = clientTasks.filter((t) => t.status !== "done");
+        const completedTasks = clientTasks.filter((t) => t.status === "done");
+        const visibleTasks = showCompletedTasks ? [...activeTasks, ...completedTasks] : activeTasks;
+
+        return (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-brand-dark">משימות ({clientTasks.length})</h2>
-            <button onClick={() => setShowTaskModal(true)} className={`inline-flex items-center gap-2 ${btnPrimary}`}>
-              <Plus className="h-4 w-4" />
-              הוסף משימה
-            </button>
+            <h2 className="text-lg font-semibold text-brand-dark">משימות ({activeTasks.length})</h2>
+            <div className="flex items-center gap-3">
+              {completedTasks.length > 0 && (
+                <button
+                  onClick={() => setShowCompletedTasks((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors duration-200 ${
+                    showCompletedTasks
+                      ? "border-brand-gold/30 bg-brand-gold/10 text-brand-dark"
+                      : "border-brand-border bg-brand-light text-brand-muted hover:bg-brand-bg"
+                  }`}
+                >
+                  {showCompletedTasks ? "הסתר" : "הצג"} משימות שהושלמו ({completedTasks.length})
+                </button>
+              )}
+              <button onClick={() => setShowTaskModal(true)} className={`inline-flex items-center gap-2 ${btnPrimary}`}>
+                <Plus className="h-4 w-4" />
+                הוסף משימה
+              </button>
+            </div>
           </div>
 
           <div className={cardClass}>
-            {clientTasks.length === 0 ? (
+            {visibleTasks.length === 0 ? (
               <p className="text-sm text-brand-muted">אין משימות ללקוח זה</p>
             ) : (
               <div className="overflow-x-auto">
@@ -865,12 +885,14 @@ export default function ClientDetailPage() {
                       <th className="px-4 py-3 text-xs font-medium text-brand-muted">עדיפות</th>
                       <th className="px-4 py-3 text-xs font-medium text-brand-muted">תאריך יעד</th>
                       <th className="px-4 py-3 text-xs font-medium text-brand-muted">סטטוס</th>
+                      {showCompletedTasks && <th className="px-4 py-3 text-xs font-medium text-brand-muted"></th>}
                     </tr>
                   </thead>
                   <tbody>
-                    {clientTasks.map((task) => {
+                    {visibleTasks.map((task) => {
                       const pri = getPriorityInfo(task.priority);
                       const ts = getTaskStatusInfo(task.status);
+                      const isDone = task.status === "done";
                       return (
                         <tr
                           key={task.id}
@@ -887,10 +909,10 @@ export default function ClientDetailPage() {
                               platform: task.platform,
                             });
                           }}
-                          className="cursor-pointer border-b border-brand-border/50 transition-colors duration-200 hover:bg-brand-bg/30"
+                          className={`cursor-pointer border-b border-brand-border/50 transition-colors duration-200 hover:bg-brand-bg/30 ${isDone ? "opacity-60" : ""}`}
                         >
                           <td className="px-4 py-3">
-                            <p className="font-medium text-brand-dark">{task.title}</p>
+                            <p className={`font-medium text-brand-dark ${isDone ? "line-through" : ""}`}>{task.title}</p>
                             {task.description && (
                               <p className="mt-0.5 text-xs text-brand-muted">{task.description}</p>
                             )}
@@ -903,6 +925,21 @@ export default function ClientDetailPage() {
                           </td>
                           <td className="px-4 py-3 text-brand-dark">{formatDate(task.dueDate)}</td>
                           <td className="px-4 py-3 text-brand-dark">{ts.label}</td>
+                          {showCompletedTasks && (
+                            <td className="px-4 py-3">
+                              {isDone && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateTask(task.id, { status: "pending" });
+                                  }}
+                                  className="whitespace-nowrap rounded-lg border border-brand-border px-2.5 py-1 text-xs font-medium text-brand-muted transition-colors duration-200 hover:bg-brand-bg hover:text-brand-dark"
+                                >
+                                  הפעל מחדש
+                                </button>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -1137,7 +1174,8 @@ export default function ClientDetailPage() {
             })()}
           </Modal>
         </div>
-      )}
+        );
+      })()}
 
       {/* ===== טאב צ׳אט AI ===== */}
       {activeTab === "ai" && <AiChatTab clientId={client.id} clientName={client.name} />}
