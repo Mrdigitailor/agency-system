@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
-import { countConversions } from "@/lib/utils/metaMetrics";
+import { countConversions, breakdownConversions } from "@/lib/utils/metaMetrics";
 
 /**
  * GET /api/clients/[id]/performance?since=...&until=...
@@ -70,8 +70,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     select: { date: true, createdAt: true },
   });
 
+  const metaBreakdown = breakdownConversions(insights, selectedEventRaw);
   console.log(`[Performance] client=${clientId} | event="${selectedEventRaw}" | range=${since}→${until}`);
-  console.log(`  Meta: spend=${metaSpend.toFixed(2)}, conversions=${metaConversions} (filtered by "${selectedEventRaw || "ALL"}"), raw conversions field=${insights.reduce((s, i) => s + i.conversions, 0)}, purchases=${totalPurchases}, leads=${totalLeads}`);
+  console.log(`  Meta: spend=${metaSpend.toFixed(2)}, filteredConversions=${metaConversions}, rawConversionsField=${insights.reduce((s, i) => s + i.conversions, 0)}, rawLeadsField=${totalLeads}, rawPurchasesField=${totalPurchases}`);
+  console.log(`  Meta breakdown by event:`, metaBreakdown.map((b) => `${b.event}=${b.count}`).join(", "));
   console.log(`  Google: spend=${gadsSpend.toFixed(2)}, conversions=${gadsConversions}`);
   console.log(`  TikTok: spend=${ttSpend.toFixed(2)}, conversions=${ttConversions}`);
   console.log(`  Total: spend=${totalSpend.toFixed(2)}, conversions=${conversions}, CPA=${avgCostPerConv.toFixed(2)}`);

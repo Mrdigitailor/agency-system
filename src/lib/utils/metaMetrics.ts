@@ -24,8 +24,32 @@ export function parseConversionEvents(raw: string): string[] {
 }
 
 /**
+ * חלץ actions מ-actionsJson — מנרמל מבנים שונים
+ */
+function extractActions(actionsJson: string): Array<{ action_type: string; value: string }> {
+  if (!actionsJson) return [];
+  try {
+    const parsed = JSON.parse(actionsJson);
+    // actionsJson = JSON.stringify(ins) — כל ה-insight object מ-Meta API
+    // ל-insight יש שדה actions שהוא מערך
+    if (parsed.actions && Array.isArray(parsed.actions)) return parsed.actions;
+    // fallback — אם השדה עצמו הוא מערך
+    if (Array.isArray(parsed)) return parsed;
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * חישוב conversions לפי event types שנבחרו (תומך במערך)
- * אם selectedEvents ריק — מחזיר conversions כללי
+ * אם selectedEvents ריק — מחזיר conversions כללי מהשדה conversions
+ *
+ * חשוב: כל הספירה עוברת דרך actionsJson כדי למנוע כפילויות.
+ * לא משתמשים ב-shortcuts של i.leads / i.purchases כי:
+ * - שדה leads ב-DB = getActionValue(["lead"]) שזה סיכום כללי
+ * - המשתמש יכול לבחור events ספציפיים כמו offsite_conversion.fb_pixel_lead
+ *   + onsite_conversion.lead_grouped — ואם נשתמש ב-i.leads זה ייצור כפילות
  */
 export function countConversions(insights: Insight[], selectedEventRaw: string): number {
   const events = parseConversionEvents(selectedEventRaw);
@@ -34,22 +58,13 @@ export function countConversions(insights: Insight[], selectedEventRaw: string):
   }
 
   let total = 0;
-  for (const event of events) {
-    if (event === "purchase" || event === "offsite_conversion.fb_pixel_purchase") {
-      total += insights.reduce((s, i) => s + i.purchases, 0);
-    } else if (event === "lead" || event === "offsite_conversion.fb_pixel_lead") {
-      total += insights.reduce((s, i) => s + i.leads, 0);
-    } else {
-      // Custom/other — חלץ מ-actionsJson
-      for (const ins of insights) {
-        try {
-          const parsed = JSON.parse(ins.actionsJson ?? "{}") as { actions?: Array<{ action_type: string; value: string }> };
-          if (parsed.actions) {
-            for (const a of parsed.actions) {
-              if (a.action_type === event) total += parseFloat(a.value) || 0;
-            }
-          }
-        } catch {}
+  for (const ins of insights) {
+    const actions = extractActions(ins.actionsJson);
+    for (const event of events) {
+      for (const a of actions) {
+        if (a.action_type === event) {
+          total += parseFloat(a.value) || 0;
+        }
       }
     }
   }
@@ -57,7 +72,7 @@ export function countConversions(insights: Insight[], selectedEventRaw: string):
 }
 
 /**
- * פירוט המרות לפי סוג — לtooltip
+ * פירוט המרות לפי סוג — לtooltip / debug
  */
 export function breakdownConversions(insights: Insight[], selectedEventRaw: string): Array<{ event: string; count: number }> {
   const events = parseConversionEvents(selectedEventRaw);
@@ -65,20 +80,12 @@ export function breakdownConversions(insights: Insight[], selectedEventRaw: stri
 
   return events.map((event) => {
     let count = 0;
-    if (event === "purchase" || event === "offsite_conversion.fb_pixel_purchase") {
-      count = insights.reduce((s, i) => s + i.purchases, 0);
-    } else if (event === "lead" || event === "offsite_conversion.fb_pixel_lead") {
-      count = insights.reduce((s, i) => s + i.leads, 0);
-    } else {
-      for (const ins of insights) {
-        try {
-          const parsed = JSON.parse(ins.actionsJson ?? "{}") as { actions?: Array<{ action_type: string; value: string }> };
-          if (parsed.actions) {
-            for (const a of parsed.actions) {
-              if (a.action_type === event) count += parseFloat(a.value) || 0;
-            }
-          }
-        } catch {}
+    for (const ins of insights) {
+      const actions = extractActions(ins.actionsJson);
+      for (const a of actions) {
+        if (a.action_type === event) {
+          count += parseFloat(a.value) || 0;
+        }
       }
     }
     return { event, count };
