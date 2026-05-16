@@ -61,10 +61,12 @@ model Client {
   deletedAt     DateTime?
 
   // תנאי התקשרות (admin only)
-  dealType          String   @default("") // retainer / retainer_plus_percentage / percentage_only / project / other
+  dealType          String   @default("") // retainer / retainer_plus_percentage / percentage_only / retainer_or_percentage_higher / project / other
   monthlyRetainer   Float    @default(0)
   percentageRate    Float    @default(0)
   percentageBase    String   @default("") // ad_spend / revenue / profit
+  historicalRevenue Float    @default(0)
+  projectAmount     Float    @default(0)
   specialTerms      String   @default("")
   contractStartDate String   @default("")
   contractEndDate   String   @default("")

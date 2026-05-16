@@ -85,6 +85,16 @@ function mapClient(c: Record<string, unknown>): Client {
     currentMonthCostPerConv: (c.currentMonthCostPerConv as number) ?? 0,
     hasMetaData: (c.hasMetaData as boolean) ?? false,
     platformSyncs: (c.platformSyncs as Array<{ platform: string; lastSyncAt: string | null }>) ?? [],
+    // תנאי התקשרות
+    dealType: (c.dealType as string) ?? "",
+    monthlyRetainer: (c.monthlyRetainer as number) ?? 0,
+    percentageRate: (c.percentageRate as number) ?? 0,
+    percentageBase: (c.percentageBase as string) ?? "",
+    historicalRevenue: (c.historicalRevenue as number) ?? 0,
+    projectAmount: (c.projectAmount as number) ?? 0,
+    specialTerms: (c.specialTerms as string) ?? "",
+    contractStartDate: (c.contractStartDate as string) ?? "",
+    contractEndDate: (c.contractEndDate as string) ?? "",
     performance: {
       budgetUsed: c.budgetUsed as number,
       avgCostPerConversion: c.avgCostPerConversion as number,

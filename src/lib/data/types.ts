@@ -56,6 +56,16 @@ export interface Client {
   currentMonthCostPerConv?: number;
   hasMetaData?: boolean;
   platformSyncs?: Array<{ platform: string; lastSyncAt: string | null }>;
+  // תנאי התקשרות
+  dealType?: string;
+  monthlyRetainer?: number;
+  percentageRate?: number;
+  percentageBase?: string;
+  historicalRevenue?: number;
+  projectAmount?: number;
+  specialTerms?: string;
+  contractStartDate?: string;
+  contractEndDate?: string;
 }
 
 // ==================== משימות ====================

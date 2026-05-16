@@ -230,6 +230,8 @@ export default function ClientDetailPage() {
     monthlyRetainer: 0 as number,
     percentageRate: 0 as number,
     percentageBase: "",
+    historicalRevenue: 0 as number,
+    projectAmount: 0 as number,
     specialTerms: "",
     contractStartDate: "",
     contractEndDate: "",
@@ -259,13 +261,15 @@ export default function ClientDetailPage() {
         customAssets: c.customAssets ?? [],
         targetConversions: c.performance.targetConversions,
         targetCostPerConversion: c.performance.targetCostPerConversion,
-        dealType: String((c as unknown as Record<string, unknown>).dealType ?? ""),
-        monthlyRetainer: Number((c as unknown as Record<string, unknown>).monthlyRetainer ?? 0),
-        percentageRate: Number((c as unknown as Record<string, unknown>).percentageRate ?? 0),
-        percentageBase: String((c as unknown as Record<string, unknown>).percentageBase ?? ""),
-        specialTerms: String((c as unknown as Record<string, unknown>).specialTerms ?? ""),
-        contractStartDate: String((c as unknown as Record<string, unknown>).contractStartDate ?? ""),
-        contractEndDate: String((c as unknown as Record<string, unknown>).contractEndDate ?? ""),
+        dealType: String(c.dealType ?? ""),
+        monthlyRetainer: Number(c.monthlyRetainer ?? 0),
+        percentageRate: Number(c.percentageRate ?? 0),
+        percentageBase: String(c.percentageBase ?? ""),
+        historicalRevenue: Number(c.historicalRevenue ?? 0),
+        projectAmount: Number(c.projectAmount ?? 0),
+        specialTerms: String(c.specialTerms ?? ""),
+        contractStartDate: String(c.contractStartDate ?? ""),
+        contractEndDate: String(c.contractEndDate ?? ""),
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -399,6 +403,8 @@ export default function ClientDetailPage() {
       monthlyRetainer: Number(editForm.monthlyRetainer) || 0,
       percentageRate: Number(editForm.percentageRate) || 0,
       percentageBase: editForm.percentageBase,
+      historicalRevenue: Number(editForm.historicalRevenue) || 0,
+      projectAmount: Number(editForm.projectAmount) || 0,
       specialTerms: editForm.specialTerms,
       contractStartDate: editForm.contractStartDate,
       contractEndDate: editForm.contractEndDate,
@@ -563,46 +569,73 @@ export default function ClientDetailPage() {
 
                 {/* שורה 3 — תנאי התקשרות (admin only) */}
                 {isAdmin && (() => {
-                  const raw = client as unknown as Record<string, unknown>;
-                  const dealType = (raw.dealType as string) ?? "";
-                  const monthlyRetainer = (raw.monthlyRetainer as number) ?? 0;
-                  const percentageRate = (raw.percentageRate as number) ?? 0;
-                  const percentageBase = (raw.percentageBase as string) ?? "";
-                  const contractStart = (raw.contractStartDate as string) ?? "";
-                  const contractEnd = (raw.contractEndDate as string) ?? "";
+                  const dealType = client.dealType ?? "";
+                  const monthlyRetainer = client.monthlyRetainer ?? 0;
+                  const percentageRate = client.percentageRate ?? 0;
+                  const percentageBase = client.percentageBase ?? "";
+                  const historicalRevenue = client.historicalRevenue ?? 0;
+                  const contractStart = client.contractStartDate ?? "";
+                  const contractEnd = client.contractEndDate ?? "";
                   const sym = getCurrencySymbol(client.currency);
 
-                  const DEAL_LABELS: Record<string, string> = { retainer: "ריטיינר", retainer_plus_percentage: "ריטיינר + אחוזים", percentage_only: "אחוזים בלבד", project: "פרויקט", other: "אחר" };
+                  const DEAL_LABELS: Record<string, string> = { retainer: "ריטיינר", retainer_plus_percentage: "ריטיינר + אחוזים", percentage_only: "אחוזים בלבד", retainer_or_percentage_higher: "ריטיינר / אחוזים — הגבוה", project: "פרויקט", other: "אחר" };
                   const BASE_LABELS: Record<string, string> = { ad_spend: "תקציב פרסום", revenue: "הכנסות", profit: "רווח", cashflow: "תזרים" };
 
                   const endPoint = contractEnd ? new Date(contractEnd) : new Date();
                   const startPoint = contractStart ? new Date(contractStart) : null;
                   const monthsWorked = startPoint ? Math.max(0, Math.round((endPoint.getTime() - startPoint.getTime()) / (30.44 * 24 * 60 * 60 * 1000))) : 0;
-                  const retainerLtv = monthlyRetainer * monthsWorked;
-                  const totalSpend = metaPerf?.totalSpend ?? 0;
-                  const percentageLtv = percentageRate > 0 ? (percentageRate / 100) * totalSpend : 0;
-                  const totalLtv = retainerLtv + percentageLtv;
 
-                  const dealLabel = dealType
-                    ? `${DEAL_LABELS[dealType] ?? dealType}${percentageRate > 0 ? ` + ${percentageRate}% ${BASE_LABELS[percentageBase] ?? ""}` : ""}`
-                    : "";
+                  // חישוב הכנסה חודשית לפי סוג עסקה
+                  const totalSpend = metaPerf?.totalSpend ?? 0;
+                  const monthlyAdSpend = client.monthlyBudget ?? 0;
+                  const percentageMonthly = percentageRate > 0 ? (percentageRate / 100) * monthlyAdSpend : 0;
+                  let effectiveMonthlyIncome = 0;
+                  if (dealType === "retainer") effectiveMonthlyIncome = monthlyRetainer;
+                  else if (dealType === "percentage_only") effectiveMonthlyIncome = percentageMonthly;
+                  else if (dealType === "retainer_plus_percentage") effectiveMonthlyIncome = monthlyRetainer + percentageMonthly;
+                  else if (dealType === "retainer_or_percentage_higher") effectiveMonthlyIncome = Math.max(monthlyRetainer, percentageMonthly);
+                  else effectiveMonthlyIncome = monthlyRetainer;
+
+                  // LTV = historicalRevenue + (monthlyRetainer × חודשי עבודה) + אחוזים × total spend
+                  const retainerLtv = monthlyRetainer * monthsWorked;
+                  const percentageLtv = percentageRate > 0 ? (percentageRate / 100) * totalSpend : 0;
+                  const totalLtv = historicalRevenue + retainerLtv + percentageLtv;
+
+                  // תנאי עסקה label
+                  let dealLabel = "";
+                  if (dealType === "retainer_or_percentage_higher") {
+                    dealLabel = `${sym}${monthlyRetainer.toLocaleString()} או ${percentageRate}% — הגבוה מביניהם`;
+                  } else if (dealType) {
+                    dealLabel = `${DEAL_LABELS[dealType] ?? dealType}${percentageRate > 0 ? ` + ${percentageRate}% ${BASE_LABELS[percentageBase] ?? ""}` : ""}`;
+                  }
 
                   return (
-                    <div className="grid grid-cols-3 gap-3 rounded-lg border border-brand-gold/20 bg-brand-gold/5 p-3">
-                      <div>
-                        <p className="text-[10px] text-brand-muted">{lang === "he" ? "תנאי עסקה" : "Deal"}</p>
-                        <p className="text-sm font-medium text-brand-dark">{dealLabel || "—"}</p>
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-3 gap-3 rounded-lg border border-brand-gold/20 bg-brand-gold/5 p-3">
+                        <div>
+                          <p className="text-[10px] text-brand-muted">תנאי עסקה</p>
+                          <p className="text-sm font-medium text-brand-dark">{dealLabel || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-brand-muted">ריטיינר חודשי</p>
+                          <p className="text-lg font-semibold text-brand-gold">{monthlyRetainer > 0 ? `${sym}${monthlyRetainer.toLocaleString()}` : "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-brand-muted">LTV</p>
+                          <p className="text-lg font-semibold text-brand-gold">
+                            {monthsWorked > 0 ? `${monthsWorked} חודשים · ${sym}${Math.round(totalLtv).toLocaleString()}` : "—"}
+                          </p>
+                          {historicalRevenue > 0 && monthsWorked > 0 && (
+                            <p className="text-[10px] text-brand-muted">(כולל {sym}{historicalRevenue.toLocaleString()} היסטורי)</p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[10px] text-brand-muted">{lang === "he" ? "ריטיינר חודשי" : "Retainer"}</p>
-                        <p className="text-lg font-semibold text-brand-gold">{monthlyRetainer > 0 ? `${sym}${monthlyRetainer.toLocaleString()}` : "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-brand-muted">LTV</p>
-                        <p className="text-lg font-semibold text-brand-gold">
-                          {monthsWorked > 0 ? `${monthsWorked} ${lang === "he" ? "חודשים" : "months"} · ${sym}${Math.round(totalLtv).toLocaleString()}` : "—"}
-                        </p>
-                      </div>
+                      {/* שורת חיוב חודשי עבור retainer_or_percentage_higher */}
+                      {dealType === "retainer_or_percentage_higher" && monthlyRetainer > 0 && percentageRate > 0 && (
+                        <div className="rounded-lg border border-brand-border bg-brand-bg p-2 text-xs text-brand-dark">
+                          החודש: ריטיינר {sym}{monthlyRetainer.toLocaleString()} | אחוזים {sym}{Math.round(percentageMonthly).toLocaleString()} → חויב: <span className="font-semibold text-brand-gold">{sym}{Math.round(effectiveMonthlyIncome).toLocaleString()}</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -1383,50 +1416,75 @@ export default function ClientDetailPage() {
           {/* תנאי התקשרות — admin only */}
           {isAdmin && (
             <div className="space-y-4 border-t border-brand-border pt-4">
-              <h3 className="text-sm font-semibold text-brand-dark">{lang === "he" ? "תנאי התקשרות" : "Deal Terms"}</h3>
+              <h3 className="text-sm font-semibold text-brand-dark">תנאי התקשרות</h3>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "סוג עסקה" : "Deal Type"}</label>
-                  <select className={inputClass} value={editForm.dealType ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, dealType: e.target.value } as typeof p))}>
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">סוג עסקה</label>
+                  <select className={inputClass} value={editForm.dealType ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, dealType: e.target.value }))}>
                     <option value="">—</option>
-                    <option value="retainer">ריטיינר</option>
+                    <option value="retainer">ריטיינר בלבד</option>
                     <option value="retainer_plus_percentage">ריטיינר + אחוזים</option>
                     <option value="percentage_only">אחוזים בלבד</option>
-                    <option value="project">פרויקט</option>
+                    <option value="retainer_or_percentage_higher">ריטיינר / אחוזים — הגבוה מביניהם</option>
+                    <option value="project">פרויקט חד פעמי</option>
                     <option value="other">אחר</option>
                   </select>
                 </div>
+                {/* ריטיינר — retainer / retainer_plus_percentage / retainer_or_percentage_higher */}
+                {(editForm.dealType === "retainer" || editForm.dealType === "retainer_plus_percentage" || editForm.dealType === "retainer_or_percentage_higher") && (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-brand-dark">ריטיינר חודשי (₪)</label>
+                    <input type="number" className={inputClass} value={editForm.monthlyRetainer || ""} onChange={(e) => setEditForm((p) => ({ ...p, monthlyRetainer: Number(e.target.value) || 0 }))} placeholder="₪" />
+                  </div>
+                )}
+                {/* אחוזים — percentage_only / retainer_plus_percentage / retainer_or_percentage_higher */}
+                {(editForm.dealType === "percentage_only" || editForm.dealType === "retainer_plus_percentage" || editForm.dealType === "retainer_or_percentage_higher") && (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-brand-dark">אחוזים מתקציב (%)</label>
+                      <input type="number" className={inputClass} value={editForm.percentageRate || ""} onChange={(e) => setEditForm((p) => ({ ...p, percentageRate: Number(e.target.value) || 0 }))} placeholder="%" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-brand-dark">בסיס אחוזים</label>
+                      <select className={inputClass} value={editForm.percentageBase ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, percentageBase: e.target.value }))}>
+                        <option value="">—</option>
+                        <option value="ad_spend">תקציב פרסום</option>
+                        <option value="revenue">הכנסות</option>
+                        <option value="profit">רווח</option>
+                        <option value="cashflow">תזרים</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+                {/* פרויקט — project */}
+                {editForm.dealType === "project" && (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-brand-dark">סכום פרויקט (₪)</label>
+                    <input type="number" className={inputClass} value={editForm.projectAmount || ""} onChange={(e) => setEditForm((p) => ({ ...p, projectAmount: Number(e.target.value) || 0 }))} placeholder="₪" />
+                  </div>
+                )}
+                {/* תחילת וסיום התקשרות */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "ריטיינר חודשי (₪)" : "Monthly Retainer (₪)"}</label>
-                  <input type="number" className={inputClass} value={editForm.monthlyRetainer ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, monthlyRetainer: Number(e.target.value) || 0 } as typeof p))} />
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">תחילת התקשרות</label>
+                  <input type="date" className={inputClass} value={editForm.contractStartDate ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, contractStartDate: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "אחוזים (%)" : "Percentage (%)"}</label>
-                  <input type="number" className={inputClass} value={editForm.percentageRate ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, percentageRate: Number(e.target.value) || 0 } as typeof p))} />
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">סיום התקשרות</label>
+                  <input type="date" className={inputClass} value={editForm.contractEndDate ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, contractEndDate: e.target.value }))} />
                 </div>
+                {/* הכנסות מצטברות עד היום */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "בסיס אחוזים" : "Percentage Base"}</label>
-                  <select className={inputClass} value={editForm.percentageBase ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, percentageBase: e.target.value } as typeof p))}>
-                    <option value="">—</option>
-                    <option value="ad_spend">תקציב פרסום</option>
-                    <option value="revenue">הכנסות</option>
-                    <option value="profit">רווח</option>
-                    <option value="cashflow">תזרים</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "תחילת התקשרות" : "Contract Start"}</label>
-                  <input type="date" className={inputClass} value={editForm.contractStartDate ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, contractStartDate: e.target.value } as typeof p))} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "סיום התקשרות" : "Contract End"}</label>
-                  <input type="date" className={inputClass} value={editForm.contractEndDate ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, contractEndDate: e.target.value } as typeof p))} />
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">הכנסות מצטברות עד היום (₪)</label>
+                  <input type="number" className={inputClass} value={editForm.historicalRevenue || ""} onChange={(e) => setEditForm((p) => ({ ...p, historicalRevenue: Number(e.target.value) || 0 }))} placeholder="סכום שנכנס מהלקוח לפני השימוש במערכת" />
                 </div>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brand-dark">{lang === "he" ? "תנאים מיוחדים" : "Special Terms"}</label>
-                <textarea className={inputClass} rows={2} value={editForm.specialTerms ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, specialTerms: e.target.value } as typeof p))} />
-              </div>
+              {/* אחר — textarea */}
+              {editForm.dealType === "other" && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">תנאים מיוחדים</label>
+                  <textarea className={inputClass} rows={3} value={editForm.specialTerms ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, specialTerms: e.target.value }))} placeholder="פרט את תנאי ההתקשרות..." />
+                </div>
+              )}
             </div>
           )}
 
