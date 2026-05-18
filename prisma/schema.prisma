@@ -357,6 +357,24 @@ model ReportTracker {
   @@map("report_trackers")
 }
 
+// רשומת דוח שבועי — כל שבוע שנשלח = רשומה חדשה
+model WeeklyReport {
+  id                 String   @id @default(cuid())
+  clientId           String
+  campaignManagerId  String   @default("")
+  campaignManagerName String  @default("")
+  weekStart          String   // YYYY-MM-DD (ראשון)
+  weekEnd            String   // YYYY-MM-DD (שבת)
+  content            String   @default("")
+  sentAt             DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([clientId, weekStart])
+  @@index([clientId])
+  @@map("weekly_reports")
+}
+
 // ==================== הגדרות סוכנות ====================
 
 model AgencySettings {

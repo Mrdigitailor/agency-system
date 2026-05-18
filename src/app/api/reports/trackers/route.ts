@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
+import { getLastWeekRange } from "@/lib/utils/dates";
 
 /**
  * GET — רשימת trackers של כל הלקוחות
@@ -14,7 +15,7 @@ export async function GET() {
 }
 
 /**
- * PATCH — עדכון tracker של לקוח
+ * PATCH — עדכון tracker של לקוח + יצירת רשומת WeeklyReport
  * body: { clientId, type: "weekly"|"monthly", date?, content?, author? }
  */
 export async function PATCH(req: Request) {
@@ -53,6 +54,32 @@ export async function PATCH(req: Request) {
       monthlyAuthor: isWeekly ? "" : author,
     },
   });
+
+  // יצירת/עדכון רשומת WeeklyReport עם היסטוריה מלאה
+  if (isWeekly && content) {
+    const { start, end } = getLastWeekRange();
+    const weekStart = start.toISOString().split("T")[0];
+    const weekEnd = end.toISOString().split("T")[0];
+
+    await prisma.weeklyReport.upsert({
+      where: { clientId_weekStart: { clientId: body.clientId, weekStart } },
+      update: {
+        content,
+        campaignManagerName: author,
+        campaignManagerId: user.id ?? "",
+        updatedAt: new Date(),
+      },
+      create: {
+        clientId: body.clientId,
+        campaignManagerId: user.id ?? "",
+        campaignManagerName: author,
+        weekStart,
+        weekEnd,
+        content,
+        sentAt: new Date(),
+      },
+    });
+  }
 
   return NextResponse.json(tracker);
 }

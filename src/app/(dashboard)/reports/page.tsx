@@ -131,28 +131,29 @@ export default function ReportsPage() {
     return trackers;
   }, [trackers, employees, role, userName]);
 
-  // תמיד מחושב — השבוע הנוכחי שחלף
-  const currentWeekStart = useMemo(() => {
-    const { start } = getLastWeekRange();
-    return start.toISOString().split("T")[0];
+  // תמיד מחושב — סוף השבוע שחלף (שבת)
+  // דוח "נשלח" = weeklyLastSent > end (סומן אחרי שהשבוע הסתיים)
+  const lastWeekEnd = useMemo(() => {
+    const { end } = getLastWeekRange();
+    return end.toISOString().split("T")[0];
   }, []);
 
   const kpis = useMemo(() => {
-    const weeklySent = roleFilteredTrackers.filter((t) => t.weeklyLastSent >= currentWeekStart).length;
+    const weeklySent = roleFilteredTrackers.filter((t) => t.weeklyLastSent > lastWeekEnd).length;
     const weeklyMissing = roleFilteredTrackers.length - weeklySent;
     const monthlySent = roleFilteredTrackers.filter((t) => isCurrentMonth(t.monthlyLastSent)).length;
     const monthlyMissing = roleFilteredTrackers.length - monthlySent;
     return { weeklySent, weeklyMissing, monthlySent, monthlyMissing };
-  }, [roleFilteredTrackers, currentWeekStart]);
+  }, [roleFilteredTrackers, lastWeekEnd]);
 
   const alertCounts = useMemo(() => {
-    const weeklyMissing = roleFilteredTrackers.filter((t) => t.weeklyLastSent < currentWeekStart).length;
+    const weeklyMissing = roleFilteredTrackers.filter((t) => !(t.weeklyLastSent > lastWeekEnd)).length;
     const monthlyMissing = roleFilteredTrackers.filter((t) => {
       if (!t.monthlyLastSent) return true;
       return new Date().getTime() - new Date(t.monthlyLastSent).getTime() > 30 * 24 * 60 * 60 * 1000;
     }).length;
     return { weeklyMissing, monthlyMissing };
-  }, [roleFilteredTrackers]);
+  }, [roleFilteredTrackers, lastWeekEnd]);
 
   const filteredRows = useMemo(() => {
     return roleFilteredTrackers
@@ -166,8 +167,8 @@ export default function ReportsPage() {
         const { tracker, client: c } = row;
         if (nameFilter && !c.name.toLowerCase().includes(nameFilter.toLowerCase())) return false;
         if (managerFilter !== "all" && getClientCM(c.id) !== managerFilter) return false;
-        if (statusFilter === "sent") return tracker.weeklyLastSent >= currentWeekStart || isCurrentMonth(tracker.monthlyLastSent);
-        if (statusFilter === "not_sent") return tracker.weeklyLastSent < currentWeekStart || !isCurrentMonth(tracker.monthlyLastSent);
+        if (statusFilter === "sent") return tracker.weeklyLastSent > lastWeekEnd || isCurrentMonth(tracker.monthlyLastSent);
+        if (statusFilter === "not_sent") return !(tracker.weeklyLastSent > lastWeekEnd) || !isCurrentMonth(tracker.monthlyLastSent);
         return true;
       });
   }, [roleFilteredTrackers, clients, statusFilter, managerFilter, nameFilter]);
@@ -400,11 +401,12 @@ export default function ReportsPage() {
               filteredRows.map(({ tracker, client }) => {
                 // השבוע הנוכחי שחלף — תמיד מוצג
                 const currentWeek = getLastWeekRange();
-                const currentWeekStartStr = currentWeek.start.toISOString().split("T")[0];
+                const currentWeekEndStr = currentWeek.end.toISOString().split("T")[0];
                 const currentWeekPeriod = formatWeekRange(currentWeek.start, currentWeek.end);
 
                 // האם דוח שבועי נשלח על השבוע הנוכחי?
-                const weeklySent = tracker.weeklyLastSent >= currentWeekStartStr;
+                // "נשלח" = weeklyLastSent > end (סומן אחרי שהשבוע הסתיים)
+                const weeklySent = tracker.weeklyLastSent > currentWeekEndStr;
                 const monthlySent = isCurrentMonth(tracker.monthlyLastSent);
                 return (
                   <tr key={client.id} className="border-b border-brand-border transition-colors hover:bg-brand-bg">

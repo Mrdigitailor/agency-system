@@ -13,9 +13,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { start } = getLastWeekRange();
-  const weekStartStr = start.toISOString().split("T")[0];
   const { start: ws, end: we } = getLastWeekRange();
+  const weekEndStr = we.toISOString().split("T")[0];
   const periodStr = formatWeekRange(ws, we);
 
   const clients = await prisma.client.findMany({
@@ -36,7 +35,8 @@ export async function GET(req: Request) {
 
   for (const client of clients) {
     const tracker = trackerMap.get(client.id);
-    const isSent = (tracker?.weeklyLastSent ?? "") >= weekStartStr;
+    // "נשלח" = weeklyLastSent > end (סומן אחרי שהשבוע הסתיים)
+    const isSent = (tracker?.weeklyLastSent ?? "") > weekEndStr;
     if (isSent) {
       sent.push(client.name);
     } else {

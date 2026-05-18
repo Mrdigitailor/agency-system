@@ -44,13 +44,13 @@ import ClientIdentityTab from "@/components/ui/ClientIdentityTab";
 import QuickProfileCard from "@/components/ui/QuickProfileCard";
 import AiChatTab from "@/components/ui/AiChatTab";
 import MonthPerformanceKpis from "@/components/ui/MonthPerformanceKpis";
+import ClientWeeklyReportsTab from "@/components/ui/ClientWeeklyReportsTab";
 import OptimizationsTab from "@/components/ui/OptimizationsTab";
 import CreativesTab from "@/components/ui/CreativesTab";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
 import { CLIENT_STATUSES, PRIORITIES, TASK_STATUSES, CLIENT_TYPES, type CustomAsset, type Client } from "@/lib/data/types";
 import { CURRENCIES, getCurrencySymbol } from "@/lib/utils/currency";
-import { getWeekRangeBack } from "@/lib/utils/dates";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 /* ==================== עזרים ==================== */
@@ -767,80 +767,7 @@ export default function ClientDetailPage() {
       {activeTab === "creatives" && <CreativesTab clientId={client.id} currency={client.currency ?? "ILS"} />}
 
       {/* ===== טאב דוחות ===== */}
-      {activeTab === "reports" && (
-        <div className="rounded-lg border border-brand-border bg-brand-light p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-brand-dark">דוחות</h2>
-          {(() => {
-            // ייצור דוחות דינאמיים — 6 שבועיים אחרונים + 2 חודשיים
-            const now = new Date();
-            const fmtRange = (start: Date, end: Date) =>
-              `${start.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })}-${end.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" })}`;
-
-            const reports: Array<{ id: string; type: string; period: string; sentDate: string; status: string }> = [];
-
-            // 6 שבועות — משתמש בפונקציה מרכזית
-            for (let w = 0; w < 6; w++) {
-              const { start: startDate, end: endDate } = getWeekRangeBack(w);
-              const isCurrent = w === 0;
-              reports.push({
-                id: `w${w}`,
-                type: "שבועי",
-                period: fmtRange(startDate, endDate),
-                sentDate: isCurrent ? "" : endDate.toISOString().split("T")[0],
-                status: isCurrent ? "pending" : "sent",
-              });
-            }
-
-            // 2 חודשים — חודש שעבר + לפני שעברו
-            for (let m = 1; m <= 2; m++) {
-              const monthDate = new Date(now.getFullYear(), now.getMonth() - m, 1);
-              const label = monthDate.toLocaleDateString("he-IL", { month: "long", year: "numeric" });
-              reports.push({
-                id: `m${m}`,
-                type: "חודשי",
-                period: label,
-                sentDate: new Date(now.getFullYear(), now.getMonth() - m + 1, 1).toISOString().split("T")[0],
-                status: "sent",
-              });
-            }
-
-            return (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-brand-border bg-brand-bg/50">
-                      <th className="px-4 py-3 text-right font-medium text-brand-muted">סוג</th>
-                      <th className="px-4 py-3 text-right font-medium text-brand-muted">תקופת דיווח</th>
-                      <th className="px-4 py-3 text-right font-medium text-brand-muted">תאריך שליחה</th>
-                      <th className="px-4 py-3 text-right font-medium text-brand-muted">סטטוס</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reports.map((r) => (
-                      <tr key={r.id} className="border-b border-brand-border">
-                        <td className="px-4 py-3">
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${r.type === "חודשי" ? "bg-brand-gold/20 text-brand-dark" : "bg-blue-100 text-blue-700"}`}>
-                            {r.type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-brand-dark">{r.period}</td>
-                        <td className="px-4 py-3 text-brand-muted">{r.sentDate ? formatDate(r.sentDate) : "—"}</td>
-                        <td className="px-4 py-3">
-                          {r.status === "sent" ? (
-                            <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">נשלח</span>
-                          ) : (
-                            <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">לא נשלח</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+      {activeTab === "reports" && <ClientWeeklyReportsTab clientId={client.id} />}
 
       {/* ===== טאב 5 — הודעות ===== */}
       {activeTab === "messages" && <MessagesTab clientId={client.id} />}
