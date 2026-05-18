@@ -56,7 +56,7 @@ export async function PATCH(req: Request) {
   });
 
   // יצירת/עדכון רשומת WeeklyReport עם היסטוריה מלאה
-  if (isWeekly && content) {
+  if (isWeekly) {
     const { start, end } = getLastWeekRange();
     const weekStart = start.toISOString().split("T")[0];
     const weekEnd = end.toISOString().split("T")[0];
