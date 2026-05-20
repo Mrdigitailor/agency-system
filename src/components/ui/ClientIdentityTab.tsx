@@ -94,6 +94,12 @@ export default function ClientIdentityTab({ clientId, userRole, clientData }: Pr
   const [p, setP] = useState<Profile>(emptyProfile);
   const [savedMap, setSavedMap] = useState<Record<string, boolean>>({});
   const [noteInput, setNoteInput] = useState("");
+  const [website, setWebsite] = useState<string>(clientData.website || "");
+
+  // סנכרן את שדה האתר כשה-prop משתנה (טעינת הלקוח)
+  useEffect(() => {
+    setWebsite(clientData.website || "");
+  }, [clientData.website]);
 
   // load profile
   useEffect(() => {
@@ -104,6 +110,11 @@ export default function ClientIdentityTab({ clientId, userRole, clientData }: Pr
     await fetch(`/api/clients/${clientId}/profile`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
     setSavedMap(prev => ({ ...prev, [key]: true }));
     setTimeout(() => setSavedMap(prev => ({ ...prev, [key]: false })), 2000);
+  }, [clientId]);
+
+  // שמירת שדות שיושבים על מודל הלקוח (לא על ה-profile) — למשל website
+  const patchClient = useCallback(async (data: Record<string, unknown>) => {
+    await fetch(`/api/clients/${clientId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
   }, [clientId]);
 
   const update = <K extends keyof Profile>(k: K, v: Profile[K]) => setP(prev => ({ ...prev, [k]: v }));
@@ -194,7 +205,14 @@ export default function ClientIdentityTab({ clientId, userRole, clientData }: Pr
           )}
           <div>
             <Label>אתר אינטרנט</Label>
-            <div className={inputClass + " bg-brand-bg/50 text-brand-muted cursor-default"}>{clientData.website || "—"}</div>
+            <input
+              type="url"
+              value={website}
+              onChange={e => setWebsite(e.target.value)}
+              className={inputClass}
+              placeholder="https://..."
+              dir="ltr"
+            />
           </div>
           <div>
             <Label>כתובת פיזית</Label>
@@ -205,7 +223,15 @@ export default function ClientIdentityTab({ clientId, userRole, clientData }: Pr
             <textarea value={p.businessDescription} onChange={e => update("businessDescription", e.target.value)} className={inputClass} rows={3} placeholder="תאר את העסק בקצרה" />
           </div>
         </div>
-        <SaveBtn onClick={() => patchSection("business", { businessSector: p.businessSector, businessDescription: p.businessDescription, serviceArea: p.serviceArea, serviceAreaDetails: p.serviceAreaDetails, physicalAddress: p.physicalAddress })} saved={!!savedMap.business} />
+        <SaveBtn
+          onClick={async () => {
+            await Promise.all([
+              patchSection("business", { businessSector: p.businessSector, businessDescription: p.businessDescription, serviceArea: p.serviceArea, serviceAreaDetails: p.serviceAreaDetails, physicalAddress: p.physicalAddress }),
+              patchClient({ website: website.trim() }),
+            ]);
+          }}
+          saved={!!savedMap.business}
+        />
       </Section>
 
       {/* 2. מוצרים ושירותים */}
