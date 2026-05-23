@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Plus, Calendar, Filter, Clock, Loader2, CheckCircle2, AlertOctagon, Send, Pencil, Trash2 } from "lucide-react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { Plus, Calendar, Filter, Clock, Loader2, CheckCircle2, AlertOctagon, Send, Pencil, Trash2, ChevronDown, Search, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Modal from "@/components/ui/Modal";
 import { useApp } from "@/lib/data/context";
@@ -22,6 +22,92 @@ function isOverdue(task: Task) {
   return task.status !== "done" && task.dueDate && new Date(task.dueDate) < new Date();
 }
 
+// ─── Multi-select Filter Dropdown ────────────────────────────────────
+type Option = { value: string; label: string };
+function MultiSelectFilter({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: Option[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const toggle = (value: string) => {
+    if (selected.includes(value)) onChange(selected.filter((v) => v !== value));
+    else onChange([...selected, value]);
+  };
+
+  const count = selected.length;
+  const hasSelection = count > 0;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors duration-200 focus:outline-none ${
+          hasSelection
+            ? "border-brand-gold bg-brand-gold/10 text-brand-dark"
+            : "border-brand-border bg-brand-light text-brand-dark hover:bg-brand-bg"
+        }`}
+      >
+        <span>{label}</span>
+        {hasSelection && (
+          <span className="rounded-full bg-brand-gold px-1.5 text-[10px] font-semibold text-brand-dark">{count}</span>
+        )}
+        <ChevronDown className={`h-3.5 w-3.5 text-brand-muted transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-64 min-w-[12rem] overflow-y-auto rounded-lg border border-brand-border bg-brand-light shadow-md">
+          {options.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-brand-muted">אין אפשרויות</div>
+          ) : (
+            options.map((opt) => {
+              const checked = selected.includes(opt.value);
+              return (
+                <label
+                  key={opt.value}
+                  className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-brand-dark hover:bg-brand-bg"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(opt.value)}
+                    className="accent-brand-gold"
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type Filters = {
+  statuses: string[];
+  priorities: string[];
+  assignees: string[];
+  clientIds: string[];
+};
+const emptyFilters: Filters = { statuses: [], priorities: [], assignees: [], clientIds: [] };
+
 export default function TasksPage() {
   const { t } = useLanguage();
   const { data: session } = useSession();
@@ -35,9 +121,13 @@ export default function TasksPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [filterStatus, setFilterStatus] = useState("open");
-  const [filterPriority, setFilterPriority] = useState("all");
-  const [filterAssignee, setFilterAssignee] = useState("all");
+  // ברירת מחדל: רק משימות פתוחות (pending + in_progress) — תואם להתנהגות הקודמת של "open"
+  const defaultFilters = useMemo<Filters>(
+    () => ({ statuses: ["pending", "in_progress"], priorities: [], assignees: [], clientIds: [] }),
+    []
+  );
+  const [draftFilters, setDraftFilters] = useState<Filters>(defaultFilters);
+  const [appliedFilters, setAppliedFilters] = useState<Filters>(defaultFilters);
   const [noteText, setNoteText] = useState("");
 
   const [form, setForm] = useState({
@@ -70,15 +160,45 @@ export default function TasksPage() {
   }, [tasks]);
 
   const filteredTasks = useMemo(() => {
+    const { statuses, priorities, assignees, clientIds } = appliedFilters;
     return tasks.filter((t) => {
-      if (filterStatus === "open") return t.status !== "done"; // pending + in_progress + overdue
-      if (filterStatus === "overdue") return isOverdue(t);
-      if (filterStatus !== "all" && t.status !== filterStatus) return false;
-      if (filterPriority !== "all" && t.priority !== filterPriority) return false;
-      if (filterAssignee !== "all" && t.assignee !== filterAssignee) return false;
+      if (statuses.length > 0) {
+        const matches = statuses.some((s) => (s === "overdue" ? isOverdue(t) : t.status === s));
+        if (!matches) return false;
+      }
+      if (priorities.length > 0 && !priorities.includes(t.priority)) return false;
+      if (assignees.length > 0 && !assignees.includes(t.assignee)) return false;
+      if (clientIds.length > 0 && !clientIds.includes(t.clientId)) return false;
       return true;
     });
-  }, [tasks, filterStatus, filterPriority, filterAssignee]);
+  }, [tasks, appliedFilters]);
+
+  // קיצורי דרך מ-KPI: מגדירים סינון מיידי (לא דרך draft)
+  const applyStatusShortcut = (status: string) => {
+    const next: Filters = { ...emptyFilters, statuses: [status] };
+    setDraftFilters(next);
+    setAppliedFilters(next);
+  };
+  const applyFilters = () => setAppliedFilters(draftFilters);
+  const clearFilters = () => {
+    setDraftFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
+  };
+  const hasAnyFilter =
+    appliedFilters.statuses.length +
+      appliedFilters.priorities.length +
+      appliedFilters.assignees.length +
+      appliedFilters.clientIds.length >
+    0;
+
+  // אפשרויות לסינון
+  const statusOptions: Option[] = useMemo(
+    () => [...TASK_STATUSES.map((s) => ({ value: s.value, label: s.label })), { value: "overdue", label: t("overdue") }],
+    [t]
+  );
+  const priorityOptions: Option[] = useMemo(() => PRIORITIES.map((p) => ({ value: p.value, label: p.label })), []);
+  const assigneeOptions: Option[] = useMemo(() => employees.map((e) => ({ value: e.name, label: e.name })), [employees]);
+  const clientOptions: Option[] = useMemo(() => clients.map((c) => ({ value: c.id, label: c.name })), [clients]);
 
   const getClientName = (clientId: string) => clients.find((c) => c.id === clientId)?.name ?? "—";
 
@@ -162,44 +282,67 @@ export default function TasksPage() {
 
       {/* KPI */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <button onClick={() => setFilterStatus("pending")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
+        <button onClick={() => applyStatusShortcut("pending")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
           <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-brand-muted" /><span className="text-sm text-brand-muted">{t('pending')}</span></div>
           <p className="mt-1 text-2xl font-semibold text-brand-dark">{kpi.pending}</p>
         </button>
-        <button onClick={() => setFilterStatus("in_progress")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
+        <button onClick={() => applyStatusShortcut("in_progress")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
           <div className="flex items-center gap-2"><Loader2 className="h-4 w-4 text-brand-info" /><span className="text-sm text-brand-muted">{t('inProgress')}</span></div>
           <p className="mt-1 text-2xl font-semibold text-brand-dark">{kpi.inProgress}</p>
         </button>
-        <button onClick={() => setFilterStatus("done")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
+        <button onClick={() => applyStatusShortcut("done")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
           <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-brand-success" /><span className="text-sm text-brand-muted">{t('done')}</span></div>
           <p className="mt-1 text-2xl font-semibold text-brand-dark">{kpi.done}</p>
         </button>
-        <button onClick={() => setFilterStatus("overdue")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
+        <button onClick={() => applyStatusShortcut("overdue")} className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm text-right transition-colors duration-200 hover:bg-brand-bg/50">
           <div className="flex items-center gap-2"><AlertOctagon className="h-4 w-4 text-brand-danger" /><span className="text-sm text-brand-muted">{t('overdue')}</span></div>
           <p className="mt-1 text-2xl font-semibold text-brand-danger">{kpi.overdue}</p>
         </button>
       </div>
 
-      {/* פילטרים */}
+      {/* פילטרים — multi-select, מוחל רק בלחיצה על "סנן" */}
       <div className="flex flex-wrap items-center gap-3">
         <Filter className="h-4 w-4 text-brand-muted" />
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none">
-          <option value="open">{t('openTasks')}</option>
-          <option value="all">{t('allStatuses')}</option>
-          {TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-          <option value="overdue">{t('overdue')}</option>
-        </select>
-        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none">
-          <option value="all">{t('allPriorities')}</option>
-          {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </select>
-        <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} className="rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-sm text-brand-dark focus:border-brand-gold focus:outline-none">
-          <option value="all">{t('allEmployees')}</option>
-          {employees.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}
-        </select>
-        {filterStatus !== "all" && (
-          <button onClick={() => { setFilterStatus("all"); setFilterPriority("all"); setFilterAssignee("all"); }} className="rounded-lg border border-brand-border px-3 py-1.5 text-xs text-brand-muted hover:bg-brand-bg">
-            {t('clearFilters')}
+        <MultiSelectFilter
+          label={t('status')}
+          options={statusOptions}
+          selected={draftFilters.statuses}
+          onChange={(statuses) => setDraftFilters((f) => ({ ...f, statuses }))}
+        />
+        <MultiSelectFilter
+          label={t('assignee')}
+          options={assigneeOptions}
+          selected={draftFilters.assignees}
+          onChange={(assignees) => setDraftFilters((f) => ({ ...f, assignees }))}
+        />
+        <MultiSelectFilter
+          label={t('client')}
+          options={clientOptions}
+          selected={draftFilters.clientIds}
+          onChange={(clientIds) => setDraftFilters((f) => ({ ...f, clientIds }))}
+        />
+        <MultiSelectFilter
+          label={t('priority')}
+          options={priorityOptions}
+          selected={draftFilters.priorities}
+          onChange={(priorities) => setDraftFilters((f) => ({ ...f, priorities }))}
+        />
+        <button
+          type="button"
+          onClick={applyFilters}
+          className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-4 py-1.5 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80"
+        >
+          <Search className="h-3.5 w-3.5" />
+          סנן
+        </button>
+        {hasAnyFilter && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-sm text-brand-muted transition-colors duration-200 hover:bg-brand-bg"
+          >
+            <X className="h-3.5 w-3.5" />
+            נקה
           </button>
         )}
       </div>
