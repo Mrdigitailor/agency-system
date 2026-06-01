@@ -46,6 +46,7 @@ import AiChatTab from "@/components/ui/AiChatTab";
 import MonthPerformanceKpis from "@/components/ui/MonthPerformanceKpis";
 import ClientWeeklyReportsTab from "@/components/ui/ClientWeeklyReportsTab";
 import OptimizationsTab from "@/components/ui/OptimizationsTab";
+import TaskModal from "@/components/ui/TaskModal";
 import CreativesTab from "@/components/ui/CreativesTab";
 import { useApp } from "@/lib/data/context";
 import { getCampaignManagerForClient, getAccountManagerForClient } from "@/lib/utils/resolveManagers";
@@ -166,7 +167,7 @@ export default function ClientDetailPage() {
   const userRole = (session?.user as { role?: string })?.role ?? "";
   const isAdmin = userRole === "admin";
   const { t, lang } = useLanguage();
-  const { getClient, tasks, addTask, updateTask, addTaskNote, clients, employees, settings, updateClient } = useApp();
+  const { getClient, tasks, addTask, updateTask, employees, updateClient } = useApp();
   const client = getClient(params.id as string);
 
   // נתוני ביצועים מ-Meta (החודש הנוכחי)
@@ -191,7 +192,6 @@ export default function ClientDetailPage() {
   const [showCompletedTasks, setShowCompletedTasks] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [taskEditForm, setTaskEditForm] = useState({ title: "", description: "", assignee: "", priority: "medium" as string, dueDate: "", status: "pending" as string, taskType: "other" as string, platform: "" });
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
@@ -856,19 +856,7 @@ export default function ClientDetailPage() {
                       return (
                         <tr
                           key={task.id}
-                          onClick={() => {
-                            setSelectedTaskId(task.id);
-                            setTaskEditForm({
-                              title: task.title,
-                              description: task.description,
-                              assignee: task.assignee,
-                              priority: task.priority,
-                              dueDate: task.dueDate,
-                              status: task.status,
-                              taskType: task.taskType,
-                              platform: task.platform,
-                            });
-                          }}
+                          onClick={() => setSelectedTaskId(task.id)}
                           className={`cursor-pointer border-b border-brand-border/50 transition-colors duration-200 hover:bg-brand-bg/30 ${isDone ? "opacity-60" : ""}`}
                         >
                           <td className="px-4 py-3">
@@ -1039,100 +1027,8 @@ export default function ClientDetailPage() {
             </div>
           </Modal>
 
-          {/* מודל עריכה/צפייה במשימה */}
-          <Modal
-            isOpen={!!selectedTaskId}
-            onClose={() => setSelectedTaskId(null)}
-            title={taskEditForm.title || t("taskDetails")}
-            size="lg"
-          >
-            {selectedTaskId && (() => {
-              const liveTask = clientTasks.find((t2) => t2.id === selectedTaskId);
-              if (!liveTask) return null;
-              return (
-                <div className="space-y-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-brand-dark">{t("taskTitle")}</label>
-                    <input className={inputClass} value={taskEditForm.title} onChange={(e) => setTaskEditForm((p) => ({ ...p, title: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-brand-dark">{t("description")}</label>
-                    <textarea className={inputClass} rows={3} value={taskEditForm.description} onChange={(e) => setTaskEditForm((p) => ({ ...p, description: e.target.value }))} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-brand-dark">{t("assignee")}</label>
-                      <select className={inputClass} value={taskEditForm.assignee} onChange={(e) => setTaskEditForm((p) => ({ ...p, assignee: e.target.value }))}>
-                        <option value="">—</option>
-                        {employees.map((emp) => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-brand-dark">{t("priority")}</label>
-                      <select className={inputClass} value={taskEditForm.priority} onChange={(e) => setTaskEditForm((p) => ({ ...p, priority: e.target.value }))}>
-                        <option value="low">{t("low")}</option>
-                        <option value="medium">{t("medium")}</option>
-                        <option value="high">{t("high")}</option>
-                        <option value="urgent">{t("urgent")}</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-brand-dark">{t("dueDate")}</label>
-                      <input type="date" className={inputClass} value={taskEditForm.dueDate} onChange={(e) => setTaskEditForm((p) => ({ ...p, dueDate: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-brand-dark">{t("status")}</label>
-                      <select className={inputClass} value={taskEditForm.status} onChange={(e) => setTaskEditForm((p) => ({ ...p, status: e.target.value }))}>
-                        <option value="pending">{t("pending")}</option>
-                        <option value="in_progress">{t("inProgress")}</option>
-                        <option value="done">{t("done")}</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* הערות */}
-                  {liveTask.notes.length > 0 && (
-                    <div className="border-t border-brand-border pt-3">
-                      <p className="mb-2 text-xs font-semibold text-brand-muted">{t("notesAndChat")}</p>
-                      <div className="max-h-32 space-y-2 overflow-y-auto">
-                        {liveTask.notes.map((note) => (
-                          <div key={note.id} className="rounded-lg bg-brand-bg p-2 text-xs">
-                            <span className="font-medium text-brand-dark">{note.author}</span>
-                            <span className="text-brand-muted"> · {formatDate(note.createdAt)}</span>
-                            <p className="mt-0.5 text-brand-dark">{note.content}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
-                    <button onClick={() => setSelectedTaskId(null)} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg">
-                      {t("cancel")}
-                    </button>
-                    <button
-                      onClick={async () => {
-                        await updateTask(selectedTaskId, {
-                          title: taskEditForm.title,
-                          description: taskEditForm.description,
-                          assignee: taskEditForm.assignee,
-                          priority: taskEditForm.priority as "low" | "medium" | "high" | "urgent",
-                          dueDate: taskEditForm.dueDate,
-                          status: taskEditForm.status as "pending" | "in_progress" | "done",
-                        });
-                        setSelectedTaskId(null);
-                      }}
-                      className={btnPrimary}
-                    >
-                      {t("save")}
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
-          </Modal>
+          {/* מודל עריכה/צפייה במשימה — קומפוננטה משותפת */}
+          <TaskModal taskId={selectedTaskId} onClose={() => setSelectedTaskId(null)} />
         </div>
         );
       })()}

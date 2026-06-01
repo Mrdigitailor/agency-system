@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { Plus, Calendar, Filter, Clock, Loader2, CheckCircle2, AlertOctagon, Send, Pencil, Trash2, ChevronDown, Search, X } from "lucide-react";
+import { Plus, Calendar, Filter, Clock, Loader2, CheckCircle2, AlertOctagon, Pencil, Trash2, ChevronDown, Search, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Modal from "@/components/ui/Modal";
+import TaskModal from "@/components/ui/TaskModal";
 import { useApp } from "@/lib/data/context";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { PLATFORMS, PRIORITIES, TASK_STATUSES, TASK_TYPES, type Task } from "@/lib/data/types";
@@ -112,15 +113,13 @@ export default function TasksPage() {
   const { t } = useLanguage();
   const { data: session } = useSession();
   const role = (session?.user as { role?: string })?.role ?? "admin";
-  const userId = (session?.user as { id?: string })?.id ?? "";
   const userName = (session?.user as { name?: string })?.name ?? "";
-  const { tasks: allTasks, addTask, updateTask, addTaskNote, refreshTasks, clients, employees, settings } = useApp();
+  const { tasks: allTasks, addTask, updateTask, refreshTasks, clients, employees } = useApp();
 
   // מנהל קמפיינים רואה רק משימות שלו
   const tasks = role === "campaignManager" ? allTasks.filter((t) => t.assignee === userName) : allTasks;
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   // ברירת מחדל: רק משימות פתוחות (pending + in_progress) — תואם להתנהגות הקודמת של "open"
   const defaultFilters = useMemo<Filters>(
     () => ({ statuses: ["pending", "in_progress"], priorities: [], assignees: [], clientIds: [] }),
@@ -128,17 +127,11 @@ export default function TasksPage() {
   );
   const [draftFilters, setDraftFilters] = useState<Filters>(defaultFilters);
   const [appliedFilters, setAppliedFilters] = useState<Filters>(defaultFilters);
-  const [noteText, setNoteText] = useState("");
 
   const [form, setForm] = useState({
     title: "", description: "", clientId: "", assignee: employees[0]?.name ?? "",
     priority: "medium" as Task["priority"], dueDate: "", status: "pending" as Task["status"],
     taskType: "other" as Task["taskType"], platform: "",
-  });
-
-  const [editForm, setEditForm] = useState({
-    description: "", priority: "medium" as Task["priority"], dueDate: "",
-    status: "pending" as Task["status"], assignee: "", clientId: "",
   });
 
   // === הרשאות ===
@@ -214,19 +207,12 @@ export default function TasksPage() {
     setIsModalOpen(false);
   };
 
-  const handleAddNote = () => {
-    if (!selectedTask || !noteText.trim()) return;
-    addTaskNote(selectedTask.id, { author: settings.userName, content: noteText });
-    setNoteText("");
-  };
-
-  // === מחיקת משימה ===
+  // === מחיקת משימה (משמש בכפתור המהיר בטבלה) ===
   async function handleDeleteTask(taskId: string) {
     if (!confirm(t('delete') + '?')) return;
     await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
     await refreshTasks();
-    setSelectedTask(null);
-    setEditingTask(null);
+    setSelectedTaskId(null);
   }
 
   // === שינוי סטטוס מהיר ===
@@ -235,40 +221,7 @@ export default function TasksPage() {
     await updateTask(taskId, { status: newStatus } as Partial<Task>);
   }
 
-  // === פתיחת עריכה ===
-  function openEdit(task: Task) {
-    setEditingTask(task);
-    setEditForm({
-      description: task.description,
-      priority: task.priority,
-      dueDate: task.dueDate,
-      status: task.status,
-      assignee: task.assignee,
-      clientId: task.clientId,
-    });
-  }
-
-  async function handleSaveEdit() {
-    if (!editingTask) return;
-    const data: Record<string, unknown> = {
-      description: editForm.description,
-      priority: editForm.priority,
-      dueDate: editForm.dueDate,
-      status: editForm.status,
-    };
-    // רק admin יכול לשנות assignee ו-clientId
-    if (isAdmin) {
-      data.assignee = editForm.assignee;
-      data.clientId = editForm.clientId || null;
-    }
-    await updateTask(editingTask.id, data as Partial<Task>);
-    setEditingTask(null);
-  }
-
   const inputClass = "w-full rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-sm text-brand-dark placeholder:text-brand-muted focus:border-brand-gold focus:bg-brand-light focus:outline-none focus:ring-1 focus:ring-brand-gold";
-
-  // גרסה עדכנית של המשימה הנבחרת
-  const liveTask = selectedTask ? tasks.find((t) => t.id === selectedTask.id) ?? selectedTask : null;
 
   return (
     <div className="space-y-6">
@@ -373,7 +326,7 @@ export default function TasksPage() {
                 const overdue = isOverdue(task);
                 const editable = canEditTask(task);
                 return (
-                  <tr key={task.id} onClick={() => { setSelectedTask(task); setNoteText(""); }} className={`cursor-pointer border-b border-brand-border transition-colors duration-200 hover:bg-brand-bg/30 ${overdue ? "bg-red-50/50" : ""}`}>
+                  <tr key={task.id} onClick={() => setSelectedTaskId(task.id)} className={`cursor-pointer border-b border-brand-border transition-colors duration-200 hover:bg-brand-bg/30 ${overdue ? "bg-red-50/50" : ""}`}>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         {overdue && <AlertOctagon className="h-4 w-4 shrink-0 text-brand-danger" />}
@@ -409,7 +362,7 @@ export default function TasksPage() {
                     <td className="px-2 py-4" onClick={(e) => e.stopPropagation()}>
                       {editable && (
                         <button
-                          onClick={() => openEdit(task)}
+                          onClick={() => setSelectedTaskId(task.id)}
                           className="rounded p-1 text-brand-muted transition-colors hover:bg-brand-bg hover:text-brand-dark"
                           title={t('edit')}
                         >
@@ -463,91 +416,8 @@ export default function TasksPage() {
         </form>
       </Modal>
 
-      {/* מודל עריכת משימה */}
-      <Modal isOpen={!!editingTask} onClose={() => setEditingTask(null)} title={`${t('edit')} ${t('tasks')}`}>
-        {editingTask && (
-          <div className="space-y-4">
-            <p className="text-sm font-medium text-brand-dark">{editingTask.title}</p>
-            <div><label className="mb-1 block text-sm font-medium text-brand-dark">תיאור</label><textarea value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} rows={3} className={inputClass} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="mb-1 block text-sm font-medium text-brand-dark">דחיפות</label><select value={editForm.priority} onChange={(e) => setEditForm((p) => ({ ...p, priority: e.target.value as Task["priority"] }))} className={inputClass}>{PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
-              <div><label className="mb-1 block text-sm font-medium text-brand-dark">סטטוס</label><select value={editForm.status} onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value as Task["status"] }))} className={inputClass}>{TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
-            </div>
-            <div><label className="mb-1 block text-sm font-medium text-brand-dark">תאריך יעד</label><input type="date" value={editForm.dueDate} onChange={(e) => setEditForm((p) => ({ ...p, dueDate: e.target.value }))} className={inputClass} /></div>
-            {/* שדות admin-only */}
-            {isAdmin && (
-              <div className="grid grid-cols-2 gap-3 border-t border-brand-border pt-3">
-                <div><label className="mb-1 block text-sm font-medium text-brand-dark">אחראי</label><select value={editForm.assignee} onChange={(e) => setEditForm((p) => ({ ...p, assignee: e.target.value }))} className={inputClass}>{employees.map((e) => <option key={e.id} value={e.name}>{e.name}</option>)}</select></div>
-                <div><label className="mb-1 block text-sm font-medium text-brand-dark">לקוח</label><select value={editForm.clientId} onChange={(e) => setEditForm((p) => ({ ...p, clientId: e.target.value }))} className={inputClass}><option value="">ללא שיוך</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-              </div>
-            )}
-            <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
-              <button onClick={() => setEditingTask(null)} className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg">{t('cancel')}</button>
-              <button onClick={handleSaveEdit} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">{t('save')}</button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* מודל פרטי משימה */}
-      <Modal isOpen={!!selectedTask} onClose={() => setSelectedTask(null)} title={t('taskDetails')} size="lg">
-        {liveTask && (() => {
-          const priorityInfo = getPriorityInfo(liveTask.priority);
-          const statusInfo = getTaskStatusInfo(liveTask.status);
-          const overdue = isOverdue(liveTask);
-          return (
-            <div className="space-y-5">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-brand-dark">{liveTask.title}</h3>
-                  {liveTask.description && <p className="mt-1 text-sm text-brand-muted">{liveTask.description}</p>}
-                </div>
-                <div className="flex items-center gap-2">
-                  {overdue && <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-brand-danger">{t('overdue')}</span>}
-                  {canEditTask(liveTask) && (
-                    <button onClick={() => { setSelectedTask(null); openEdit(liveTask); }} className="flex items-center gap-1 rounded-lg border border-brand-border px-2.5 py-1 text-xs text-brand-muted hover:bg-brand-bg">
-                      <Pencil className="h-3 w-3" />
-                      {t('edit')}
-                    </button>
-                  )}
-                  {isAdmin && (
-                    <button onClick={() => handleDeleteTask(liveTask.id)} className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-brand-danger hover:bg-red-100">
-                      <Trash2 className="h-3 w-3" />
-                      {t('delete')}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('client')}</p><p className="text-sm font-medium text-brand-dark">{getClientName(liveTask.clientId)}</p></div>
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('assignee')}</p><p className="text-sm font-medium text-brand-dark">{liveTask.assignee}</p></div>
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('priority')}</p><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${priorityInfo.bg} ${priorityInfo.color}`}>{priorityInfo.label}</span></div>
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('status')}</p><p className="text-sm font-medium text-brand-dark">{overdue ? t('overdue') : statusInfo.label}</p></div>
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('dueDate')}</p><p className={`text-sm font-medium ${overdue ? "text-brand-danger" : "text-brand-dark"}`}>{formatDate(liveTask.dueDate)}</p></div>
-                <div className="rounded-lg bg-brand-bg p-3"><p className="text-xs text-brand-muted">{t('type')}</p><p className="text-sm font-medium text-brand-dark">{liveTask.taskType === "advertising" ? `פרסום — ${liveTask.platform}` : "אחר"}</p></div>
-              </div>
-
-              <div className="border-t border-brand-border pt-4">
-                <h4 className="mb-3 text-sm font-semibold text-brand-dark">{t('notesAndChat')}</h4>
-                <div className="max-h-48 space-y-2 overflow-y-auto">
-                  {liveTask.notes.length === 0 && <p className="text-sm text-brand-muted">{t('noNotes')}</p>}
-                  {liveTask.notes.map((note) => (
-                    <div key={note.id} className="rounded-lg bg-brand-bg p-3">
-                      <div className="flex items-center justify-between"><span className="text-xs font-medium text-brand-dark">{note.author}</span><span className="text-xs text-brand-muted">{formatDate(note.createdAt)}</span></div>
-                      <p className="mt-1 text-sm text-brand-dark">{note.content}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <input type="text" value={noteText} onChange={(e) => setNoteText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddNote(); } }} className={`${inputClass} flex-1`} placeholder={t('writeNote')} />
-                  <button type="button" onClick={handleAddNote} className="rounded-lg bg-brand-gold p-2 text-brand-dark hover:bg-brand-gold/80"><Send className="h-4 w-4" /></button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-      </Modal>
+      {/* מודל עריכה/צפייה במשימה — קומפוננטה משותפת */}
+      <TaskModal taskId={selectedTaskId} onClose={() => setSelectedTaskId(null)} showClientField />
     </div>
   );
 }
