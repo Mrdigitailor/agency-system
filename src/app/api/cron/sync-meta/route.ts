@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { fetchAdInsights, extractMetrics } from "@/lib/api/meta/ad-insights";
-import { searchStream, refreshGoogleToken } from "@/lib/api/google-ads/client";
+import { searchStream, getValidGoogleToken } from "@/lib/api/google-ads/client";
 import { fetchCampaignReport } from "@/lib/api/tiktok/client";
 import type { MetaInsight } from "@/lib/api/meta/ad-insights";
 
@@ -52,7 +52,7 @@ export async function GET(req: Request) {
     if (conn.platform === "meta") {
       rows = await syncMetaQuick(conn.clientId, conn.accessToken, conn.assets, dateStr);
     } else if (conn.platform === "google_ads") {
-      rows = await syncGoogleQuick(conn.clientId, conn.accessToken, conn.refreshToken, conn.assets, dateStr);
+      rows = await syncGoogleQuick(conn.clientId, conn.id, conn.accessToken, conn.refreshToken, conn.tokenExpiry, conn.assets, dateStr);
     } else if (conn.platform === "tiktok") {
       rows = await syncTikTokQuick(conn.clientId, conn.accessToken, conn.assets, dateStr);
     }
@@ -146,20 +146,23 @@ async function syncMetaQuick(
 
 async function syncGoogleQuick(
   clientId: string,
+  connectionId: string,
   accessToken: string,
   refreshToken: string,
+  tokenExpiry: Date | null,
   assets: Array<{ id: string; assetType: string; externalId: string; extraData: string }>,
   date: string,
 ): Promise<number> {
   const account = assets.find((a) => a.assetType === "google_ads_account");
   if (!account) return 0;
 
-  // Refresh token if needed
-  let token = accessToken;
-  if (refreshToken) {
-    const refreshed = await refreshGoogleToken(refreshToken);
-    if (refreshed) token = refreshed.access_token;
-  }
+  // וודא טוקן תקף — מרענן ושומר ל-DB דרך getValidGoogleToken
+  const token = await getValidGoogleToken({
+    id: connectionId,
+    accessToken,
+    refreshToken,
+    tokenExpiry,
+  });
 
   const extra = JSON.parse(account.extraData || "{}");
   const mccId = extra.mccId ?? "";

@@ -1,5 +1,7 @@
 // Google Ads REST API client (v17)
 
+import { prisma } from "@/lib/db/prisma";
+
 const GOOGLE_ADS_API = "https://googleads.googleapis.com/v20";
 const DEV_TOKEN = process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "";
 
@@ -36,6 +38,50 @@ export async function refreshGoogleToken(refreshToken: string): Promise<{
     console.error("[GoogleAds] Token refresh error:", err);
     return null;
   }
+}
+
+/**
+ * מחזיר access token תקף ל-Google Ads — מרענן אוטומטית אם פג או עומד לפוג (חלון 5 דק׳).
+ * הטוקן החדש נשמר ל-DB.
+ *
+ * Throws אם אין refreshToken או שהרענון נכשל — המשמעות: הלקוח צריך להתחבר מחדש.
+ */
+export async function getValidGoogleToken(conn: {
+  id: string;
+  accessToken: string;
+  refreshToken: string;
+  tokenExpiry: Date | null;
+}): Promise<string> {
+  const FIVE_MIN_MS = 5 * 60 * 1000;
+  const expiresAt = conn.tokenExpiry ? new Date(conn.tokenExpiry).getTime() : 0;
+  const isExpired = !expiresAt || expiresAt < Date.now() + FIVE_MIN_MS;
+
+  if (!isExpired) {
+    return conn.accessToken;
+  }
+
+  if (!conn.refreshToken) {
+    throw new Error("No refresh token — need to reconnect");
+  }
+
+  console.log(`[GoogleAds] Token expired/expiring (expiresAt=${conn.tokenExpiry?.toISOString() ?? "null"}), refreshing…`);
+
+  const refreshed = await refreshGoogleToken(conn.refreshToken);
+  if (!refreshed) {
+    throw new Error("Token refresh failed — need to reconnect");
+  }
+
+  const newExpiry = new Date(Date.now() + refreshed.expires_in * 1000);
+  await prisma.platformConnection.update({
+    where: { id: conn.id },
+    data: {
+      accessToken: refreshed.access_token,
+      tokenExpiry: newExpiry,
+    },
+  });
+
+  console.log(`[GoogleAds] Token refreshed, new expiry ${newExpiry.toISOString()}`);
+  return refreshed.access_token;
 }
 
 function buildHeaders(opts: GoogleAdsApiOptions): Record<string, string> {

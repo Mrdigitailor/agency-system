@@ -1,7 +1,7 @@
 // סנכרון נתוני Google Ads — שואב campaigns ושומר ב-DB
 
 import { prisma } from "@/lib/db/prisma";
-import { searchStream, refreshGoogleToken } from "./client";
+import { searchStream, getValidGoogleToken } from "./client";
 
 const MICROS = 1_000_000;
 
@@ -12,27 +12,12 @@ export async function syncGoogleAdsAccount(
   clientId: string,
   assetId: string,
   customerId: string,
-  accessToken: string,
-  refreshToken: string,
+  token: string,
   since: string,
   until: string,
   mccId?: string,
 ): Promise<{ fetched: number; errors: string[] }> {
   const errors: string[] = [];
-  let token = accessToken;
-
-  // רענון token אם צריך
-  if (refreshToken) {
-    const refreshed = await refreshGoogleToken(refreshToken);
-    if (refreshed) {
-      token = refreshed.access_token;
-      // עדכון ב-DB
-      await prisma.platformConnection.updateMany({
-        where: { clientId, platform: "google_ads" },
-        data: { accessToken: token, tokenExpiry: new Date(Date.now() + refreshed.expires_in * 1000) },
-      });
-    }
-  }
 
   const query = `
     SELECT
@@ -164,6 +149,15 @@ export async function syncClientGoogleAds(clientId: string, daysBack = 30): Prom
   let totalFetched = 0;
   const allErrors: string[] = [];
 
+  // וודא שיש token תקף לפני התחלת הסנכרון — מרענן ב-DB אם צריך
+  let token: string;
+  try {
+    token = await getValidGoogleToken(connection);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    return { fetched: 0, errors: [msg] };
+  }
+
   for (const asset of connection.assets) {
     const extra = JSON.parse(asset.extraData || "{}");
     const mccId = extra.mccId ?? "";
@@ -171,8 +165,7 @@ export async function syncClientGoogleAds(clientId: string, daysBack = 30): Prom
       clientId,
       asset.id,
       asset.externalId,
-      connection.accessToken,
-      connection.refreshToken,
+      token,
       since,
       until,
       mccId,

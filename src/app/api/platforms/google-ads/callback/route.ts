@@ -108,16 +108,24 @@ export async function GET(req: Request) {
     const primaryMccId = allAccounts.find((a) => a.mccId)?.mccId ?? "";
 
     // 6. Save connection with MCC ID in accountName
+    // חשוב: Google מחזיר refresh_token רק כשהמשתמש אישר (prompt=consent / access_type=offline).
+    // אם הוא לא נשלח (re-consent ללא prompt) — אסור לדרוס את הקיים ב-DB.
+    const updatePayload: Record<string, unknown> = {
+      accessToken: tokenData.access_token,
+      tokenExpiry: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null,
+      accountName: primaryMccId ? `MCC: ${primaryMccId}` : "",
+      accountEmail: email,
+      isActive: true,
+    };
+    if (tokenData.refresh_token) {
+      updatePayload.refreshToken = tokenData.refresh_token;
+    } else {
+      console.warn(`[GoogleAds Callback] No refresh_token in response — keeping existing one for client ${clientId}`);
+    }
+
     const conn = await prisma.platformConnection.upsert({
       where: { clientId_platform: { clientId, platform: "google_ads" } },
-      update: {
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token ?? "",
-        tokenExpiry: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null,
-        accountName: primaryMccId ? `MCC: ${primaryMccId}` : "",
-        accountEmail: email,
-        isActive: true,
-      },
+      update: updatePayload,
       create: {
         clientId,
         platform: "google_ads",
