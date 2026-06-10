@@ -102,6 +102,7 @@ model Client {
   chatRoom      ChatRoom?
   platformConnections PlatformConnection[]
   profile       ClientProfile?
+  competitors   Competitor[]
 
   @@map("clients")
 }
@@ -960,6 +961,70 @@ model Recruitment {
   updatedAt  DateTime @updatedAt
 
   @@map("recruitments")
+}
+
+// ==================== ביון מתחרים ====================
+
+model Competitor {
+  id             String   @id @default(cuid())
+  clientId       String
+  name           String
+  website        String   @default("")
+  facebookPage   String   @default("")
+  facebookPageId String   @default("")
+  instagramUrl  String   @default("")
+  category       String   @default("")
+  notes          String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client   Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  ads      CompetitorAd[]
+  analyses CompetitorAnalysis[]
+
+  @@index([clientId])
+  @@map("competitors")
+}
+
+model CompetitorAd {
+  id              String   @id @default(cuid())
+  competitorId    String
+  adId            String   @unique
+  body            String   @default("")
+  title           String   @default("")
+  linkCaption     String   @default("")
+  linkDescription String   @default("")
+  pageId          String   @default("")
+  pageName        String   @default("")
+  platforms       String   @default("") // JSON array
+  startDate       String   @default("")
+  endDate         String   @default("")
+  daysRunning     Int      @default(0)
+  snapshotUrl     String   @default("")
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@index([competitorId])
+  @@map("competitor_ads")
+}
+
+model CompetitorAnalysis {
+  id           String   @id @default(cuid())
+  competitorId String
+  clientId     String
+  adsCount     Int      @default(0)
+  analysis     String   @default("")
+  topAds       String   @default("[]") // JSON array of ad IDs + scores
+  analyzedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@index([competitorId])
+  @@index([clientId])
+  @@map("competitor_analyses")
 }
 
 // ==================== ספקים ====================
