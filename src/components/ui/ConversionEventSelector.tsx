@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { TargetIcon, RefreshCw, CheckCircle2 } from "lucide-react";
+import { TargetIcon, RefreshCw, CheckCircle2, Info } from "lucide-react";
 import { parseConversionEvents } from "@/lib/utils/metaMetrics";
 
 interface EventOption {
@@ -25,6 +25,21 @@ const CATEGORY_LABELS: Record<string, string> = {
   engagement: "מעורבות",
   other: "אחר",
 };
+
+// אירועי on-platform — לא נשאבים מהפיקסל. מגיעים ישירות מקמפיינים
+// (Click-to-WhatsApp, Click-to-Messenger, Lead Ads, Video Ads וכו').
+const ON_PLATFORM_EVENTS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "onsite_conversion.messaging_conversation_started_7d", label: "שיחות מסנג'ר/ווטסאפ (Messaging Conversations)" },
+  { value: "onsite_conversion.messaging_first_reply", label: "תגובה ראשונה בהודעות (First Reply)" },
+  { value: "landing_page_view", label: "צפיות בדף נחיתה (Landing Page Views)" },
+  { value: "link_click", label: "קליקים על קישור (Link Clicks)" },
+  { value: "post_engagement", label: "מעורבות בפוסט (Post Engagement)" },
+  { value: "video_view", label: "צפיות וידאו (Video Views)" },
+  { value: "lead", label: "לידים — טפסי Meta (On-Facebook Leads)" },
+  { value: "page_engagement", label: "מעורבות בעמוד (Page Engagement)" },
+];
+
+const ON_PLATFORM_LABEL_BY_VALUE = new Map(ON_PLATFORM_EVENTS.map((e) => [e.value, e.label]));
 
 export default function ConversionEventSelector({ clientId, currentEvent }: ConversionEventSelectorProps) {
   const [events, setEvents] = useState<EventOption[]>([]);
@@ -91,22 +106,10 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
     return acc;
   }, {});
 
-  const currentNames = selected.map((id) => events.find((e) => e.id === id)?.name ?? id);
-
-  // אם אין פיקסל נבחר — הצג הודעה
-  if (hasPixel === false) {
-    return (
-      <div className="rounded-lg border border-orange-200 bg-orange-50 p-4">
-        <div className="flex items-center gap-2">
-          <TargetIcon className="h-4 w-4 text-orange-500" />
-          <h4 className="text-sm font-semibold text-brand-dark">הגדרת המרות — Meta</h4>
-        </div>
-        <p className="mt-2 text-xs text-orange-700">
-          יש לבחור פיקסל ב&quot;ניהול נכסים&quot; למעלה כדי להגדיר המרות.
-        </p>
-      </div>
-    );
-  }
+  // שם תצוגה לכל ערך נבחר — מחפש קודם באירועי הפיקסל ואז בקבועי on-platform
+  const labelFor = (id: string) =>
+    events.find((e) => e.id === id)?.name ?? ON_PLATFORM_LABEL_BY_VALUE.get(id) ?? id;
+  const currentNames = selected.map(labelFor);
 
   return (
     <div className="rounded-lg border border-brand-border bg-brand-bg p-4">
@@ -117,7 +120,7 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
         </div>
         <button
           onClick={loadEvents}
-          disabled={loading || hasPixel === null}
+          disabled={loading || hasPixel === null || hasPixel === false}
           className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-bg disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
@@ -134,9 +137,21 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
 
       {error && <p className="mb-3 rounded-lg bg-red-50 p-2 text-xs text-brand-danger">{error}</p>}
 
-      {events.length > 0 && (
-        <>
-          <div className="max-h-60 space-y-3 overflow-y-auto rounded-lg border border-brand-border bg-brand-light p-3">
+      {/* ===== סקשן 1: אירועי פיקסל ===== */}
+      <div className="mb-3 rounded-lg border border-brand-border bg-brand-light p-3">
+        <p className="mb-2 text-[11px] font-semibold text-brand-muted">
+          אירועי פיקסל {pixelName ? `— ${pixelName}` : ""}
+        </p>
+
+        {hasPixel === false && (
+          <div className="flex items-start gap-2 rounded-lg bg-orange-50 p-2 text-[11px] text-orange-700">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>אין פיקסל נבחר. כדי לראות אירועי פיקסל יש לבחור פיקסל ב&quot;ניהול נכסים&quot;. אירועי פלטפורמה למטה זמינים גם בלי פיקסל.</span>
+          </div>
+        )}
+
+        {events.length > 0 && (
+          <div className="max-h-60 space-y-3 overflow-y-auto">
             {Object.entries(grouped).map(([source, items]) => (
               <div key={source}>
                 <p className="mb-1 text-[10px] font-semibold text-brand-muted">
@@ -158,33 +173,54 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
               </div>
             ))}
           </div>
+        )}
 
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
-            >
-              {saving ? "שומר..." : `שמור (${selected.length} נבחרו)`}
-            </button>
-            {savedOk && (
-              <span className="flex items-center gap-1 text-xs text-brand-success">
-                <CheckCircle2 className="h-4 w-4" />
-                נשמר
-              </span>
-            )}
-          </div>
-          <p className="mt-2 text-[10px] text-brand-muted">
-            המרות = סכום כל האירועים שנבחרו. עלות להמרה = spend / סה״כ המרות.
+        {events.length === 0 && !loading && !error && hasPixel !== false && (
+          <p className="text-xs text-brand-muted">
+            לחץ &quot;טען אירועים מהפיקסל&quot; כדי לראות את ההמרות שהפיקסל קולט.
           </p>
-        </>
-      )}
+        )}
+      </div>
 
-      {events.length === 0 && !loading && !error && (
-        <p className="text-xs text-brand-muted">
-          לחץ &quot;טען אירועים מהפיקסל&quot; כדי לראות את ההמרות שהפיקסל קולט.
+      {/* ===== סקשן 2: אירועי פלטפורמה ===== */}
+      <div className="mb-3 rounded-lg border border-brand-border bg-brand-light p-3">
+        <p className="mb-1 text-[11px] font-semibold text-brand-muted">אירועי פלטפורמה (On-Platform)</p>
+        <p className="mb-2 text-[10px] text-brand-muted">
+          אירועים שלא תלויים בפיקסל — מתאימים לקמפיינים של Click-to-WhatsApp/Messenger, Lead Ads ו-Video Views.
         </p>
-      )}
+        <div className="max-h-60 space-y-1 overflow-y-auto">
+          {ON_PLATFORM_EVENTS.map((e) => (
+            <label key={e.value} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-brand-dark hover:bg-brand-bg">
+              <input
+                type="checkbox"
+                checked={selected.includes(e.value)}
+                onChange={() => toggleEvent(e.value)}
+                className="h-3.5 w-3.5 rounded border-brand-border"
+              />
+              <span>{e.label} <span className="text-brand-muted">({e.value})</span></span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
+        >
+          {saving ? "שומר..." : `שמור (${selected.length} נבחרו)`}
+        </button>
+        {savedOk && (
+          <span className="flex items-center gap-1 text-xs text-brand-success">
+            <CheckCircle2 className="h-4 w-4" />
+            נשמר
+          </span>
+        )}
+      </div>
+      <p className="mt-2 text-[10px] text-brand-muted">
+        המרות = סכום כל האירועים שנבחרו (פיקסל + פלטפורמה). עלות להמרה = spend / סה״כ המרות.
+      </p>
     </div>
   );
 }
