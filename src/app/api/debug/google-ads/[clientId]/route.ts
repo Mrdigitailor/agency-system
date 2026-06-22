@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { refreshGoogleToken, listMccChildAccounts } from "@/lib/api/google-ads/client";
 
-const GOOGLE_ADS_API = "https://googleads.googleapis.com/v20";
+const GOOGLE_ADS_API = `https://googleads.googleapis.com/${process.env.GOOGLE_ADS_API_VERSION ?? "v24"}`;
 
 export async function GET(req: Request, { params }: { params: Promise<{ clientId: string }> }) {
   const auth = await requireAuth();

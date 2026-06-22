@@ -1,8 +1,12 @@
-// Google Ads REST API client (v17)
+// Google Ads REST API client
 
 import { prisma } from "@/lib/db/prisma";
 
-const GOOGLE_ADS_API = "https://googleads.googleapis.com/v20";
+// גרסת ה-API ניתנת להגדרה דרך משתנה סביבה (GOOGLE_ADS_API_VERSION).
+// גוגל עברה לשחרורים חודשיים ב-2026 וכל גרסה נחסמת ~שנה אחרי שחרורה,
+// אז כשמגיעה התראת deprecation מספיק לעדכן את המשתנה — בלי שינוי קוד.
+const GOOGLE_ADS_API_VERSION = process.env.GOOGLE_ADS_API_VERSION ?? "v24";
+const GOOGLE_ADS_API = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 const DEV_TOKEN = process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "";
 
 interface GoogleAdsApiOptions {
