@@ -35,10 +35,18 @@ export async function refreshGoogleToken(refreshToken: string): Promise<{
     if (!res.ok) {
       const err = await res.text();
       console.error("[GoogleAds] Token refresh failed:", err);
+      // invalid_grant = ה-refresh token מת (בוטל / פג ב-OAuth testing mode / לא בשימוש 6 חודשים).
+      // זורקים כדי שהקורא ינקה אותו ב-DB — אחרת ה-UI ימשיך להציג חיבור "בריא" שתמיד נכשל.
+      if (err.includes("invalid_grant")) {
+        const e = new Error("invalid_grant") as Error & { invalidGrant?: boolean };
+        e.invalidGrant = true;
+        throw e;
+      }
       return null;
     }
     return res.json();
   } catch (err) {
+    if ((err as { invalidGrant?: boolean })?.invalidGrant) throw err; // העבר הלאה לטיפול בקורא
     console.error("[GoogleAds] Token refresh error:", err);
     return null;
   }
@@ -70,7 +78,20 @@ export async function getValidGoogleToken(conn: {
 
   console.log(`[GoogleAds] Token expired/expiring (expiresAt=${conn.tokenExpiry?.toISOString() ?? "null"}), refreshing…`);
 
-  const refreshed = await refreshGoogleToken(conn.refreshToken);
+  let refreshed: { access_token: string; expires_in: number } | null;
+  try {
+    refreshed = await refreshGoogleToken(conn.refreshToken);
+  } catch (err) {
+    if ((err as { invalidGrant?: boolean })?.invalidGrant) {
+      // ה-refresh token מת — מנקים אותו כדי ש-needsReconnect יידלק וה-UI יבקש חיבור מחדש
+      await prisma.platformConnection.update({
+        where: { id: conn.id },
+        data: { refreshToken: "" },
+      });
+      throw new Error("Refresh token invalid (invalid_grant) — need to reconnect");
+    }
+    throw err;
+  }
   if (!refreshed) {
     throw new Error("Token refresh failed — need to reconnect");
   }

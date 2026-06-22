@@ -18,6 +18,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   });
 
   // הסרת tokens מהתגובה לאבטחה
+  const now = Date.now();
   const safe = connections.map((c) => ({
     id: c.id,
     platform: c.platform,
@@ -26,6 +27,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     connectedAt: c.connectedAt,
     lastSyncAt: c.lastSyncAt,
     tokenExpiry: c.tokenExpiry,
+    // האם החיבור באמת דורש חיבור מחדש?
+    // פלטפורמות עם refresh token (Google Ads, GA4, TikTok) מרעננות את ה-access token
+    // אוטומטית — ה-access token חי שעה בלבד ולכן ה-tokenExpiry שלו לא מעיד על תקלה.
+    // החיבור "שבור" רק אם אין refresh token (או שנמחק אחרי invalid_grant).
+    // פלטפורמות בלי refresh token (Meta — טוקן ארוך-טווח) — שם tokenExpiry הוא הסיגנל האמיתי.
+    needsReconnect: c.refreshToken
+      ? false
+      : c.tokenExpiry
+      ? new Date(c.tokenExpiry).getTime() < now
+      : false,
     assets: c.assets.map((a) => ({
       id: a.id,
       assetType: a.assetType,

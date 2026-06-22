@@ -22,6 +22,7 @@ interface Connection {
   connectedAt: string;
   lastSyncAt: string | null;
   tokenExpiry: string | null;
+  needsReconnect: boolean;
   assets: Asset[];
 }
 
@@ -259,7 +260,7 @@ export default function PlatformConnections({ clientId }: { clientId: string }) 
                     <div>
                       <p className="flex items-center gap-2 text-sm font-medium text-brand-dark">
                         {platform?.label}
-                        {conn.tokenExpiry && new Date(conn.tokenExpiry) < new Date() ? (
+                        {conn.needsReconnect ? (
                           <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-brand-danger">
                             {lang === "he" ? "פג תוקף — חבר מחדש" : "Expired — Reconnect"}
                           </span>

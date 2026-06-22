@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { TargetIcon, RefreshCw, CheckCircle2, Info } from "lucide-react";
+import { TargetIcon, RefreshCw, CheckCircle2, Info, ChevronDown } from "lucide-react";
 import { parseConversionEvents } from "@/lib/utils/metaMetrics";
 
 interface EventOption {
@@ -42,6 +42,7 @@ const ON_PLATFORM_EVENTS: ReadonlyArray<{ value: string; label: string }> = [
 const ON_PLATFORM_LABEL_BY_VALUE = new Map(ON_PLATFORM_EVENTS.map((e) => [e.value, e.label]));
 
 export default function ConversionEventSelector({ clientId, currentEvent }: ConversionEventSelectorProps) {
+  const [expanded, setExpanded] = useState(false); // סגור כברירת מחדל — נפתח בלחיצה על הכותרת
   const [events, setEvents] = useState<EventOption[]>([]);
   const [pixelName, setPixelName] = useState<string | null>(null);
   const [hasPixel, setHasPixel] = useState<boolean | null>(null); // null = loading
@@ -113,11 +114,27 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
 
   return (
     <div className="rounded-lg border border-brand-border bg-brand-bg p-4">
-      <div className="mb-3 flex items-center justify-between">
+      {/* כותרת — לחיצה פותחת/סוגרת. סגור כברירת מחדל. */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between"
+      >
         <div className="flex items-center gap-2">
           <TargetIcon className="h-4 w-4 text-brand-gold" />
           <h4 className="text-sm font-semibold text-brand-dark">הגדרת המרות — Meta</h4>
+          {selected.length > 0 && (
+            <span className="rounded-full bg-brand-gold/20 px-2 py-0.5 text-[10px] font-semibold text-brand-dark">
+              {selected.length} נבחרו
+            </span>
+          )}
         </div>
+        <ChevronDown className={`h-4 w-4 text-brand-muted transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </button>
+
+      {expanded && (
+      <div className="mt-3">
+      <div className="mb-3 flex justify-end">
         <button
           onClick={loadEvents}
           disabled={loading || hasPixel === null || hasPixel === false}
@@ -221,6 +238,8 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
       <p className="mt-2 text-[10px] text-brand-muted">
         המרות = סכום כל האירועים שנבחרו (פיקסל + פלטפורמה). עלות להמרה = spend / סה״כ המרות.
       </p>
+      </div>
+      )}
     </div>
   );
 }
