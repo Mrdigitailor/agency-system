@@ -1,13 +1,12 @@
-// מוח ה-WhatsApp assistant — מקבל הודעת טקסט, מריץ Claude עם tool-use,
-// ומחזיר תשובה בעברית. יודע לפתוח משימות (עם שיוך אוטומטי + התראה לעובד)
+// מוח ה-assistant — מקבל הודעת טקסט, מריץ Claude עם tool-use, ומחזיר תשובה בעברית.
+// פלטפורמה-אגנוסטי (משמש את בוט הטלגרם). יודע לפתוח משימות (עם שיוך אוטומטי)
 // ולשלוף נתוני קמפיינים של לקוחות.
 
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db/prisma";
-import { sendWhatsAppMessage, phoneToChatId } from "@/lib/api/green-api/client";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const MODEL = process.env.WHATSAPP_AI_MODEL ?? "claude-sonnet-4-6";
+const MODEL = process.env.TELEGRAM_AI_MODEL ?? "claude-sonnet-4-6";
 
 const tools: Anthropic.Tool[] = [
   {
@@ -65,29 +64,16 @@ async function findClient(name: string) {
   );
 }
 
-/** מציאת המשתמש ששלח את ההודעה לפי מספר טלפון (ספרות) */
-async function findUserByPhone(phoneDigits: string) {
-  if (!phoneDigits) return null;
-  const users = await prisma.user.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, role: true, phone: true },
-  });
-  const norm = (p: string) => {
-    let d = p.replace(/\D/g, "");
-    if (d.startsWith("0")) d = "972" + d.slice(1);
-    return d;
-  };
-  const target = norm(phoneDigits);
-  return users.find((u) => u.phone && norm(u.phone) === target) ?? null;
-}
-
-async function createTask(
-  input: { title: string; description?: string; client_name?: string; priority?: string; due_date?: string },
-  senderDigits: string,
-) {
+async function createTask(input: {
+  title: string;
+  description?: string;
+  client_name?: string;
+  priority?: string;
+  due_date?: string;
+}) {
   const client = input.client_name ? await findClient(input.client_name) : null;
 
-  // שיוך: מנהל הקמפיינים של הלקוח → fallback: השולח (אם הוא משתמש) → אדמין ראשון
+  // שיוך: מנהל הקמפיינים של הלקוח → fallback: אדמין ראשון
   let assigneeId: string | null = null;
   let assigneeName = "";
   if (client?.campaignManagerId) {
@@ -97,12 +83,11 @@ async function createTask(
       assigneeName = u.name;
     }
   }
-  const senderUser = await findUserByPhone(senderDigits);
   if (!assigneeId) {
-    const fallback = senderUser ?? (await prisma.user.findFirst({ where: { role: "admin", isActive: true } }));
-    if (fallback) {
-      assigneeId = fallback.id;
-      assigneeName = fallback.name;
+    const admin = await prisma.user.findFirst({ where: { role: "admin", isActive: true } });
+    if (admin) {
+      assigneeId = admin.id;
+      assigneeName = admin.name;
     }
   }
 
@@ -113,30 +98,12 @@ async function createTask(
       clientId: client?.id ?? null,
       assigneeId,
       assignee: assigneeName,
-      creatorId: senderUser?.id ?? null,
       priority: input.priority ?? "medium",
       dueDate: input.due_date ?? "",
       status: "pending",
       taskType: "other",
     },
   });
-
-  // התראה לעובד המשויך בוואטסאפ (אם יש לו מספר טלפון רשום)
-  let notified = false;
-  if (assigneeId) {
-    const u = await prisma.user.findUnique({ where: { id: assigneeId }, select: { phone: true } });
-    if (u?.phone) {
-      const lines = [
-        `📋 *משימה חדשה הוקצתה לך*`,
-        `*${task.title}*`,
-        client ? `לקוח: ${client.name}` : null,
-        `עדיפות: ${task.priority}`,
-        task.dueDate ? `תאריך יעד: ${task.dueDate}` : null,
-        task.description ? `\n${task.description}` : null,
-      ].filter(Boolean);
-      notified = await sendWhatsAppMessage(phoneToChatId(u.phone), lines.join("\n"));
-    }
-  }
 
   return {
     ok: true,
@@ -147,7 +114,6 @@ async function createTask(
     client_matched: input.client_name ? Boolean(client) : null,
     priority: task.priority,
     due_date: task.dueDate || null,
-    employee_notified: notified,
   };
 }
 
@@ -202,9 +168,8 @@ async function getCampaignData(input: { client_name: string; days?: number }) {
   };
 }
 
-const SYSTEM_PROMPT = `אתה עוזר WhatsApp של סוכנות שיווק דיגיטלי (DigiTailors).
-אתה מתקשר בעברית, בסגנון קצר וברור שמתאים לוואטסאפ (לא דוחות ארוכים).
-מטבע: ₪ (שקלים). תאריך היום: {TODAY}.
+const SYSTEM_PROMPT = `אתה עוזר טלגרם של סוכנות שיווק דיגיטלי (DigiTailors).
+אתה מתקשר בעברית, בסגנון קצר וברור. מטבע: ₪ (שקלים). תאריך היום: {TODAY}.
 
 יש לך שני כלים:
 1. create_task — לפתיחת משימה. שייך אותה ללקוח אם הוזכר. אם לא ברור מה העדיפות, אל תשאל — קבע medium.
@@ -218,10 +183,8 @@ const SYSTEM_PROMPT = `אתה עוזר WhatsApp של סוכנות שיווק ד�
 
 /**
  * מריץ את ה-assistant על הודעה נכנסת ומחזיר טקסט תשובה.
- * @param text  תוכן ההודעה מהמשתמש
- * @param senderDigits מספר הטלפון של השולח (ספרות) — לשיוך creator/fallback
  */
-export async function runWhatsAppAssistant(text: string, senderDigits: string): Promise<string> {
+export async function runCampaignAssistant(text: string): Promise<string> {
   const system = SYSTEM_PROMPT.replace("{TODAY}", ymd(new Date()));
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: text }];
 
@@ -241,7 +204,6 @@ export async function runWhatsAppAssistant(text: string, senderDigits: string): 
       return replyText.trim() || "לא הצלחתי לעבד את הבקשה. נסה לנסח מחדש.";
     }
 
-    // הרצת כל הכלים שהמודל ביקש
     messages.push({ role: "assistant", content: response.content });
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
@@ -250,7 +212,7 @@ export async function runWhatsAppAssistant(text: string, senderDigits: string): 
       let result: unknown;
       try {
         if (block.name === "create_task") {
-          result = await createTask(block.input as Parameters<typeof createTask>[0], senderDigits);
+          result = await createTask(block.input as Parameters<typeof createTask>[0]);
         } else if (block.name === "get_campaign_data") {
           result = await getCampaignData(block.input as Parameters<typeof getCampaignData>[0]);
         } else {
@@ -259,11 +221,7 @@ export async function runWhatsAppAssistant(text: string, senderDigits: string): 
       } catch (err) {
         result = { error: err instanceof Error ? err.message : "שגיאה בהרצת הכלי" };
       }
-      toolResults.push({
-        type: "tool_result",
-        tool_use_id: block.id,
-        content: JSON.stringify(result),
-      });
+      toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
     }
 
     messages.push({ role: "user", content: toolResults });
