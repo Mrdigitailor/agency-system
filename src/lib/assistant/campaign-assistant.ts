@@ -51,18 +51,92 @@ function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** מציאת לקוח לפי שם — התאמה מדויקת ואז התאמה חלקית (case-insensitive) */
-async function findClient(name: string) {
+// ===== התאמת לקוח מטושטשת (fuzzy) =====
+
+/** נרמול שם לצורך השוואה — אותיות קטנות, בלי גרשיים/פיסוק, רווחים מכווצים */
+function normalizeName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/["'`׳״’]/g, "")
+    .replace(/[.,\-_/]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** מרחק עריכה (Levenshtein) בין שתי מחרוזות */
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  let curr = new Array<number>(n + 1);
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
+/** דמיון 0..1 לפי מרחק עריכה */
+function similarity(a: string, b: string): number {
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  return 1 - levenshtein(a, b) / maxLen;
+}
+
+/** ניקוד התאמה 0..1 בין מה שהמשתמש כתב לשם לקוח */
+function scoreClient(query: string, name: string): number {
+  const q = normalizeName(query);
+  const n = normalizeName(name);
+  if (!q || !n) return 0;
+  if (q === n) return 1;
+  // הכלה (חיפוש חלקי — נפוץ מאוד כשכותבים חלק מהשם)
+  if (n.includes(q) || q.includes(n)) return 0.92;
+  // התאמה לפי מילים — כמה ממילות החיפוש מופיעות בשם הלקוח
+  const qt = q.split(" ").filter(Boolean);
+  const nt = n.split(" ").filter(Boolean);
+  let hits = 0;
+  for (const t of qt) {
+    if (nt.some((x) => x.includes(t) || t.includes(x) || similarity(t, x) >= 0.8)) hits++;
+  }
+  const tokenScore = qt.length ? hits / qt.length : 0;
+  // דמיון תווים כללי (תופס שגיאות כתיב)
+  const charScore = similarity(q, n);
+  return Math.max(tokenScore * 0.9, charScore);
+}
+
+interface ClientLite {
+  id: string;
+  name: string;
+  campaignManagerId: string | null;
+  campaignManager: string;
+}
+
+/**
+ * מחפש לקוח לפי שם בהתאמה מטושטשת.
+ * מחזיר את הטוב ביותר (אם הניקוד מעל סף ביטחון) ואת 3 הקרובים ביותר כהצעות.
+ */
+async function matchClient(query: string): Promise<{ best: ClientLite | null; suggestions: string[]; topScore: number }> {
   const clients = await prisma.client.findMany({
     where: { deletedAt: null },
     select: { id: true, name: true, campaignManagerId: true, campaignManager: true },
   });
-  const lower = name.trim().toLowerCase();
-  return (
-    clients.find((c) => c.name.toLowerCase() === lower) ??
-    clients.find((c) => c.name.toLowerCase().includes(lower) || lower.includes(c.name.toLowerCase())) ??
-    null
-  );
+  const scored = clients
+    .map((c) => ({ client: c, score: scoreClient(query, c.name) }))
+    .sort((a, b) => b.score - a.score);
+
+  const CONFIDENT = 0.6; // סף ביטחון לשיוך אוטומטי
+  const best = scored[0];
+  return {
+    best: best && best.score >= CONFIDENT ? best.client : null,
+    suggestions: scored.filter((s) => s.score > 0.25).slice(0, 3).map((s) => s.client.name),
+    topScore: best?.score ?? 0,
+  };
 }
 
 async function createTask(input: {
@@ -72,7 +146,24 @@ async function createTask(input: {
   priority?: string;
   due_date?: string;
 }) {
-  const client = input.client_name ? await findClient(input.client_name) : null;
+  // התאמת לקוח — אם הוזכר שם אך לא נמצאה התאמה בטוחה, לא פותחים משימה
+  // על לקוח שגוי; מחזירים הצעות כדי שהמשתמש יתקן.
+  let client: ClientLite | null = null;
+  if (input.client_name) {
+    const m = await matchClient(input.client_name);
+    if (!m.best) {
+      return {
+        ok: false,
+        client_not_found: true,
+        searched: input.client_name,
+        suggestions: m.suggestions,
+        message: m.suggestions.length
+          ? `לא נמצא לקוח שמתאים ל-"${input.client_name}". הקרובים ביותר: ${m.suggestions.join(", ")}. המשימה לא נפתחה — בקש מהמשתמש לבחור שם מדויק.`
+          : `לא נמצא לקוח שמתאים ל-"${input.client_name}", ואין שמות קרובים. המשימה לא נפתחה.`,
+      };
+    }
+    client = m.best;
+  }
 
   // שיוך: מנהל הקמפיינים של הלקוח → fallback: אדמין ראשון
   let assigneeId: string | null = null;
@@ -140,8 +231,18 @@ async function createTask(input: {
 }
 
 async function getCampaignData(input: { client_name: string; days?: number }) {
-  const client = await findClient(input.client_name);
-  if (!client) return { error: `לא נמצא לקוח בשם "${input.client_name}".` };
+  const match = await matchClient(input.client_name);
+  if (!match.best) {
+    return {
+      error: "client_not_found",
+      searched: input.client_name,
+      suggestions: match.suggestions,
+      message: match.suggestions.length
+        ? `לא נמצא לקוח שמתאים ל-"${input.client_name}". הקרובים ביותר: ${match.suggestions.join(", ")}.`
+        : `לא נמצא לקוח שמתאים ל-"${input.client_name}".`,
+    };
+  }
+  const client = match.best;
 
   const days = input.days && input.days > 0 ? Math.min(input.days, 90) : 7;
   const to = new Date();
@@ -200,8 +301,8 @@ const SYSTEM_PROMPT = `אתה עוזר טלגרם של סוכנות שיווק �
 כללים:
 - כשפותחים משימה — אשר בקצרה למי היא שויכה ולאיזה לקוח.
 - כשמציגים נתוני קמפיין — סכם את העיקר (הוצאה, המרות, עלות להמרה) בנקודות קצרות, בלי טבלאות ענקיות.
-- אם לא מצאת לקוח בשם שניתן — אמר זאת בפירוש ובקש שם מדויק.
-- אל תמציא נתונים. השתמש רק במה שהכלים מחזירים.`;
+- אם כלי החזיר client_not_found — אל תפתח את המשימה ואל תנחש לקוח. אמור למשתמש שלא נמצא לקוח מתאים, הצג את השמות הקרובים (suggestions) ובקש שיכתוב את השם המדויק מהרשימה. אם המשתמש מאשר במפורש שאין לקוח — אפשר לפתוח את המשימה בלי שם לקוח (בלי הפרמטר client_name).
+- אל תמציא נתונים או שמות לקוחות. השתמש רק במה שהכלים מחזירים.`;
 
 /**
  * מריץ את ה-assistant על הודעה נכנסת ומחזיר טקסט תשובה.
