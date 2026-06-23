@@ -4,6 +4,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db/prisma";
+import { notifyTaskAssigned } from "@/lib/notifications/task-notify";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = process.env.TELEGRAM_AI_MODEL ?? "claude-sonnet-4-6";
@@ -105,6 +106,26 @@ async function createTask(input: {
     },
   });
 
+  // התראה במערכת + מייל לעובד — אותה לוגיקה כמו ב-/api/tasks.
+  // creatorId ריק (אין משתמש מחובר בבוט) ולכן ההתראה תמיד נשלחת ולא נחסמת כ"שיוך עצמי".
+  if (assigneeId) {
+    try {
+      await notifyTaskAssigned({
+        taskId: task.id,
+        taskTitle: task.title,
+        taskDescription: task.description,
+        taskDueDate: task.dueDate,
+        taskPriority: task.priority,
+        clientId: task.clientId,
+        assigneeId,
+        creatorId: "",
+        creatorName: "בוט טלגרם",
+      });
+    } catch (err) {
+      console.error("[TelegramAssistant] notifyTaskAssigned failed:", err);
+    }
+  }
+
   return {
     ok: true,
     task_id: task.id,
@@ -114,6 +135,7 @@ async function createTask(input: {
     client_matched: input.client_name ? Boolean(client) : null,
     priority: task.priority,
     due_date: task.dueDate || null,
+    employee_notified: Boolean(assigneeId),
   };
 }
 
