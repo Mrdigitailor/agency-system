@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runCampaignAssistant } from "@/lib/assistant/campaign-assistant";
-import { sendTelegramMessage, isTelegramConfigured } from "@/lib/api/telegram/client";
+import { sendTelegramMessage, isTelegramConfigured, downloadTelegramFile } from "@/lib/api/telegram/client";
+import { transcribeAudio, isTranscriptionConfigured } from "@/lib/api/transcription/client";
 
 // עיבוד ה-AI עשוי לקחת כמה שניות
 export const maxDuration = 60;
@@ -22,6 +23,8 @@ interface TelegramUpdate {
     chat?: { id?: number };
     from?: { id?: number; first_name?: string; username?: string };
     text?: string;
+    voice?: { file_id?: string };
+    audio?: { file_id?: string };
   };
 }
 
@@ -49,9 +52,10 @@ export async function POST(req: Request) {
   const message = update.message;
   const chatId = message?.chat?.id;
   const userId = message?.from?.id;
-  const text = (message?.text ?? "").trim();
+  let text = (message?.text ?? "").trim();
+  const voiceFileId = message?.voice?.file_id ?? message?.audio?.file_id;
 
-  if (!chatId || !userId || !text) {
+  if (!chatId || !userId || (!text && !voiceFileId)) {
     return NextResponse.json({ ok: true });
   }
 
@@ -69,6 +73,22 @@ export async function POST(req: Request) {
       `🔒 הגישה לבוט מוגבלת.\nה-Telegram ID שלך: ${userId}\nבקש מהאדמין להוסיף אותו ל-TELEGRAM_ALLOWED_USER_IDS.`,
     );
     return NextResponse.json({ ok: true });
+  }
+
+  // הודעה קולית — מורידים, מתמללים, ומאשרים מה הובן
+  if (!text && voiceFileId) {
+    if (!isTranscriptionConfigured()) {
+      await sendTelegramMessage(chatId, "תמלול הודעות קוליות עדיין לא מוגדר במערכת. שלח טקסט בינתיים.");
+      return NextResponse.json({ ok: true });
+    }
+    const audio = await downloadTelegramFile(voiceFileId);
+    const transcript = audio ? await transcribeAudio(audio) : null;
+    if (!transcript) {
+      await sendTelegramMessage(chatId, "לא הצלחתי לתמלל את ההודעה הקולית 🎙️ נסה שוב או שלח טקסט.");
+      return NextResponse.json({ ok: true });
+    }
+    text = transcript;
+    await sendTelegramMessage(chatId, `🎙️ הבנתי: "${text}"`);
   }
 
   // פקודת פתיחה
