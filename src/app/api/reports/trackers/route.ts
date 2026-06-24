@@ -65,8 +65,10 @@ export async function PATCH(req: Request) {
       where: { clientId_weekStart: { clientId: body.clientId, weekStart } },
       update: {
         content,
+        status: "sent",
         campaignManagerName: author,
         campaignManagerId: user.id ?? "",
+        sentAt: new Date(),
         updatedAt: new Date(),
       },
       create: {
@@ -76,6 +78,7 @@ export async function PATCH(req: Request) {
         weekStart,
         weekEnd,
         content,
+        status: "sent",
         sentAt: new Date(),
       },
     });

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Eye, Pencil, FileText, CheckCircle2, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import WeeklyReportDraft from "@/components/ui/WeeklyReportDraft";
 
 interface WeeklyReport {
   id: string;
@@ -170,6 +171,9 @@ export default function ClientWeeklyReportsTab({ clientId }: { clientId: string 
 
   return (
     <div className="space-y-4">
+      {/* הפקת דוח שבועי — טיוטה + צ'אט תיקון */}
+      <WeeklyReportDraft clientId={clientId} onChanged={loadReports} />
+
       {/* שורת סטטוס השבוע הנוכחי */}
       <div className={`${cardClass} border-brand-gold/20 bg-brand-gold/5`}>
         <div className="flex items-center justify-between">

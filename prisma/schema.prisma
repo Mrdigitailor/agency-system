@@ -162,6 +162,10 @@ model ClientProfile {
   // סקשן 10 — הערות פנימיות (JSON array)
   internalNotes String @default("[]") // [{ content, date, author }]
 
+  // הגדרות דוח שבועי — לכל לקוח פורמט מועדף
+  weeklyReportFormat       String @default("standard") // standard | per_product
+  weeklyReportInstructions String @default("")         // הוראות חופשיות ל-AI (טון, דגשים)
+
   updatedAt DateTime @updatedAt
 
   @@map("client_profiles")
@@ -367,13 +371,29 @@ model WeeklyReport {
   weekStart          String   // YYYY-MM-DD (ראשון)
   weekEnd            String   // YYYY-MM-DD (שבת)
   content            String   @default("")
+  status             String   @default("draft") // draft | sent
   sentAt             DateTime @default(now())
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  messages WeeklyReportMessage[]
+
   @@unique([clientId, weekStart])
   @@index([clientId])
   @@map("weekly_reports")
+}
+
+// הודעות צ'אט תיקון על טיוטת דוח שבועי
+model WeeklyReportMessage {
+  id        String   @id @default(cuid())
+  reportId  String
+  report    WeeklyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  role      String   // user | assistant
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([reportId])
+  @@map("weekly_report_messages")
 }
 
 // ==================== הגדרות סוכנות ====================
