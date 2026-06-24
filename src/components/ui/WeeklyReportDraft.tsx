@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Sparkles, Loader2, RefreshCw, Send, Settings2, CheckCircle2, FileText } from "lucide-react";
+import { Sparkles, Loader2, RefreshCw, Send, Settings2, FileText, Mail } from "lucide-react";
 
 interface ReportMessage {
   id: string;
@@ -71,9 +70,6 @@ function markdownToWhatsApp(md: string): string {
 }
 
 export default function WeeklyReportDraft({ clientId, onChanged }: { clientId: string; onChanged?: () => void }) {
-  const { data: session } = useSession();
-  const userName = (session?.user as { name?: string } | undefined)?.name ?? "";
-
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<DraftReport | null>(null);
   const [messages, setMessages] = useState<ReportMessage[]>([]);
@@ -81,7 +77,7 @@ export default function WeeklyReportDraft({ clientId, onChanged }: { clientId: s
   const [generating, setGenerating] = useState(false);
   const [refining, setRefining] = useState(false);
   const [note, setNote] = useState("");
-  const [approving, setApproving] = useState(false);
+  const [sending, setSending] = useState(false);
 
   // הגדרות
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -154,25 +150,22 @@ export default function WeeklyReportDraft({ clientId, onChanged }: { clientId: s
     }
   }
 
-  async function approve() {
+  async function sendToClient() {
     if (!report) return;
-    setApproving(true);
+    if (!confirm("לשלוח את הדוח במייל ללקוח? הוא יסומן כנשלח לשבוע זה.")) return;
+    setSending(true);
     try {
-      await fetch("/api/reports/trackers", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId,
-          type: "weekly",
-          date: new Date().toISOString().split("T")[0],
-          content: report.content,
-          author: userName,
-        }),
-      });
-      await load();
-      onChanged?.();
+      const res = await fetch(`/api/clients/${clientId}/weekly-report/${report.id}/send`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`✅ הדוח נשלח ל-${data.sentTo}`);
+        await load();
+        onChanged?.();
+      } else {
+        alert(`שליחה נכשלה: ${data.error ?? "שגיאה"}`);
+      }
     } finally {
-      setApproving(false);
+      setSending(false);
     }
   }
 
@@ -310,16 +303,14 @@ export default function WeeklyReportDraft({ clientId, onChanged }: { clientId: s
                 >
                   העתק לוואטסאפ
                 </button>
-                {!isSent && (
-                  <button
-                    onClick={approve}
-                    disabled={approving}
-                    className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    {approving ? "מאשר..." : "אשר ושלח"}
-                  </button>
-                )}
+                <button
+                  onClick={sendToClient}
+                  disabled={sending}
+                  className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
+                >
+                  {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+                  {sending ? "שולח..." : isSent ? "שלח שוב ללקוח" : "שלח ללקוח"}
+                </button>
               </div>
             </div>
 
