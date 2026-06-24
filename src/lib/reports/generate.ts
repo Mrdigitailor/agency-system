@@ -10,38 +10,47 @@ import { groupCampaignsByProduct } from "./group-by-product";
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = process.env.REPORT_AI_MODEL ?? "claude-sonnet-4-6";
 
-const shekel = (n: number) => `₪${Math.round(n).toLocaleString("he-IL")}`;
-const num = (n: number) => Math.round(n).toLocaleString("he-IL");
+const CURRENCY_SYMBOLS: Record<string, string> = { USD: "$", ILS: "₪", EUR: "€", GBP: "£" };
+
+/** עיצוב סכום לפי מטבע החשבון (USD→$, ILS→₪, אחר→קוד מטבע) */
+function money(n: number, currency: string): string {
+  const sym = CURRENCY_SYMBOLS[currency];
+  const amount = Math.round(n).toLocaleString("en-US");
+  return sym ? `${sym}${amount}` : `${amount} ${currency}`;
+}
+const num = (n: number) => Math.round(n).toLocaleString("en-US");
 const dec = (n: number) => n.toFixed(2);
 
-function platformLine(label: string, t: PlatformTotals): string | null {
+function platformLine(label: string, t: PlatformTotals, currency: string): string | null {
   if (t.spend === 0 && t.conversions === 0) return null;
-  const cpa = t.conversions > 0 ? shekel(t.spend / t.conversions) : "—";
-  return `  - ${label}: הוצאה ${shekel(t.spend)}, ${num(t.conversions)} המרות, עלות/המרה ${cpa}, ${num(t.clicks)} קליקים, ${num(t.impressions)} חשיפות`;
+  const cpa = t.conversions > 0 ? money(t.spend / t.conversions, currency) : "—";
+  return `  - ${label}: הוצאה ${money(t.spend, currency)}, ${num(t.conversions)} המרות, עלות/המרה ${cpa}, ${num(t.clicks)} קליקים, ${num(t.impressions)} חשיפות`;
 }
 
-/** בונה בלוק טקסט קריא עם כל הנתונים, לפי הפורמט המבוקש */
+/** בונה בלוק טקסט קריא עם כל הנתונים, לפי הפורמט והמטבע המבוקשים */
 export function buildWeeklyDataText(
   data: WeeklyClientData,
   format: string,
   products: Array<{ name: string }>,
+  currency: string,
 ): string {
   const t = data.totals;
   const lines: string[] = [];
   lines.push(`תקופת הדיווח: ${data.weekStart} עד ${data.weekEnd}`);
+  lines.push(`מטבע החשבון: ${currency}`);
   lines.push(``);
   lines.push(`**סיכום כולל:**`);
-  lines.push(`- הוצאה כוללת: ${shekel(t.spend)}`);
+  lines.push(`- הוצאה כוללת: ${money(t.spend, currency)}`);
   lines.push(`- המרות: ${num(t.conversions)}`);
-  lines.push(`- עלות להמרה: ${t.conversions > 0 ? shekel(t.spend / t.conversions) : "—"}`);
-  lines.push(`- ערך המרות: ${shekel(t.conversionsValue)}`);
+  lines.push(`- עלות להמרה: ${t.conversions > 0 ? money(t.spend / t.conversions, currency) : "—"}`);
+  lines.push(`- ערך המרות: ${money(t.conversionsValue, currency)}`);
   lines.push(`- ROAS: ${t.roas > 0 ? dec(t.roas) : "—"}`);
   lines.push(`- קליקים: ${num(t.clicks)} | חשיפות: ${num(t.impressions)} | CTR: ${t.impressions > 0 ? dec((t.clicks / t.impressions) * 100) + "%" : "—"}`);
 
   lines.push(``);
   lines.push(`**לפי פלטפורמה:**`);
   for (const [label, totals] of [["Meta", data.perPlatform.meta], ["Google Ads", data.perPlatform.google], ["TikTok", data.perPlatform.tiktok]] as const) {
-    const l = platformLine(label, totals);
+    const l = platformLine(label, totals, currency);
     if (l) lines.push(l);
   }
 
@@ -54,18 +63,18 @@ export function buildWeeklyDataText(
         lines.push(`- ${g.product}: אין קמפיינים פעילים בתקופה`);
         continue;
       }
-      const cpa = g.totals.conversions > 0 ? shekel(g.totals.spend / g.totals.conversions) : "—";
-      lines.push(`- **${g.product}**: הוצאה ${shekel(g.totals.spend)}, ${num(g.totals.conversions)} המרות, עלות/המרה ${cpa}`);
+      const cpa = g.totals.conversions > 0 ? money(g.totals.spend / g.totals.conversions, currency) : "—";
+      lines.push(`- **${g.product}**: הוצאה ${money(g.totals.spend, currency)}, ${num(g.totals.conversions)} המרות, עלות/המרה ${cpa}`);
       for (const c of g.campaigns) {
-        lines.push(`    · ${c.campaignName} [${c.platform}]: ${shekel(c.spend)}, ${num(c.conversions)} המרות`);
+        lines.push(`    · ${c.campaignName} [${c.platform}]: ${money(c.spend, currency)}, ${num(c.conversions)} המרות`);
       }
     }
   } else {
     lines.push(``);
     lines.push(`**קמפיינים מובילים (לפי הוצאה):**`);
     for (const c of data.perCampaign.slice(0, 15)) {
-      const cpa = c.conversions > 0 ? shekel(c.spend / c.conversions) : "—";
-      lines.push(`- ${c.campaignName} [${c.platform}]: ${shekel(c.spend)}, ${num(c.conversions)} המרות, עלות/המרה ${cpa}`);
+      const cpa = c.conversions > 0 ? money(c.spend / c.conversions, currency) : "—";
+      lines.push(`- ${c.campaignName} [${c.platform}]: ${money(c.spend, currency)}, ${num(c.conversions)} המרות, עלות/המרה ${cpa}`);
     }
   }
 
@@ -80,7 +89,11 @@ const REPORT_INSTRUCTIONS = `אתה כותב דוח שבועי ללקוח של �
 3. **ביצועים** — לפי פלטפורמה (או לפי מוצר אם התבקש), עם המספרים החשובים.
 4. **תובנות** — מה עבד טוב ומה פחות, על סמך המספרים בלבד.
 5. **המלצות לשבוע הבא** — 3 פעולות קונקרטיות ומעשיות שנגזרות מהנתונים.
-חוקים: התבסס אך ורק על המספרים שסופקו, אל תמציא נתונים. אם אין נתונים לפלטפורמה — אל תזכיר אותה. מטבע ₪.`;
+
+חוקים מחייבים:
+- התבסס אך ורק על המספרים שסופקו, אל תמציא נתונים. אם אין נתונים לפלטפורמה — אל תזכיר אותה.
+- **מטבע:** השתמש אך ורק במטבע ובסימן שסופקו בנתונים ("מטבע החשבון"). לעולם אל תניח שקלים אם המטבע שונה.
+- **אל תשתמש בטבלאות Markdown** (הן נשברות בהעתקה לוואטסאפ). הצג מספרים כרשימות תבליטים בפורמט "מדד: ערך", עם אימוג'ים קצרים לכותרות סקשנים. שמור על שורות קצרות.`;
 
 /** מריץ Claude ומחזיר את תוכן הדוח (Markdown) */
 export async function generateWeeklyReportContent(
@@ -88,20 +101,23 @@ export async function generateWeeklyReportContent(
   weekStart: string,
   weekEnd: string,
 ): Promise<string> {
-  const [systemBase, profile, data] = await Promise.all([
+  const [systemBase, profile, data, client] = await Promise.all([
     buildSystemPrompt(clientId),
     prisma.clientProfile.findUnique({ where: { clientId } }),
     getWeeklyClientData(clientId, weekStart, weekEnd),
+    prisma.client.findUnique({ where: { id: clientId }, select: { currency: true } }),
   ]);
 
   const format = profile?.weeklyReportFormat ?? "standard";
   const instructions = profile?.weeklyReportInstructions ?? "";
   const products: Array<{ name: string }> = profile ? JSON.parse(profile.products ?? "[]") : [];
+  const currency = client?.currency || "ILS";
 
-  const dataText = buildWeeklyDataText(data, format, products);
+  const dataText = buildWeeklyDataText(data, format, products, currency);
 
   const userMessage = [
     `הפק דוח שבועי לתקופה ${weekStart} עד ${weekEnd}.`,
+    `\nמטבע החשבון: ${currency} — הצג את כל הסכומים במטבע הזה בלבד.`,
     instructions ? `\nהוראות ספציפיות של הלקוח (חשוב לכבד): ${instructions}` : "",
     format === "per_product" ? `\nהלקוח מעדיף פילוח לפי מוצר.` : "",
     `\n\nהנתונים בפועל:\n${dataText}`,

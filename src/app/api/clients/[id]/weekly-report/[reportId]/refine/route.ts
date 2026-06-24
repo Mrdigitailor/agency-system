@@ -30,11 +30,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   // הקשר הנתונים — כדי שהתיקון יישאר מעוגן במספרים האמיתיים
-  const profile = await prisma.clientProfile.findUnique({ where: { clientId } });
+  const [profile, client] = await Promise.all([
+    prisma.clientProfile.findUnique({ where: { clientId } }),
+    prisma.client.findUnique({ where: { id: clientId }, select: { currency: true } }),
+  ]);
   const format = profile?.weeklyReportFormat ?? "standard";
   const products: Array<{ name: string }> = profile ? JSON.parse(profile.products ?? "[]") : [];
+  const currency = client?.currency || "ILS";
   const data = await getWeeklyClientData(clientId, report.weekStart, report.weekEnd);
-  const dataText = buildWeeklyDataText(data, format, products);
+  const dataText = buildWeeklyDataText(data, format, products, currency);
 
   try {
     const response = await anthropic.messages.create({
@@ -43,7 +47,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       system:
         "אתה עורך דוח שבועי קיים של סוכנות שיווק לפי הערת המשתמש. " +
         "החזר אך ורק את הדוח המלא המעודכן ב-Markdown בעברית (בלי הקדמות כמו 'הנה הדוח'). " +
-        "שמור על עיגון מוחלט בנתונים שסופקו — אל תמציא מספרים.",
+        "שמור על עיגון מוחלט בנתונים שסופקו — אל תמציא מספרים. " +
+        `כל הסכומים במטבע ${currency} בלבד. אל תשתמש בטבלאות Markdown — רשימות תבליטים בפורמט "מדד: ערך".`,
       messages: [
         {
           role: "user",

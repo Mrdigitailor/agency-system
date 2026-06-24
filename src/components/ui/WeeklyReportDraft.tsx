@@ -46,6 +46,30 @@ function formatPeriod(s: string, e: string): string {
   return `${f(s)} – ${f(e)}`;
 }
 
+/** ממיר Markdown לטקסט ידידותי לוואטסאפ — בלי #, טבלאות הופכות לשורות, **bold**→*bold* */
+function markdownToWhatsApp(md: string): string {
+  return md
+    .split("\n")
+    .map((line) => {
+      // שורת מפריד טבלה (|---|---|) — להסיר
+      if (/^\s*\|[\s|:-]+\|\s*$/.test(line)) return null;
+      // שורת טבלה רגילה — להפוך לתאים מופרדים
+      if (/^\s*\|.*\|\s*$/.test(line)) {
+        const cells = line.split("|").map((c) => c.trim()).filter(Boolean);
+        return cells.length === 2 ? `${cells[0]}: ${cells[1]}` : cells.join(" · ");
+      }
+      return line;
+    })
+    .filter((l) => l !== null)
+    .join("\n")
+    .replace(/^#{1,6}\s*(.+)$/gm, "*$1*") // כותרות → bold
+    .replace(/\*\*(.+?)\*\*/g, "*$1*") // **bold** → *bold*
+    .replace(/^\s*[-*]\s+/gm, "• ") // תבליטים → •
+    .replace(/^\s*---\s*$/gm, "") // קווי הפרדה
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export default function WeeklyReportDraft({ clientId, onChanged }: { clientId: string; onChanged?: () => void }) {
   const { data: session } = useSession();
   const userName = (session?.user as { name?: string } | undefined)?.name ?? "";
@@ -280,10 +304,11 @@ export default function WeeklyReportDraft({ clientId, onChanged }: { clientId: s
                   {generating ? "מפיק..." : "צור מחדש"}
                 </button>
                 <button
-                  onClick={() => navigator.clipboard.writeText(report.content)}
+                  onClick={() => navigator.clipboard.writeText(markdownToWhatsApp(report.content))}
                   className="rounded-lg border border-brand-border px-3 py-1.5 text-xs font-medium text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
+                  title="מעתיק בפורמט נקי לוואטסאפ (בלי טבלאות שבורות)"
                 >
-                  העתק
+                  העתק לוואטסאפ
                 </button>
                 {!isSent && (
                   <button
