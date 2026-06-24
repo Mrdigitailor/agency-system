@@ -35,6 +35,7 @@ import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
 import PlatformConnections from "@/components/ui/PlatformConnections";
 import ConversionEventSelector from "@/components/ui/ConversionEventSelector";
+import GoogleConversionActionSelector from "@/components/ui/GoogleConversionActionSelector";
 import MetaCampaignsTab from "@/components/ui/MetaCampaignsTab";
 import GoogleAdsCampaignsTab from "@/components/ui/GoogleAdsCampaignsTab";
 import TikTokCampaignsTab from "@/components/ui/TikTokCampaignsTab";
@@ -708,8 +709,14 @@ export default function ClientDetailPage() {
                 </div>
 
                 {/* בחירת אירוע המרה */}
-                <div className="border-t border-brand-border pt-4">
+                <div className="border-t border-brand-border pt-4 space-y-3">
                   <ConversionEventSelector clientId={client.id} currentEvent={client.metaConversionEvent ?? ""} />
+                  {connectedPlatforms.has("google_ads") && (
+                    <GoogleConversionActionSelector
+                      clientId={client.id}
+                      currentAction={(client as { googleConversionAction?: string }).googleConversionAction ?? ""}
+                    />
+                  )}
                 </div>
               </div>
             </div>

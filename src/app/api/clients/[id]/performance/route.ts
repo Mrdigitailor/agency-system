@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { countConversions, breakdownConversions } from "@/lib/utils/metaMetrics";
+import { countGoogleConversions } from "@/lib/utils/googleMetrics";
 
 /**
  * GET /api/clients/[id]/performance?since=...&until=...
@@ -22,9 +23,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const client = await prisma.client.findUnique({
     where: { id: clientId },
-    select: { metaConversionEvent: true },
+    select: { metaConversionEvent: true, googleConversionAction: true },
   });
   const selectedEventRaw = client?.metaConversionEvent ?? "";
+  const googleSelectedRaw = client?.googleConversionAction ?? "";
 
   // Meta Insights
   const insights = await prisma.metaInsightDaily.findMany({
@@ -44,7 +46,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     where: { clientId, date: { gte: since, lte: until } },
   });
   const gadsSpend = gadsInsights.reduce((s, i) => s + i.spend, 0);
-  const gadsConversions = gadsInsights.reduce((s, i) => s + i.conversions, 0);
+  const gadsConversions = countGoogleConversions(gadsInsights, googleSelectedRaw);
 
   // TikTok Insights
   const ttInsights = await prisma.tikTokInsightDaily.findMany({

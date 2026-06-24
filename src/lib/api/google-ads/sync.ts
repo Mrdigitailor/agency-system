@@ -42,12 +42,42 @@ export async function syncGoogleAdsAccount(
     ORDER BY segments.date DESC
   `;
 
+  // שאילתה שנייה — פירוט המרות לפי conversion action (לבחירת המרות לספירה)
+  const actionQuery = `
+    SELECT campaign.id, segments.date, segments.conversion_action_name, metrics.conversions
+    FROM campaign
+    WHERE segments.date BETWEEN '${since}' AND '${until}' AND metrics.conversions > 0
+  `;
+  const actionMap = new Map<string, Record<string, number>>();
+
   try {
     const results = await searchStream(customerId, query, {
       accessToken: token,
       loginCustomerId: mccId || undefined,
     });
     console.log(`[GoogleAds Sync] Got ${results.length} rows for customer ${customerId}`);
+
+    // פירוט לפי conversion action — לא חוסם את הסנכרון אם נכשל
+    try {
+      const actionRows = await searchStream(customerId, actionQuery, {
+        accessToken: token,
+        loginCustomerId: mccId || undefined,
+      });
+      for (const row of actionRows) {
+        const cid = String(row.campaign?.id ?? "");
+        const d = row.segments?.date ?? "";
+        const actionName = row.segments?.conversionActionName ?? "";
+        const conv = Number(row.metrics?.conversions ?? 0);
+        if (!cid || !d || !actionName) continue;
+        const key = `${cid}|${d}`;
+        const entry = actionMap.get(key) ?? {};
+        entry[actionName] = (entry[actionName] ?? 0) + conv;
+        actionMap.set(key, entry);
+      }
+      console.log(`[GoogleAds Sync] Conversion-action breakdown: ${actionMap.size} campaign-day rows`);
+    } catch (err) {
+      console.warn(`[GoogleAds Sync] conversion_action query failed: ${(err as Error).message?.slice(0, 80)}`);
+    }
 
     for (const row of results) {
       const c = row.campaign ?? {};
@@ -58,6 +88,7 @@ export async function syncGoogleAdsAccount(
       const campaignId = String(c.id ?? "");
       const date = s.date ?? "";
       if (!campaignId || !date) continue;
+      const conversionsByAction = JSON.stringify(actionMap.get(`${campaignId}|${date}`) ?? {});
 
       await prisma.googleAdsInsightDaily.upsert({
         where: {
@@ -73,6 +104,7 @@ export async function syncGoogleAdsAccount(
           clicks: Number(m.clicks ?? 0),
           conversions: Number(m.conversions ?? 0),
           conversionsValue: Number(m.conversionsValue ?? 0),
+          conversionsByAction,
           costPerConversion: Number(m.costPerConversion ?? 0) / MICROS,
           ctr: Number(m.ctr ?? 0),
           averageCpc: Number(m.averageCpc ?? 0) / MICROS,
@@ -99,6 +131,7 @@ export async function syncGoogleAdsAccount(
           clicks: Number(m.clicks ?? 0),
           conversions: Number(m.conversions ?? 0),
           conversionsValue: Number(m.conversionsValue ?? 0),
+          conversionsByAction,
           costPerConversion: Number(m.costPerConversion ?? 0) / MICROS,
           ctr: Number(m.ctr ?? 0),
           averageCpc: Number(m.averageCpc ?? 0) / MICROS,

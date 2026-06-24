@@ -176,11 +176,28 @@ async function syncGoogleQuick(
     accessToken: token, loginCustomerId: mccId || undefined,
   });
 
+  // פירוט המרות לפי conversion action ליום זה — לא חוסם אם נכשל
+  const actionMap = new Map<string, Record<string, number>>();
+  try {
+    const actionRows = await searchStream(account.externalId, `SELECT campaign.id, segments.conversion_action_name, metrics.conversions FROM campaign WHERE segments.date = '${date}' AND metrics.conversions > 0`, {
+      accessToken: token, loginCustomerId: mccId || undefined,
+    });
+    for (const row of actionRows) {
+      const cid = String(row.campaign?.id ?? "");
+      const an = row.segments?.conversionActionName ?? "";
+      if (!cid || !an) continue;
+      const entry = actionMap.get(cid) ?? {};
+      entry[an] = (entry[an] ?? 0) + Number(row.metrics?.conversions ?? 0);
+      actionMap.set(cid, entry);
+    }
+  } catch { /* ignore */ }
+
   for (const row of results) {
     const c = row.campaign ?? {};
     const m = row.metrics ?? {};
     const campaignId = String(c.id ?? "");
     if (!campaignId) continue;
+    const conversionsByAction = JSON.stringify(actionMap.get(campaignId) ?? {});
 
     await prisma.googleAdsInsightDaily.upsert({
       where: { assetId_campaignId_date: { assetId: account.id, campaignId, date } },
@@ -191,6 +208,7 @@ async function syncGoogleQuick(
         clicks: Number(m.clicks ?? 0),
         conversions: Number(m.conversions ?? 0),
         conversionsValue: Number(m.conversionsValue ?? 0),
+        conversionsByAction,
       },
       create: {
         clientId, assetId: account.id, campaignId, date,
@@ -200,6 +218,7 @@ async function syncGoogleQuick(
         clicks: Number(m.clicks ?? 0),
         conversions: Number(m.conversions ?? 0),
         conversionsValue: Number(m.conversionsValue ?? 0),
+        conversionsByAction,
       },
     });
   }

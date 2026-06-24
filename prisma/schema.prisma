@@ -51,6 +51,7 @@ model Client {
   monthlyBudget Float    @default(0)
   currency      String   @default("ILS") // ILS | USD
   metaConversionEvent String @default("") // action_type שנחשב כהמרה (לדוגמה "lead", "purchase", או "offsite_conversion.custom.123")
+  googleConversionAction String @default("") // JSON array של שמות conversion actions שנספרים כהמרה (ריק = כל ההמרות)
   clientType    String   @default("לידים")
   status        String   @default("active") // active | at_risk | upsell
   contactEmail  String   @default("")
@@ -799,6 +800,7 @@ model GoogleAdsInsightDaily {
   clicks             Int   @default(0)
   conversions        Float @default(0)
   conversionsValue   Float @default(0)
+  conversionsByAction String @default("{}") // JSON { actionName: count } — לבחירת המרות לספירה
   costPerConversion  Float @default(0)
   ctr                Float @default(0)
   averageCpc         Float @default(0)

@@ -3,6 +3,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { countConversions } from "@/lib/utils/metaMetrics";
+import { countGoogleConversions } from "@/lib/utils/googleMetrics";
 
 export interface CampaignRow {
   platform: "meta" | "google" | "tiktok";
@@ -45,9 +46,10 @@ export async function getWeeklyClientData(
 ): Promise<WeeklyClientData> {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
-    select: { metaConversionEvent: true },
+    select: { metaConversionEvent: true, googleConversionAction: true },
   });
   const selectedEvent = client?.metaConversionEvent ?? "";
+  const googleSelected = client?.googleConversionAction ?? "";
   const date = { gte: weekStart, lte: weekEnd };
 
   const [metaRows, gadsRows, ttRows] = await Promise.all([
@@ -95,7 +97,7 @@ export async function getWeeklyClientData(
     const spend = rows.reduce((s, i) => s + i.spend, 0);
     const impressions = rows.reduce((s, i) => s + i.impressions, 0);
     const clicks = rows.reduce((s, i) => s + i.clicks, 0);
-    const conversions = rows.reduce((s, i) => s + i.conversions, 0);
+    const conversions = countGoogleConversions(rows, googleSelected);
     const conversionsValue = rows.reduce((s, i) => s + i.conversionsValue, 0);
     perCampaign.push({ platform: "google", campaignName, spend, impressions, clicks, conversions, conversionsValue });
     google.spend += spend;

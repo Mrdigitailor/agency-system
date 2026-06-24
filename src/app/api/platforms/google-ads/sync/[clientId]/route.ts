@@ -2,12 +2,22 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { syncClientGoogleAds } from "@/lib/api/google-ads/sync";
 
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 /**
  * POST /api/platforms/google-ads/sync/[clientId]
+ * Auth: session או CRON_SECRET (ל-backfill).
  */
 export async function POST(req: Request, { params }: { params: Promise<{ clientId: string }> }) {
-  const result = await requireAuth();
-  if (result instanceof NextResponse) return result;
+  const url = new URL(req.url);
+  const secret = process.env.CRON_SECRET;
+  const provided = req.headers.get("authorization")?.replace("Bearer ", "") ?? url.searchParams.get("secret");
+  const isCron = Boolean(secret && provided === secret);
+  if (!isCron) {
+    const result = await requireAuth();
+    if (result instanceof NextResponse) return result;
+  }
 
   const { clientId } = await params;
   const body = await req.json().catch(() => ({}));
