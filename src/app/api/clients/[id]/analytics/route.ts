@@ -18,6 +18,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id: clientId } = await params;
   const days = Math.min(Math.max(Number(new URL(req.url).searchParams.get("days")) || 28, 1), 365);
 
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { clientType: true, currency: true },
+  });
+  const mode = client?.clientType === "ecom" ? "ecom" : "leads";
+  const currency = client?.currency || "ILS";
+
   const connection = await prisma.platformConnection.findFirst({
     where: { clientId, platform: "ga4", isActive: true },
     include: { assets: { where: { assetType: "ga4_property" } } },
@@ -41,11 +48,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
 
   try {
-    const data = await fetchAnalytics(property.externalId, token, days);
+    const data = await fetchAnalytics(property.externalId, token, days, mode);
     return NextResponse.json({
       connected: true,
       property: { id: property.externalId, name: property.name },
       days,
+      currency,
       ...data,
     });
   } catch (err) {
