@@ -36,6 +36,7 @@ import ProgressBar from "@/components/ui/ProgressBar";
 import PlatformConnections from "@/components/ui/PlatformConnections";
 import ConversionEventSelector from "@/components/ui/ConversionEventSelector";
 import GoogleConversionActionSelector from "@/components/ui/GoogleConversionActionSelector";
+import ClientAnalyticsTab from "@/components/ui/ClientAnalyticsTab";
 import MetaCampaignsTab from "@/components/ui/MetaCampaignsTab";
 import GoogleAdsCampaignsTab from "@/components/ui/GoogleAdsCampaignsTab";
 import TikTokCampaignsTab from "@/components/ui/TikTokCampaignsTab";
@@ -780,34 +781,7 @@ export default function ClientDetailPage() {
       {activeTab === "messages" && <MessagesTab clientId={client.id} />}
 
       {/* ===== טאב 6 — אנליטיקס ===== */}
-      {activeTab === "analytics" && (
-        <div className="space-y-6">
-          <h2 className="text-lg font-semibold text-brand-dark">אנליטיקס</h2>
-
-          <div className={cardClass}>
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <BarChart3 className="mb-3 h-10 w-10 text-brand-muted/50" />
-              <p className="text-sm text-brand-muted">
-                יתעדכן אוטומטית לאחר חיבור Google Analytics
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {[
-              { label: "מבקרים", value: "—" },
-              { label: "דפים פופולריים", value: "—" },
-              { label: "מקורות תנועה", value: "—" },
-              { label: "שיעור המרה", value: "—" },
-            ].map((kpi) => (
-              <div key={kpi.label} className={cardClass}>
-                <p className="text-xs font-medium text-brand-muted">{kpi.label}</p>
-                <p className="mt-2 text-2xl font-semibold text-brand-dark">{kpi.value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {activeTab === "analytics" && <ClientAnalyticsTab clientId={client.id} />}
 
       {/* ===== טאב 7 — משימות ===== */}
       {activeTab === "tasks" && (() => {
