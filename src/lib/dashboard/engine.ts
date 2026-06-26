@@ -234,6 +234,34 @@ export async function loadClientCtx(clientId: string): Promise<ClientCtx | null>
   return { clientId, currency: c.currency || "ILS", clientType: c.clientType || "לידים", metaConversionEvent: c.metaConversionEvent || "", googleConversionAction: c.googleConversionAction || "" };
 }
 
+// ---------- snapshot — סיכום מספרי קומפקטי להקשר AI / השוואת תקופות ----------
+export interface PlatformSnapshot { spend: number; impressions: number; clicks: number; conversions: number; purchaseValue: number; cpa: number; roas: number; ctr: number }
+export interface Snapshot {
+  range: DateRange;
+  ad: { all: PlatformSnapshot; meta: PlatformSnapshot; google: PlatformSnapshot; tiktok: PlatformSnapshot };
+  ga4: { mode: string; summary: Record<string, number>; topChannels: { name: string; value: number }[]; topItems: { name: string; primary: number }[] } | null;
+}
+const snap = (c: Components): PlatformSnapshot => ({
+  spend: c.spend, impressions: c.impressions, clicks: c.clicks, conversions: c.conversions, purchaseValue: c.purchaseValue,
+  cpa: metricValue("cpa", c), roas: metricValue("roas", c), ctr: metricValue("ctr", c),
+});
+
+export async function computeSnapshot(ctx: ClientCtx, range: DateRange): Promise<Snapshot> {
+  const adCache: AdCache = {};
+  const ga4Cache: Ga4Cache = { loaded: false, data: null };
+  const [ad, ga4] = await Promise.all([getAdRows(ctx, range, adCache), getGa4(ctx, range, ga4Cache)]);
+  return {
+    range,
+    ad: {
+      all: snap(rowsToComponents("all", ad, ctx)),
+      meta: snap(rowsToComponents("meta", ad, ctx)),
+      google: snap(rowsToComponents("google_ads", ad, ctx)),
+      tiktok: snap(rowsToComponents("tiktok", ad, ctx)),
+    },
+    ga4: ga4 ? { mode: ga4.mode, summary: ga4.summary, topChannels: ga4.channels.slice(0, 5).map((c) => ({ name: c.name, value: c.value })), topItems: ga4.items.slice(0, 5).map((i) => ({ name: i.name, primary: i.primary })) } : null,
+  };
+}
+
 export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, range: DateRange): Promise<{ widgetId: string; data: WidgetData }[]> {
   const adCache: AdCache = {};
   const ga4Cache: Ga4Cache = { loaded: false, data: null };
