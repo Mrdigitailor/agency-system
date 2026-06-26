@@ -42,8 +42,7 @@ export interface AnalyticsData {
 
 const num = (v?: string) => Number(v ?? 0);
 
-function buildRequests(mode: AnalyticsMode, days: number) {
-  const dateRanges = [{ startDate: `${days}daysAgo`, endDate: "today" }];
+function buildRequests(mode: AnalyticsMode, dateRanges: Array<{ startDate: string; endDate: string }>) {
   if (mode === "ecom") {
     return [
       { dateRanges, metrics: ["totalRevenue", "transactions", "sessions", "totalUsers", "addToCarts", "checkouts", "averagePurchaseRevenue"].map((name) => ({ name })) },
@@ -63,11 +62,21 @@ function buildRequests(mode: AnalyticsMode, days: number) {
 /**
  * שולף נתוני אנליטיקס לפי מצב (ecom/leads). זורק אם הקריאה נכשלה.
  */
-export async function fetchAnalytics(propertyId: string, accessToken: string, days: number, mode: AnalyticsMode): Promise<AnalyticsData> {
+export async function fetchAnalytics(
+  propertyId: string,
+  accessToken: string,
+  days: number,
+  mode: AnalyticsMode,
+  explicitRange?: { since: string; until: string },
+): Promise<AnalyticsData> {
+  // טווח מפורש (להשוואת תקופות) או יחסי ("N ימים אחרונים")
+  const dateRanges = explicitRange
+    ? [{ startDate: explicitRange.since, endDate: explicitRange.until }]
+    : [{ startDate: `${days}daysAgo`, endDate: "today" }];
   const res = await fetch(`${GA4_API}/properties/${propertyId}:batchRunReports`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ requests: buildRequests(mode, days) }),
+    body: JSON.stringify({ requests: buildRequests(mode, dateRanges) }),
   });
   if (!res.ok) {
     const err = await res.text();

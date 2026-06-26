@@ -99,7 +99,7 @@ async function getGa4(ctx: ClientCtx, range: DateRange, cache: Ga4Cache): Promis
   let token: string;
   try { token = await getValidGoogleToken(conn); } catch { return cache.data; }
   const mode = ctx.clientType === "ecom" ? "ecom" : "leads";
-  try { cache.data = await fetchAnalytics(prop.externalId, token, daysBetween(range.since, range.until), mode); } catch { cache.data = null; }
+  try { cache.data = await fetchAnalytics(prop.externalId, token, daysBetween(range.since, range.until), mode, { since: range.since, until: range.until }); } catch { cache.data = null; }
   return cache.data;
 }
 
