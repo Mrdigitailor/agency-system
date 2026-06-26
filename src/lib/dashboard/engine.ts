@@ -6,6 +6,7 @@ import { countConversions } from "@/lib/utils/metaMetrics";
 import { countGoogleConversions } from "@/lib/utils/googleMetrics";
 import { fetchAnalytics, type AnalyticsData } from "@/lib/api/ga4/client";
 import { getValidGoogleToken } from "@/lib/api/google-ads/client";
+import { fetchGoogleSegment, type GoogleSegment, type SegmentRow } from "@/lib/api/google-ads/segments";
 import { METRIC_BY_ID, PLATFORM_LABELS, type Platform, type DisplayType, type Dimension } from "./metrics";
 
 export interface DateRange { since: string; until: string }
@@ -105,6 +106,19 @@ function previousRange(r: DateRange): DateRange {
 
 const isText = (w: WidgetConfig) => w.displayType === "heading" || w.displayType === "text";
 const wantsCompare = (w: WidgetConfig) => w.compare && (w.displayType === "kpi" || w.dimension === "none") && !isText(w);
+
+const SEGMENT_DIMS = new Set(["age", "gender", "device"]);
+const isSegment = (w: WidgetConfig) => w.platform === "google_ads" && SEGMENT_DIMS.has(w.dimension);
+
+function segmentToData(w: WidgetConfig, rows: SegmentRow[]): WidgetData {
+  const metricId = w.metrics.find((m) => ["spend", "clicks", "conversions"].includes(m)) ?? "conversions";
+  const val = (r: SegmentRow) => (metricId === "spend" ? r.spend : metricId === "clicks" ? r.clicks : r.conversions);
+  const slices = rows.map((r) => ({ label: r.label, value: Math.round(val(r) * 100) / 100 })).filter((s) => s.value > 0);
+  if (slices.length === 0) return { type: "empty", reason: "אין נתונים דמוגרפיים בתקופה" };
+  const label = METRIC_BY_ID[metricId]?.label ?? "";
+  if (w.displayType === "bar") return { type: "series", display: "bar", buckets: slices.map((s) => s.label), series: [{ id: metricId, label, values: slices.map((s) => s.value) }] };
+  return { type: "pie", metricId, label, slices };
+}
 
 async function getGa4(ctx: ClientCtx, range: DateRange, cache: Ga4Cache): Promise<AnalyticsData | null> {
   if (cache.loaded) return cache.data;
@@ -300,23 +314,29 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
   const prevAdCache: AdCache = {};
   const prevGa4Cache: Ga4Cache = { loaded: false, data: null };
 
-  const dataWidgets = widgets.filter((w) => !isText(w));
+  const dataWidgets = widgets.filter((w) => !isText(w) && !isSegment(w));
   const needsAd = dataWidgets.some((w) => w.platform !== "ga4");
   const needsGa4 = dataWidgets.some((w) => w.platform === "ga4");
   const needsCompare = dataWidgets.some(wantsCompare);
   const prev = needsCompare ? previousRange(range) : null;
   const emptyAd: AdRows = { meta: [], google: [], tiktok: [] };
 
+  // פילוחים דמוגרפיים — שליפה חיה מ-Google Ads (קריאה אחת לכל פילוח)
+  const segCache = new Map<string, SegmentRow[]>();
+  const segDims = [...new Set(widgets.filter(isSegment).map((w) => w.dimension))];
+
   const [ad, , prevAd] = await Promise.all([
     needsAd ? getAdRows(ctx, range, adCache) : Promise.resolve(emptyAd),
     needsGa4 ? getGa4(ctx, range, ga4Cache) : Promise.resolve(null),
     needsCompare && needsAd && prev ? getAdRows(ctx, prev, prevAdCache) : Promise.resolve(emptyAd),
     needsCompare && needsGa4 && prev ? getGa4(ctx, prev, prevGa4Cache) : Promise.resolve(null),
+    ...segDims.map(async (d) => { segCache.set(d, await fetchGoogleSegment(ctx.clientId, range.since, range.until, d as GoogleSegment)); }),
   ]);
 
   return widgets.map((w) => {
     let data: WidgetData;
     if (isText(w)) data = { type: "text", heading: w.displayType === "heading", body: w.textBody };
+    else if (isSegment(w)) data = segmentToData(w, segCache.get(w.dimension) ?? []);
     else if (w.platform === "ga4") data = computeGa4Widget(w, ga4Cache.data, prevGa4Cache.data);
     else data = computeAdWidget(w, ctx, ad, prevAd);
     return { widgetId: w.id, data };

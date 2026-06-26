@@ -3,7 +3,7 @@ import { getCurrencySymbol } from "@/lib/utils/currency";
 
 export type Platform = "meta" | "google_ads" | "tiktok" | "ga4" | "all";
 export type DisplayType = "kpi" | "line" | "area" | "bar" | "pie" | "table" | "heading" | "text";
-export type Dimension = "none" | "date" | "week" | "month" | "platform" | "campaign" | "channel";
+export type Dimension = "none" | "date" | "week" | "month" | "platform" | "campaign" | "channel" | "age" | "gender" | "device";
 
 export interface MetricDef {
   id: string;
@@ -68,19 +68,28 @@ export const DIMENSION_LABELS: Record<Dimension, string> = {
   platform: "לפי פלטפורמה",
   campaign: "לפי קמפיין",
   channel: "לפי ערוץ",
+  age: "לפי גיל (Google)",
+  gender: "לפי מגדר (Google)",
+  device: "לפי מכשיר (Google)",
 };
 
-/** הפילוחים החוקיים לכל סוג תצוגה */
-export function validDimensions(displayType: DisplayType): Dimension[] {
+/** הפילוחים החוקיים לכל סוג תצוגה (ופלטפורמה — פילוחים דמוגרפיים זמינים ל-Google Ads) */
+export function validDimensions(displayType: DisplayType, platform?: Platform): Dimension[] {
+  let dims: Dimension[];
   switch (displayType) {
-    case "kpi": return ["none"];
+    case "kpi": dims = ["none"]; break;
     case "line":
     case "area":
-    case "bar": return ["date", "week", "month", "platform"];
-    case "pie": return ["platform", "campaign"];
-    case "table": return ["campaign"];
-    default: return ["none"];
+    case "bar": dims = ["date", "week", "month", "platform"]; break;
+    case "pie": dims = ["platform", "campaign"]; break;
+    case "table": dims = ["campaign"]; break;
+    default: dims = ["none"];
   }
+  // פילוחים דמוגרפיים — רק ל-Google Ads, בתצוגות pie/bar
+  if (platform === "google_ads" && (displayType === "pie" || displayType === "bar")) {
+    dims = [...dims.filter((d) => d !== "campaign"), "age", "gender", "device"];
+  }
+  return dims;
 }
 
 export const TEXT_DISPLAYS: DisplayType[] = ["heading", "text"];

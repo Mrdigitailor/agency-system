@@ -95,7 +95,7 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
   // שינוי סוג תצוגה — מתאים את הפילוח לברירת מחדל חוקית
   function setDisplay(displayType: DisplayType) {
     setForm((f) => {
-      const dims = validDimensions(displayType);
+      const dims = validDimensions(displayType, f.platform);
       const dimension = dims.includes(f.dimension as Dimension) ? f.dimension : dims[0];
       return { ...f, displayType, dimension };
     });
@@ -108,7 +108,11 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
 
   function setPlatform(platform: Platform) {
     const valid = getMetricsForPlatform(platform).map((m) => m.id);
-    setForm((f) => ({ ...f, platform, metrics: f.metrics.filter((m) => valid.includes(m)) }));
+    setForm((f) => {
+      const dims = validDimensions(f.displayType, platform);
+      const dimension = dims.includes(f.dimension as Dimension) ? f.dimension : dims[0];
+      return { ...f, platform, metrics: f.metrics.filter((m) => valid.includes(m)), dimension };
+    });
   }
   function toggleMetric(id: string) {
     setForm((f) => ({ ...f, metrics: f.metrics.includes(id) ? f.metrics.filter((m) => m !== id) : [...f.metrics, id] }));
@@ -251,7 +255,7 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-brand-muted">פילוח</label>
                   <select value={form.dimension} onChange={(e) => setForm((f) => ({ ...f, dimension: e.target.value }))} className={inputClass}>
-                    {validDimensions(form.displayType).map((d) => <option key={d} value={d}>{DIMENSION_LABELS[d]}</option>)}
+                    {validDimensions(form.displayType, form.platform).map((d) => <option key={d} value={d}>{DIMENSION_LABELS[d]}</option>)}
                   </select>
                 </div>
               </div>
