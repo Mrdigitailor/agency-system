@@ -1,257 +1,147 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { useApp } from "@/lib/data/context";
-import ProgressBar from "@/components/ui/ProgressBar";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
-import { TrendingUp, DollarSign, Target, Zap } from "lucide-react";
+import { WidgetGrid, type WidgetDTO } from "@/components/dashboard/DashboardWidgets";
+import { Loader2, Sparkles, Send, MessageSquare } from "lucide-react";
 
-const cardClass =
-  "rounded-lg border border-brand-border bg-brand-light p-6 shadow-sm";
+interface DashboardDTO { client: { name: string; currency: string }; widgets: WidgetDTO[] }
+interface ChatMsg { id: string; content: string; authorName: string; authorId: string | null; createdAt: string }
 
-const statusColors: Record<string, { bg: string; text: string; label: string }> = {
-  active: { bg: "bg-brand-success/10", text: "text-brand-success", label: "תקין" },
-  at_risk: { bg: "bg-brand-warning/10", text: "text-brand-warning", label: "בסיכון" },
-  upsell: { bg: "bg-brand-info/10", text: "text-brand-info", label: "מוכן לאפסייל" },
-};
+const cardClass = "rounded-lg border border-brand-border bg-brand-light p-5 shadow-sm";
+const RANGES = [{ days: "7", label: "7 ימים" }, { days: "28", label: "28 ימים" }, { days: "month", label: "החודש" }];
+const SUGGESTIONS = ["מה זה יחס המרה?", "האם המספרים השתפרו מהתקופה הקודמת?", "מאיפה מגיעות הכי הרבה תוצאות?"];
+
+function rangeDates(key: string): { since: string; until: string } {
+  const today = new Date();
+  const until = today.toISOString().slice(0, 10);
+  if (key === "month") return { since: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`, until };
+  return { since: new Date(today.getTime() - (Number(key) - 1) * 86400000).toISOString().slice(0, 10), until };
+}
 
 export default function ClientPortalPage() {
   const { data: session } = useSession();
-  const { clients } = useApp();
+  const myId = (session?.user as { id?: string } | undefined)?.id ?? "";
 
-  const myClient = clients[0];
+  const [dto, setDto] = useState<DashboardDTO | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState("month");
 
-  const chartData = useMemo(() => {
-    const months = ["נוב", "דצמ", "ינו", "פבר", "מרץ", "אפר"];
-    return months.map((m) => ({
-      month: m,
-      conversions: Math.floor(500 + Math.random() * 600),
-      cost: Math.floor(30 + Math.random() * 30),
-    }));
+  const [aiChat, setAiChat] = useState<{ role: "user" | "ai"; text: string }[]>([]);
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+
+  const [msgs, setMsgs] = useState<ChatMsg[]>([]);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const loadDashboard = useCallback(async (key: string) => {
+    setLoading(true);
+    try {
+      const { since, until } = rangeDates(key);
+      const res = await fetch(`/api/client-portal/dashboard?since=${since}&until=${until}`);
+      if (res.ok) setDto(await res.json());
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  if (!myClient) {
-    return (
-      <div dir="rtl" className="p-6">
-        <p className="text-brand-muted">טוען נתונים...</p>
-      </div>
-    );
+  const loadChat = useCallback(async () => {
+    const res = await fetch(`/api/client-portal/chat`);
+    if (res.ok) setMsgs((await res.json()).messages ?? []);
+  }, []);
+
+  useEffect(() => { loadDashboard(range); }, [loadDashboard, range]);
+  useEffect(() => { loadChat(); const t = setInterval(loadChat, 20000); return () => clearInterval(t); }, [loadChat]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+
+  async function ask(q: string) {
+    const text = q.trim();
+    if (!text || asking) return;
+    setQuestion("");
+    setAiChat((c) => [...c, { role: "user", text }]);
+    setAsking(true);
+    try {
+      const { since, until } = rangeDates(range);
+      const res = await fetch(`/api/client-portal/ask`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: text, since, until }) });
+      const data = await res.json();
+      setAiChat((c) => [...c, { role: "ai", text: res.ok ? data.answer : (data.error ?? "שגיאה") }]);
+    } finally {
+      setAsking(false);
+    }
   }
 
-  const { performance, monthlyBudget, optimizations } = myClient;
-  const status = statusColors[myClient.status] ?? statusColors.active;
-  const recentOptimizations = optimizations.slice(-5).reverse();
+  async function sendMsg() {
+    const content = draft.trim();
+    if (!content || sending) return;
+    setDraft("");
+    setSending(true);
+    try {
+      await fetch(`/api/client-portal/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) });
+      await loadChat();
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <div dir="rtl" className="mx-auto max-w-6xl space-y-6 p-6">
-      {/* Welcome header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold text-brand-dark">
-          שלום {myClient.name}
-        </h1>
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-medium ${status.bg} ${status.text}`}
-        >
-          {status.label}
-        </span>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* תקציב חודשי */}
-        <div className={cardClass}>
-          <div className="mb-2 flex items-center gap-2 text-brand-muted">
-            <DollarSign className="h-4 w-4 text-brand-gold" />
-            <span className="text-sm">תקציב חודשי</span>
-          </div>
-          <p className="text-2xl font-semibold text-brand-dark">
-            {performance.budgetUsed.toLocaleString("he-IL")}₪
-          </p>
-          <p className="mb-2 text-xs text-brand-muted">
-            מתוך {monthlyBudget.toLocaleString("he-IL")}₪
-          </p>
-          <ProgressBar
-            current={performance.budgetUsed}
-            target={monthlyBudget}
-            inverted
-          />
-        </div>
-
-        {/* המרות */}
-        <div className={cardClass}>
-          <div className="mb-2 flex items-center gap-2 text-brand-muted">
-            <Target className="h-4 w-4 text-brand-gold" />
-            <span className="text-sm">המרות</span>
-          </div>
-          <p className="text-2xl font-semibold text-brand-dark">
-            {performance.conversionsThisMonth.toLocaleString("he-IL")}
-          </p>
-          <p className="mb-2 text-xs text-brand-muted">
-            יעד: {performance.targetConversions.toLocaleString("he-IL")}
-          </p>
-          <ProgressBar
-            current={performance.conversionsThisMonth}
-            target={performance.targetConversions}
-          />
-        </div>
-
-        {/* עלות להמרה */}
-        <div className={cardClass}>
-          <div className="mb-2 flex items-center gap-2 text-brand-muted">
-            <TrendingUp className="h-4 w-4 text-brand-gold" />
-            <span className="text-sm">עלות להמרה</span>
-          </div>
-          <p className="text-2xl font-semibold text-brand-dark">
-            {performance.avgCostPerConversion.toLocaleString("he-IL")}₪
-          </p>
-          <p className="mb-2 text-xs text-brand-muted">
-            יעד: {performance.targetCostPerConversion.toLocaleString("he-IL")}₪
-          </p>
-          <ProgressBar
-            current={performance.avgCostPerConversion}
-            target={performance.targetCostPerConversion}
-            inverted
-          />
-        </div>
-
-        {/* אופטימיזציות */}
-        <div className={cardClass}>
-          <div className="mb-2 flex items-center gap-2 text-brand-muted">
-            <Zap className="h-4 w-4 text-brand-gold" />
-            <span className="text-sm">אופטימיזציות</span>
-          </div>
-          <p className="text-2xl font-semibold text-brand-dark">
-            {optimizations.length}
-          </p>
-          <p className="text-xs text-brand-muted">סה״כ אופטימיזציות</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-brand-dark">שלום{dto?.client.name ? ` ${dto.client.name}` : ""} 👋</h1>
+        <div className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light p-0.5">
+          {RANGES.map((r) => (
+            <button key={r.days} onClick={() => setRange(r.days)} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === r.days ? "bg-brand-gold text-brand-dark" : "text-brand-muted hover:text-brand-dark"}`}>{r.label}</button>
+          ))}
         </div>
       </div>
 
-      {/* Chart */}
-      <div className={cardClass}>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-brand-dark">
-            מגמות ביצועים
-          </h2>
-          <span className="rounded-full bg-brand-warning/10 px-3 py-1 text-xs font-medium text-brand-warning">
-            נתוני דמו
-          </span>
-        </div>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-            <XAxis dataKey="month" tick={{ fontSize: 12 }} reversed />
-            <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
-            <YAxis yAxisId="right" orientation="left" tick={{ fontSize: 12 }} />
-            <Tooltip />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="conversions"
-              stroke="#eed89b"
-              strokeWidth={2}
-              name="המרות"
-              dot={{ r: 4 }}
-            />
-            <Line
-              yAxisId="right"
-              type="monotone"
-              dataKey="cost"
-              stroke="#ef4444"
-              strokeWidth={2}
-              name="עלות להמרה"
-              dot={{ r: 4 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+      {/* דשבורד חי */}
+      {loading && !dto ? (
+        <div className="flex items-center justify-center py-16 text-brand-muted"><Loader2 className="h-6 w-6 animate-spin" /></div>
+      ) : dto && dto.widgets.length > 0 ? (
+        <div className={loading ? "opacity-60 transition-opacity" : ""}><WidgetGrid widgets={dto.widgets} currency={dto.client.currency} /></div>
+      ) : (
+        <div className={cardClass}><p className="py-8 text-center text-sm text-brand-muted">הדשבורד בהכנה. צוות DigiTailors מסדר את הנתונים שלך.</p></div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent Optimizations */}
+        {/* AI שיחתי */}
         <div className={cardClass}>
-          <h2 className="mb-4 text-lg font-semibold text-brand-dark">
-            אופטימיזציות אחרונות
-          </h2>
-          {recentOptimizations.length === 0 ? (
-            <p className="text-sm text-brand-muted">אין אופטימיזציות עדיין</p>
-          ) : (
-            <div className="space-y-4">
-              {recentOptimizations.map((opt) => (
-                <div
-                  key={opt.id}
-                  className="border-r-2 border-brand-gold pr-4"
-                >
-                  <p className="text-sm font-medium text-brand-dark">
-                    {opt.description}
-                  </p>
-                  <p className="text-xs text-brand-muted">{opt.date}</p>
-                </div>
-              ))}
+          <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand-gold" /><h3 className="text-sm font-semibold text-brand-dark">שאל את ה-AI על הנתונים</h3></div>
+          {aiChat.length > 0 && (
+            <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+              {aiChat.map((m, i) => <div key={i} className={`rounded-lg px-3 py-2 text-sm ${m.role === "user" ? "bg-brand-gold/10 text-brand-dark" : "whitespace-pre-wrap bg-brand-bg text-brand-dark"}`}>{m.text}</div>)}
+              {asking && <div className="flex items-center gap-2 px-3 py-2 text-sm text-brand-muted"><Loader2 className="h-4 w-4 animate-spin" /> מנתח...</div>}
             </div>
           )}
+          {aiChat.length === 0 && <div className="mt-3 flex flex-wrap gap-2">{SUGGESTIONS.map((s) => <button key={s} onClick={() => ask(s)} className="rounded-full border border-brand-border bg-brand-bg px-3 py-1.5 text-xs text-brand-muted hover:bg-brand-gold/10 hover:text-brand-dark">{s}</button>)}</div>}
+          <div className="mt-3 flex items-end gap-2">
+            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(question); } }} rows={1} dir="rtl" placeholder="שאל שאלה על המספרים..." className="w-full resize-none rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-sm focus:border-brand-gold focus:outline-none" />
+            <button onClick={() => ask(question)} disabled={asking || !question.trim()} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-gold text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">{asking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button>
+          </div>
         </div>
 
-        {/* Goals */}
+        {/* צ'אט עם הצוות */}
         <div className={cardClass}>
-          <h2 className="mb-4 text-lg font-semibold text-brand-dark">
-            עמידה ביעדים
-          </h2>
-          <div className="space-y-5">
-            {/* Budget goal */}
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-sm text-brand-dark">תקציב</span>
-                <span className="text-xs text-brand-muted">
-                  {performance.budgetUsed.toLocaleString("he-IL")}₪ /{" "}
-                  {monthlyBudget.toLocaleString("he-IL")}₪
-                </span>
-              </div>
-              <ProgressBar
-                current={performance.budgetUsed}
-                target={monthlyBudget}
-                inverted
-              />
-            </div>
-
-            {/* Conversions goal */}
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-sm text-brand-dark">המרות</span>
-                <span className="text-xs text-brand-muted">
-                  {performance.conversionsThisMonth.toLocaleString("he-IL")} /{" "}
-                  {performance.targetConversions.toLocaleString("he-IL")}
-                </span>
-              </div>
-              <ProgressBar
-                current={performance.conversionsThisMonth}
-                target={performance.targetConversions}
-              />
-            </div>
-
-            {/* Cost per conversion goal */}
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-sm text-brand-dark">עלות להמרה</span>
-                <span className="text-xs text-brand-muted">
-                  {performance.avgCostPerConversion.toLocaleString("he-IL")}₪ /{" "}
-                  {performance.targetCostPerConversion.toLocaleString("he-IL")}₪
-                </span>
-              </div>
-              <ProgressBar
-                current={performance.avgCostPerConversion}
-                target={performance.targetCostPerConversion}
-                inverted
-              />
-            </div>
+          <div className="flex items-center gap-2"><MessageSquare className="h-4 w-4 text-brand-gold" /><h3 className="text-sm font-semibold text-brand-dark">צ'אט עם צוות DigiTailors</h3></div>
+          <div className="mt-3 max-h-72 min-h-[8rem] space-y-2 overflow-y-auto">
+            {msgs.length === 0 ? <p className="py-6 text-center text-xs text-brand-muted">אין הודעות עדיין. כתבו לנו מה תרצו לדעת.</p> : msgs.map((m) => {
+              const mine = m.authorId === myId;
+              return (
+                <div key={m.id} className={`flex ${mine ? "justify-start" : "justify-end"}`}>
+                  <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${mine ? "bg-brand-gold/10 text-brand-dark" : "bg-brand-bg text-brand-dark"}`}>
+                    {!mine && <p className="mb-0.5 text-[10px] font-semibold text-brand-muted">{m.authorName}</p>}
+                    <p className="whitespace-pre-wrap">{m.content}</p>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={chatEndRef} />
+          </div>
+          <div className="mt-3 flex items-end gap-2">
+            <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMsg(); } }} rows={1} dir="rtl" placeholder="כתוב הודעה לצוות..." className="w-full resize-none rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-sm focus:border-brand-gold focus:outline-none" />
+            <button onClick={sendMsg} disabled={sending || !draft.trim()} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-gold text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">{sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button>
           </div>
         </div>
       </div>

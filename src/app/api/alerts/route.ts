@@ -7,9 +7,9 @@ export async function GET() {
   if (result instanceof NextResponse) return result;
   const user = result as AuthUser;
 
-  // התראות של המשתמש או של כולם (userId=null)
+  // התראות של המשתמש או של כולם (userId=null) — לקוח רואה רק את שלו
   const alerts = await prisma.alert.findMany({
-    where: { OR: [{ userId: user.id }, { userId: null }] },
+    where: user.role === "client" ? { userId: user.id } : { OR: [{ userId: user.id }, { userId: null }] },
     orderBy: { createdAt: "desc" },
     take: 50,
   });

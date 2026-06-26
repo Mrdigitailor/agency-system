@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
 
 export async function GET() {
+  const result = await requireAuth();
+  if (result instanceof NextResponse) return result;
+  // לקוח קצה לא רואה CRM
+  if ((result as AuthUser).role === "client") return NextResponse.json([]);
+
   const leads = await prisma.lead.findMany({
     include: { calls: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "desc" },

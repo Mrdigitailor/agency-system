@@ -26,7 +26,16 @@ export async function GET(req: Request) {
     }
     where.id = { in: assignedIds };
   } else if (user.role === "client") {
-    return NextResponse.json([]);
+    // לקוח קצה רואה רק את הלקוח/ות המשויכים אליו (פורטל)
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { assignedClientIds: true },
+    });
+    const assignedIds: string[] = JSON.parse(dbUser?.assignedClientIds ?? "[]");
+    if (assignedIds.length === 0) {
+      return NextResponse.json([]);
+    }
+    where.id = { in: assignedIds };
   }
 
   const clients = await prisma.client.findMany({

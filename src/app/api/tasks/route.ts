@@ -4,8 +4,21 @@ import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
 import { notifyTaskAssigned } from "@/lib/notifications/task-notify";
 
 export async function GET() {
+  const result = await requireAuth();
+  if (result instanceof NextResponse) return result;
+  const user = result as AuthUser;
+
+  const where: Record<string, unknown> = { deletedAt: null };
+  // לקוח קצה רואה רק משימות של הלקוח/ות שלו
+  if (user.role === "client") {
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { assignedClientIds: true } });
+    const assignedIds: string[] = JSON.parse(dbUser?.assignedClientIds ?? "[]");
+    if (assignedIds.length === 0) return NextResponse.json([]);
+    where.clientId = { in: assignedIds };
+  }
+
   const tasks = await prisma.task.findMany({
-    where: { deletedAt: null },
+    where,
     include: { notes: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "desc" },
   });

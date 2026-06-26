@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth } from "@/lib/auth/api-guard";
+import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
 import { sendWelcomeEmail } from "@/lib/email/resend";
 
 export async function GET() {
   const result = await requireAuth();
   if (result instanceof NextResponse) return result;
+  if ((result as AuthUser).role === "client") return NextResponse.json([]);
 
   const users = await prisma.user.findMany({
     where: { isActive: true },
