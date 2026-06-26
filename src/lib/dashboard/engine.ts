@@ -17,6 +17,8 @@ export interface WidgetConfig {
   displayType: DisplayType;
   size: "full" | "half" | "third";
   title: string;
+  textBody: string;
+  compare: boolean;
 }
 export interface ClientCtx {
   clientId: string;
@@ -26,12 +28,18 @@ export interface ClientCtx {
   googleConversionAction: string;
 }
 
-export interface KpiResult { type: "kpi"; metrics: { id: string; label: string; value: number; unit: string }[] }
+export interface KpiResult { type: "kpi"; metrics: { id: string; label: string; value: number; unit: string; change?: number | null }[] }
 export interface SeriesResult { type: "series"; display: "line" | "area" | "bar"; buckets: string[]; series: { id: string; label: string; values: number[] }[] }
 export interface TableResult { type: "table"; columns: { id: string; label: string }[]; rows: (string | number)[][] }
 export interface PieResult { type: "pie"; metricId: string; label: string; slices: { label: string; value: number }[] }
+export interface TextResult { type: "text"; heading: boolean; body: string }
 export interface EmptyResult { type: "empty"; reason: string }
-export type WidgetData = KpiResult | SeriesResult | TableResult | PieResult | EmptyResult;
+export type WidgetData = KpiResult | SeriesResult | TableResult | PieResult | TextResult | EmptyResult;
+
+function changePct(value: number, prev: number | null): number | null {
+  if (prev == null || prev === 0) return null;
+  return ((value - prev) / prev) * 100;
+}
 
 // ---------- רכיבי מטריקה (לחישוב מטריקות נגזרות מסכומים) ----------
 interface Components { spend: number; impressions: number; clicks: number; conversions: number; purchaseValue: number }
@@ -87,6 +95,17 @@ function daysBetween(since: string, until: string): number {
   return Math.min(Math.max(d, 1), 365);
 }
 
+function previousRange(r: DateRange): DateRange {
+  const since = new Date(r.since);
+  const days = Math.round((new Date(r.until).getTime() - since.getTime()) / 86400000) + 1;
+  const prevUntil = new Date(since.getTime() - 86400000);
+  const prevSince = new Date(prevUntil.getTime() - (days - 1) * 86400000);
+  return { since: prevSince.toISOString().slice(0, 10), until: prevUntil.toISOString().slice(0, 10) };
+}
+
+const isText = (w: WidgetConfig) => w.displayType === "heading" || w.displayType === "text";
+const wantsCompare = (w: WidgetConfig) => w.compare && (w.displayType === "kpi" || w.dimension === "none") && !isText(w);
+
 async function getGa4(ctx: ClientCtx, range: DateRange, cache: Ga4Cache): Promise<AnalyticsData | null> {
   if (cache.loaded) return cache.data;
   cache.loaded = true;
@@ -125,14 +144,21 @@ function rowsToComponents(platform: Platform, ad: AdRows, ctx: ClientCtx): Compo
 }
 
 // ---------- חישוב ווידג'ט פרסום ----------
-function computeAdWidget(w: WidgetConfig, ctx: ClientCtx, ad: AdRows): WidgetData {
+function computeAdWidget(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, prevAd?: AdRows | null): WidgetData {
   const metrics = w.metrics.filter((m) => METRIC_BY_ID[m]?.platforms.includes(w.platform));
   if (metrics.length === 0) return { type: "empty", reason: "לא נבחרו מטריקות" };
 
   // KPI / ללא מימד — סכום על כל הטווח
   if (w.displayType === "kpi" || w.dimension === "none") {
     const c = rowsToComponents(w.platform, ad, ctx);
-    return { type: "kpi", metrics: metrics.map((id) => ({ id, label: METRIC_BY_ID[id].label, value: metricValue(id, c), unit: METRIC_BY_ID[id].unit })) };
+    const prev = w.compare && prevAd ? rowsToComponents(w.platform, prevAd, ctx) : null;
+    return {
+      type: "kpi",
+      metrics: metrics.map((id) => {
+        const value = metricValue(id, c);
+        return { id, label: METRIC_BY_ID[id].label, value, unit: METRIC_BY_ID[id].unit, change: prev ? changePct(value, metricValue(id, prev)) : undefined };
+      }),
+    };
   }
 
   // פילוח לפי פלטפורמה (pie/bar כש-all)
@@ -201,13 +227,19 @@ function ga4Value(id: string, summary: Record<string, number>): number {
   if (id === "ga4_convRate") return (summary.convRate ?? 0) * 100;
   return summary[GA4_SUMMARY_KEY[id]] ?? 0;
 }
-function computeGa4Widget(w: WidgetConfig, data: AnalyticsData | null): WidgetData {
+function computeGa4Widget(w: WidgetConfig, data: AnalyticsData | null, prevData?: AnalyticsData | null): WidgetData {
   if (!data) return { type: "empty", reason: "Google Analytics לא מחובר" };
   const metrics = w.metrics.filter((m) => METRIC_BY_ID[m]?.platforms.includes("ga4"));
   if (metrics.length === 0) return { type: "empty", reason: "לא נבחרו מטריקות" };
 
   if (w.displayType === "kpi" || w.dimension === "none") {
-    return { type: "kpi", metrics: metrics.map((id) => ({ id, label: METRIC_BY_ID[id].label, value: ga4Value(id, data.summary), unit: METRIC_BY_ID[id].unit })) };
+    return {
+      type: "kpi",
+      metrics: metrics.map((id) => {
+        const value = ga4Value(id, data.summary);
+        return { id, label: METRIC_BY_ID[id].label, value, unit: METRIC_BY_ID[id].unit, change: w.compare && prevData ? changePct(value, ga4Value(id, prevData.summary)) : undefined };
+      }),
+    };
   }
   if (w.displayType === "pie") {
     return { type: "pie", metricId: metrics[0], label: METRIC_BY_ID[metrics[0]].label, slices: data.channels.map((c) => ({ label: c.name, value: c.value })) };
@@ -265,16 +297,28 @@ export async function computeSnapshot(ctx: ClientCtx, range: DateRange): Promise
 export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, range: DateRange): Promise<{ widgetId: string; data: WidgetData }[]> {
   const adCache: AdCache = {};
   const ga4Cache: Ga4Cache = { loaded: false, data: null };
-  const needsAd = widgets.some((w) => w.platform !== "ga4");
-  const needsGa4 = widgets.some((w) => w.platform === "ga4");
+  const prevAdCache: AdCache = {};
+  const prevGa4Cache: Ga4Cache = { loaded: false, data: null };
 
-  const [ad] = await Promise.all([
-    needsAd ? getAdRows(ctx, range, adCache) : Promise.resolve({ meta: [], google: [], tiktok: [] } as AdRows),
+  const dataWidgets = widgets.filter((w) => !isText(w));
+  const needsAd = dataWidgets.some((w) => w.platform !== "ga4");
+  const needsGa4 = dataWidgets.some((w) => w.platform === "ga4");
+  const needsCompare = dataWidgets.some(wantsCompare);
+  const prev = needsCompare ? previousRange(range) : null;
+  const emptyAd: AdRows = { meta: [], google: [], tiktok: [] };
+
+  const [ad, , prevAd] = await Promise.all([
+    needsAd ? getAdRows(ctx, range, adCache) : Promise.resolve(emptyAd),
     needsGa4 ? getGa4(ctx, range, ga4Cache) : Promise.resolve(null),
+    needsCompare && needsAd && prev ? getAdRows(ctx, prev, prevAdCache) : Promise.resolve(emptyAd),
+    needsCompare && needsGa4 && prev ? getGa4(ctx, prev, prevGa4Cache) : Promise.resolve(null),
   ]);
 
-  return widgets.map((w) => ({
-    widgetId: w.id,
-    data: w.platform === "ga4" ? computeGa4Widget(w, ga4Cache.data) : computeAdWidget(w, ctx, ad),
-  }));
+  return widgets.map((w) => {
+    let data: WidgetData;
+    if (isText(w)) data = { type: "text", heading: w.displayType === "heading", body: w.textBody };
+    else if (w.platform === "ga4") data = computeGa4Widget(w, ga4Cache.data, prevGa4Cache.data);
+    else data = computeAdWidget(w, ctx, ad, prevAd);
+    return { widgetId: w.id, data };
+  });
 }

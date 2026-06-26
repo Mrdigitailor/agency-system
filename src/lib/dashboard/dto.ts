@@ -32,7 +32,7 @@ export function sanitizeRange(sinceRaw: string | null, untilRaw: string | null):
 }
 
 interface RawWidget {
-  id: string; platform: string; metrics: string; dimension: string; displayType: string; size: string; title: string;
+  id: string; platform: string; metrics: string; dimension: string; displayType: string; size: string; title: string; textBody: string; compare: boolean;
 }
 function toConfig(w: RawWidget): WidgetConfig {
   let metrics: string[] = [];
@@ -45,6 +45,8 @@ function toConfig(w: RawWidget): WidgetConfig {
     displayType: w.displayType as DisplayType,
     size: (w.size === "half" || w.size === "third" ? w.size : "full") as "full" | "half" | "third",
     title: w.title,
+    textBody: w.textBody ?? "",
+    compare: Boolean(w.compare),
   };
 }
 

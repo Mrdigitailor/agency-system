@@ -4,12 +4,22 @@ import { ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar, P
 import { getCurrencySymbol } from "@/lib/utils/currency";
 
 // ----- טיפוסי נתונים (תואמים ל-engine WidgetData) -----
-interface KpiResult { type: "kpi"; metrics: { id: string; label: string; value: number; unit: string }[] }
+interface KpiResult { type: "kpi"; metrics: { id: string; label: string; value: number; unit: string; change?: number | null }[] }
 interface SeriesResult { type: "series"; display: "line" | "area" | "bar"; buckets: string[]; series: { id: string; label: string; values: number[] }[] }
 interface TableResult { type: "table"; columns: { id: string; label: string }[]; rows: (string | number)[][] }
 interface PieResult { type: "pie"; metricId: string; label: string; slices: { label: string; value: number }[] }
+interface TextResult { type: "text"; heading: boolean; body: string }
 interface EmptyResult { type: "empty"; reason: string }
-export type WidgetData = KpiResult | SeriesResult | TableResult | PieResult | EmptyResult;
+export type WidgetData = KpiResult | SeriesResult | TableResult | PieResult | TextResult | EmptyResult;
+
+const LOWER_BETTER = new Set(["cpa", "cpc", "cpm"]);
+function Delta({ id, change }: { id: string; change?: number | null }) {
+  if (change === null || change === undefined) return null;
+  const good = LOWER_BETTER.has(id) ? change < 0 : change > 0;
+  const color = change === 0 ? "text-brand-muted" : good ? "text-brand-success" : "text-brand-danger";
+  const arrow = change > 0 ? "↑" : change < 0 ? "↓" : "→";
+  return <span className={`text-xs font-medium ${color}`}>{arrow} {Math.abs(change).toFixed(1)}% מהתקופה הקודמת</span>;
+}
 
 export interface WidgetDTO { id: string; title: string; displayType: string; size: string; data: WidgetData }
 
@@ -33,7 +43,12 @@ function KpiView({ data, currency }: { data: KpiResult; currency: string }) {
   const single = data.metrics.length === 1;
   if (single) {
     const m = data.metrics[0];
-    return <p className="mt-2 text-3xl font-semibold text-brand-dark">{formatByUnit(m.value, m.unit, currency)}</p>;
+    return (
+      <div className="mt-2">
+        <p className="text-3xl font-semibold text-brand-dark">{formatByUnit(m.value, m.unit, currency)}</p>
+        <Delta id={m.id} change={m.change} />
+      </div>
+    );
   }
   return (
     <div className="mt-2 grid grid-cols-2 gap-3">
@@ -41,6 +56,7 @@ function KpiView({ data, currency }: { data: KpiResult; currency: string }) {
         <div key={m.id}>
           <p className="text-xs text-brand-muted">{m.label}</p>
           <p className="text-xl font-semibold text-brand-dark">{formatByUnit(m.value, m.unit, currency)}</p>
+          <Delta id={m.id} change={m.change} />
         </div>
       ))}
     </div>
@@ -122,6 +138,20 @@ function TableView({ data }: { data: TableResult }) {
 
 export function WidgetRenderer({ widget, currency }: { widget: WidgetDTO; currency: string }) {
   const { data } = widget;
+
+  // כותרת / מפריד — בלי תיבת כרטיס
+  if (data.type === "text" && data.heading) {
+    return <div className="border-b-2 border-brand-gold pb-2 pt-4"><h2 className="text-xl font-bold text-brand-dark">{widget.title}</h2></div>;
+  }
+  if (data.type === "text") {
+    return (
+      <div className="rounded-lg border border-brand-border bg-brand-light p-5 shadow-sm">
+        {widget.title && <p className="mb-1 text-sm font-semibold text-brand-dark">{widget.title}</p>}
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-brand-dark">{data.body}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-brand-border bg-brand-light p-5 shadow-sm">
       <p className="text-sm font-semibold text-brand-dark">{widget.title || " "}</p>

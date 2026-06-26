@@ -7,7 +7,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Plus, Pencil, Trash2, GripVertical, Loader2, Link2, Copy, ExternalLink, Eye } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { WidgetGrid, type WidgetDTO } from "@/components/dashboard/DashboardWidgets";
-import { getMetricsForPlatform, PLATFORM_LABELS, DISPLAY_LABELS, type Platform, type DisplayType } from "@/lib/dashboard/metrics";
+import { getMetricsForPlatform, PLATFORM_LABELS, DISPLAY_LABELS, DIMENSION_LABELS, validDimensions, type Platform, type DisplayType, type Dimension } from "@/lib/dashboard/metrics";
 
 interface Widget {
   id: string;
@@ -17,10 +17,14 @@ interface Widget {
   dimension: string;
   size: string;
   title: string;
+  textBody: string;
+  compare: boolean;
 }
 
 const PLATFORMS: Platform[] = ["meta", "google_ads", "tiktok", "all", "ga4"];
-const DISPLAYS: DisplayType[] = ["kpi", "line", "area", "bar", "pie", "table"];
+const DISPLAYS: DisplayType[] = ["kpi", "line", "area", "bar", "pie", "table", "heading", "text"];
+const isTextType = (d: DisplayType) => d === "heading" || d === "text";
+const emptyForm = (): Widget => ({ id: "", platform: "meta", metrics: [], displayType: "kpi", dimension: "none", size: "full", title: "", textBody: "", compare: false });
 const SIZES = [
   { v: "full", label: "מלא" },
   { v: "half", label: "חצי" },
@@ -28,13 +32,6 @@ const SIZES = [
 ];
 const cardClass = "rounded-lg border border-brand-border bg-brand-light p-5 shadow-sm";
 const inputClass = "w-full rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-sm focus:border-brand-gold focus:outline-none";
-
-function autoDimension(displayType: DisplayType): string {
-  if (displayType === "kpi") return "none";
-  if (displayType === "table") return "campaign";
-  if (displayType === "pie") return "platform";
-  return "date";
-}
 
 function SortableRow({ w, onEdit, onDelete }: { w: Widget; onEdit: () => void; onDelete: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: w.id });
@@ -62,7 +59,7 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
   // modal
   const [editing, setEditing] = useState<Widget | null>(null);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<Widget>({ id: "", platform: "meta", metrics: [], displayType: "kpi", dimension: "none", size: "full", title: "" });
+  const [form, setForm] = useState<Widget>(emptyForm());
   const [saving, setSaving] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -91,8 +88,17 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
 
   function openNew() {
     setEditing(null);
-    setForm({ id: "", platform: "meta", metrics: [], displayType: "kpi", dimension: "none", size: "full", title: "" });
+    setForm(emptyForm());
     setOpen(true);
+  }
+
+  // שינוי סוג תצוגה — מתאים את הפילוח לברירת מחדל חוקית
+  function setDisplay(displayType: DisplayType) {
+    setForm((f) => {
+      const dims = validDimensions(displayType);
+      const dimension = dims.includes(f.dimension as Dimension) ? f.dimension : dims[0];
+      return { ...f, displayType, dimension };
+    });
   }
   function openEdit(w: Widget) {
     setEditing(w);
@@ -109,10 +115,12 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
   }
 
   async function saveWidget() {
-    if (form.metrics.length === 0) return;
+    const isText = isTextType(form.displayType);
+    if (!isText && form.metrics.length === 0) return;
+    if (isText && !form.title.trim() && !form.textBody.trim()) return;
     setSaving(true);
     try {
-      const payload = { ...form, dimension: autoDimension(form.displayType) };
+      const payload = { ...form };
       if (editing) {
         await fetch(`/api/clients/${clientId}/widgets`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, id: editing.id }) });
       } else {
@@ -211,35 +219,62 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">פלטפורמה</label>
-              <select value={form.platform} onChange={(e) => setPlatform(e.target.value as Platform)} className={inputClass}>
-                {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
-              </select>
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">סוג תצוגה</label>
-              <select value={form.displayType} onChange={(e) => setForm((f) => ({ ...f, displayType: e.target.value as DisplayType }))} className={inputClass}>
+              <select value={form.displayType} onChange={(e) => setDisplay(e.target.value as DisplayType)} className={inputClass}>
                 {DISPLAYS.map((d) => <option key={d} value={d}>{DISPLAY_LABELS[d]}</option>)}
               </select>
             </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-brand-muted">מדדים</label>
-            <div className="flex flex-wrap gap-2">
-              {getMetricsForPlatform(form.platform).map((m) => (
-                <button key={m.id} type="button" onClick={() => toggleMetric(m.id)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${form.metrics.includes(m.id) ? "border-brand-gold bg-brand-gold/15 text-brand-dark" : "border-brand-border bg-brand-bg text-brand-muted hover:bg-brand-light"}`}>{m.label}</button>
-              ))}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">גודל</label>
+              <select value={form.size} onChange={(e) => setForm((f) => ({ ...f, size: e.target.value }))} className={inputClass}>
+                {SIZES.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
+              </select>
             </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-brand-muted">גודל</label>
-            <div className="flex gap-2">
-              {SIZES.map((s) => <button key={s.v} type="button" onClick={() => setForm((f) => ({ ...f, size: s.v }))} className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${form.size === s.v ? "border-brand-gold bg-brand-gold/15 text-brand-dark" : "border-brand-border bg-brand-bg text-brand-muted"}`}>{s.label}</button>)}
-            </div>
-          </div>
+
+          {isTextType(form.displayType) ? (
+            form.displayType === "text" && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brand-muted">תוכן הטקסט</label>
+                <textarea value={form.textBody} onChange={(e) => setForm((f) => ({ ...f, textBody: e.target.value }))} rows={4} dir="rtl" className={inputClass} placeholder="טקסט חופשי שיוצג ללקוח..." />
+              </div>
+            )
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-brand-muted">פלטפורמה</label>
+                  <select value={form.platform} onChange={(e) => setPlatform(e.target.value as Platform)} className={inputClass}>
+                    {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-brand-muted">פילוח</label>
+                  <select value={form.dimension} onChange={(e) => setForm((f) => ({ ...f, dimension: e.target.value }))} className={inputClass}>
+                    {validDimensions(form.displayType).map((d) => <option key={d} value={d}>{DIMENSION_LABELS[d]}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brand-muted">מדדים</label>
+                <div className="flex flex-wrap gap-2">
+                  {getMetricsForPlatform(form.platform).map((m) => (
+                    <button key={m.id} type="button" onClick={() => toggleMetric(m.id)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${form.metrics.includes(m.id) ? "border-brand-gold bg-brand-gold/15 text-brand-dark" : "border-brand-border bg-brand-bg text-brand-muted hover:bg-brand-light"}`}>{m.label}</button>
+                  ))}
+                </div>
+              </div>
+              {form.displayType === "kpi" && (
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-brand-dark">
+                  <input type="checkbox" checked={form.compare} onChange={(e) => setForm((f) => ({ ...f, compare: e.target.checked }))} className="h-4 w-4 rounded border-brand-border" />
+                  השוואה לתקופה הקודמת (אחוז שינוי + חץ)
+                </label>
+              )}
+            </>
+          )}
+
           <div className="flex justify-end gap-2 border-t border-brand-border pt-4">
             <button onClick={() => setOpen(false)} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg">ביטול</button>
-            <button onClick={saveWidget} disabled={saving || form.metrics.length === 0} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">{saving ? "שומר..." : "שמור"}</button>
+            <button onClick={saveWidget} disabled={saving || (!isTextType(form.displayType) && form.metrics.length === 0)} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">{saving ? "שומר..." : "שמור"}</button>
           </div>
         </div>
       </Modal>

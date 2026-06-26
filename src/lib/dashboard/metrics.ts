@@ -2,7 +2,7 @@
 import { getCurrencySymbol } from "@/lib/utils/currency";
 
 export type Platform = "meta" | "google_ads" | "tiktok" | "ga4" | "all";
-export type DisplayType = "kpi" | "line" | "area" | "bar" | "pie" | "table";
+export type DisplayType = "kpi" | "line" | "area" | "bar" | "pie" | "table" | "heading" | "text";
 export type Dimension = "none" | "date" | "week" | "month" | "platform" | "campaign" | "channel";
 
 export interface MetricDef {
@@ -56,7 +56,34 @@ export const DISPLAY_LABELS: Record<DisplayType, string> = {
   bar: "גרף עמודות",
   pie: "גרף עוגה",
   table: "טבלה",
+  heading: "כותרת / מפריד",
+  text: "טקסט חופשי",
 };
+
+export const DIMENSION_LABELS: Record<Dimension, string> = {
+  none: "ללא (סיכום)",
+  date: "לפי יום",
+  week: "לפי שבוע",
+  month: "לפי חודש",
+  platform: "לפי פלטפורמה",
+  campaign: "לפי קמפיין",
+  channel: "לפי ערוץ",
+};
+
+/** הפילוחים החוקיים לכל סוג תצוגה */
+export function validDimensions(displayType: DisplayType): Dimension[] {
+  switch (displayType) {
+    case "kpi": return ["none"];
+    case "line":
+    case "area":
+    case "bar": return ["date", "week", "month", "platform"];
+    case "pie": return ["platform", "campaign"];
+    case "table": return ["campaign"];
+    default: return ["none"];
+  }
+}
+
+export const TEXT_DISPLAYS: DisplayType[] = ["heading", "text"];
 
 const fmtNum = (n: number) => Math.round(n).toLocaleString("he-IL");
 

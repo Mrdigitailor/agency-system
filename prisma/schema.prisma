@@ -872,9 +872,11 @@ model DashboardWidget {
   metrics     String   @default("[]") // JSON array of metric IDs
   dimension   String   @default("date") // date | week | month | gender | age | device
   filters     String   @default("[]") // JSON array of { field, operator, value }
-  displayType String   @default("table") // table | kpi | line | bar | pie | area
+  displayType String   @default("table") // table | kpi | line | bar | pie | area | heading | text
   size        String   @default("full") // full | half | third
   title       String   @default("")
+  textBody    String   @default("") // לווידג'טי טקסט
+  compare     Boolean  @default(false) // השוואה לתקופה קודמת (KPI)
   createdAt   DateTime @default(now())
 
   @@index([clientId, sortOrder])

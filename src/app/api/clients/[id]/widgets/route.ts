@@ -39,6 +39,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       displayType: body.displayType ?? "table",
       size: body.size ?? "full",
       title: body.title ?? "",
+      textBody: body.textBody ?? "",
+      compare: Boolean(body.compare),
     },
   });
 
@@ -60,6 +62,8 @@ export async function PATCH(req: Request) {
   if (body.displayType !== undefined) data.displayType = body.displayType;
   if (body.size !== undefined) data.size = body.size;
   if (body.title !== undefined) data.title = body.title;
+  if (body.textBody !== undefined) data.textBody = body.textBody;
+  if (body.compare !== undefined) data.compare = Boolean(body.compare);
   if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder;
 
   const widget = await prisma.dashboardWidget.update({ where: { id: body.id }, data });
