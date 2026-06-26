@@ -37,6 +37,7 @@ import PlatformConnections from "@/components/ui/PlatformConnections";
 import ConversionEventSelector from "@/components/ui/ConversionEventSelector";
 import GoogleConversionActionSelector from "@/components/ui/GoogleConversionActionSelector";
 import ClientAnalyticsTab from "@/components/ui/ClientAnalyticsTab";
+import ClientDashboardTab from "@/components/ui/ClientDashboardTab";
 import MetaCampaignsTab from "@/components/ui/MetaCampaignsTab";
 import GoogleAdsCampaignsTab from "@/components/ui/GoogleAdsCampaignsTab";
 import TikTokCampaignsTab from "@/components/ui/TikTokCampaignsTab";
@@ -88,6 +89,7 @@ const TAB_DEFS = [
   { id: "reports", heLabel: "דוחות", tKey: "reportsList", icon: FileText },
   { id: "messages", heLabel: "הודעות", tKey: "messages", icon: MessageSquare },
   { id: "analytics", heLabel: "אנליטיקס", tKey: "analytics", icon: BarChart3 },
+  { id: "dashboard", heLabel: "דשבורד ציבורי", tKey: "publicDashboard", icon: BarChart3 },
   { id: "tasks", heLabel: "משימות", tKey: "tasksList", icon: ListTodo },
   { id: "ai", heLabel: "צ׳אט AI", tKey: "aiChat", icon: BarChart3 },
 ] as const;
@@ -782,6 +784,8 @@ export default function ClientDetailPage() {
 
       {/* ===== טאב 6 — אנליטיקס ===== */}
       {activeTab === "analytics" && <ClientAnalyticsTab clientId={client.id} />}
+
+      {activeTab === "dashboard" && <ClientDashboardTab clientId={client.id} />}
 
       {/* ===== טאב 7 — משימות ===== */}
       {activeTab === "tasks" && (() => {

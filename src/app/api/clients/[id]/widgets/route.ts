@@ -74,3 +74,15 @@ export async function DELETE(req: Request) {
   await prisma.dashboardWidget.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
+
+// PUT — סידור מחדש (drag & drop): { order: [widgetId,...] }
+export async function PUT(req: Request) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  const body = await req.json();
+  const order: string[] = Array.isArray(body.order) ? body.order : [];
+  if (order.length === 0) return NextResponse.json({ error: "Missing order" }, { status: 400 });
+
+  await prisma.$transaction(order.map((id, i) => prisma.dashboardWidget.update({ where: { id }, data: { sortOrder: i } })));
+  return NextResponse.json({ ok: true });
+}

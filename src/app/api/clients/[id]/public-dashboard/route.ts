@@ -4,6 +4,20 @@ import { requireAuth } from "@/lib/auth/api-guard";
 import crypto from "crypto";
 
 /**
+ * GET /api/clients/[id]/public-dashboard — סטטוס הקישור הציבורי (לבנאי)
+ */
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  const { id } = await params;
+  const client = await prisma.client.findUnique({
+    where: { id },
+    select: { publicDashboardToken: true, publicDashboardEnabled: true },
+  });
+  return NextResponse.json({ enabled: client?.publicDashboardEnabled ?? false, token: client?.publicDashboardToken ?? null });
+}
+
+/**
  * POST /api/clients/[id]/public-dashboard — generate/toggle public link
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
