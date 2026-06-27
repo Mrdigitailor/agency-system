@@ -56,24 +56,30 @@ export async function GET(req: Request) {
   const raced = await Promise.race([dispatch, timeout]);
   const succeeded = Array.isArray(raced) ? raced.filter((r) => r.status === "fulfilled" && r.value === true).length : null;
 
-  // התראה: חשבונות שדורשים חיבור מחדש (טוקן מת = לא יכולים להסתנכרן)
-  await alertBrokenConnections();
+  // התראה: חשבונות שלא הסתנכרנו יותר מיממה (כנראה דורשים חיבור מחדש)
+  await alertStaleConnections();
 
   console.log(`[Cron sync-all] dispatched ${connections.length} connections | completed=${succeeded ?? "in-progress"}`);
   return NextResponse.json({ ok: true, dispatched: connections.length, completed: succeeded });
 }
 
-/** יוצר התראה (פעם ביום) על חיבורים שטוקן שלהם מת — דורשים חיבור מחדש */
-async function alertBrokenConnections() {
-  const conns = await prisma.platformConnection.findMany({
-    where: { isActive: true, platform: { in: ["meta", "google_ads", "tiktok"] }, client: { deletedAt: null, status: { not: "inactive" } } },
-    select: { platform: true, refreshToken: true, tokenExpiry: true, client: { select: { name: true } } },
+/**
+ * יוצר התראה (פעם ביום) על חיבורים שלא הסתנכרנו יותר מ-25 שעות — כלומר פספסו
+ * את הסנכרון היומי (כשל אמיתי, בד"כ טוקן שדורש חיבור מחדש). מבוסס lastSyncAt
+ * ולא תוקף-טוקן, כדי לא לסמן בטעות חיבורים שמסתנכרנים בפועל.
+ */
+async function alertStaleConnections() {
+  const cutoff = new Date(Date.now() - 25 * 60 * 60 * 1000);
+  const stale = await prisma.platformConnection.findMany({
+    where: {
+      isActive: true,
+      platform: { in: ["meta", "google_ads", "tiktok"] },
+      client: { deletedAt: null, status: { not: "inactive" } },
+      OR: [{ lastSyncAt: null }, { lastSyncAt: { lt: cutoff } }],
+    },
+    select: { platform: true, client: { select: { name: true } } },
   });
-  const now = Date.now();
-  const broken = conns.filter((c) =>
-    c.platform === "meta" ? (c.tokenExpiry ? new Date(c.tokenExpiry).getTime() < now : false) : !c.refreshToken,
-  );
-  if (broken.length === 0) return;
+  if (stale.length === 0) return;
 
   // de-dup — התראה אחת ביום
   const todayStart = new Date();
@@ -81,12 +87,12 @@ async function alertBrokenConnections() {
   const existing = await prisma.alert.findFirst({ where: { type: "sync_reconnect", createdAt: { gte: todayStart } } });
   if (existing) return;
 
-  const names = [...new Set(broken.map((b) => `${b.client?.name ?? "?"} (${b.platform})`))].slice(0, 25).join(", ");
+  const names = [...new Set(stale.map((b) => `${b.client?.name ?? "?"} (${b.platform})`))].slice(0, 25).join(", ");
   await prisma.alert.create({
     data: {
       type: "sync_reconnect",
-      title: `${broken.length} חשבונות דורשים חיבור מחדש`,
-      message: `החשבונות הבאים לא הסתנכרנו (טוקן פג): ${names}`,
+      title: `${stale.length} חשבונות לא הסתנכרנו — ייתכן שדורשים חיבור מחדש`,
+      message: `החשבונות הבאים לא הסתנכרנו מעל 24 שעות: ${names}`,
       link: "/clients",
       userId: null,
     },
