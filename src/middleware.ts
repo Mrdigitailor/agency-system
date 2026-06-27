@@ -46,7 +46,7 @@ export default withAuth(
         // IDOR — לקוח רשאי לגשת רק ללקוח/ות שלו תחת /api/clients/<id>/...
         if (pathname.startsWith("/api/clients/")) {
           const clientId = pathname.split("/")[3];
-          const assigned = (token.assignedClientIds as string[] | undefined) ?? [];
+          const assigned = (token?.assignedClientIds as string[] | undefined) ?? [];
           if (clientId && !assigned.includes(clientId)) {
             return NextResponse.json({ error: "אין הרשאה ללקוח זה" }, { status: 403 });
           }
