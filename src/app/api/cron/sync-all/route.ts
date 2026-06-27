@@ -35,7 +35,8 @@ export async function GET(req: Request) {
   });
 
   const origin = process.env.APP_BASE_URL ?? new URL(req.url).origin;
-  const daysBack = 14;
+  // תמיד מסנכרנים את כל החודש הקלנדרי הנוכחי (1 בחודש → היום), כי כך מוגדרים תקציבים ויעדים
+  const daysBack = new Date().getDate();
 
   // יורים את כל הסנכרונים מיד (כל אחד invocation נפרד שרץ עד הסוף בנפרד).
   // ממתינים עד SOFT_LIMIT כדי להחזיר תשובה נקייה לפני מגבלת 60ש' — סנכרונים שלא
@@ -55,6 +56,39 @@ export async function GET(req: Request) {
   const raced = await Promise.race([dispatch, timeout]);
   const succeeded = Array.isArray(raced) ? raced.filter((r) => r.status === "fulfilled" && r.value === true).length : null;
 
+  // התראה: חשבונות שדורשים חיבור מחדש (טוקן מת = לא יכולים להסתנכרן)
+  await alertBrokenConnections();
+
   console.log(`[Cron sync-all] dispatched ${connections.length} connections | completed=${succeeded ?? "in-progress"}`);
   return NextResponse.json({ ok: true, dispatched: connections.length, completed: succeeded });
+}
+
+/** יוצר התראה (פעם ביום) על חיבורים שטוקן שלהם מת — דורשים חיבור מחדש */
+async function alertBrokenConnections() {
+  const conns = await prisma.platformConnection.findMany({
+    where: { isActive: true, platform: { in: ["meta", "google_ads", "tiktok"] }, client: { deletedAt: null, status: { not: "inactive" } } },
+    select: { platform: true, refreshToken: true, tokenExpiry: true, client: { select: { name: true } } },
+  });
+  const now = Date.now();
+  const broken = conns.filter((c) =>
+    c.platform === "meta" ? (c.tokenExpiry ? new Date(c.tokenExpiry).getTime() < now : false) : !c.refreshToken,
+  );
+  if (broken.length === 0) return;
+
+  // de-dup — התראה אחת ביום
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const existing = await prisma.alert.findFirst({ where: { type: "sync_reconnect", createdAt: { gte: todayStart } } });
+  if (existing) return;
+
+  const names = [...new Set(broken.map((b) => `${b.client?.name ?? "?"} (${b.platform})`))].slice(0, 25).join(", ");
+  await prisma.alert.create({
+    data: {
+      type: "sync_reconnect",
+      title: `${broken.length} חשבונות דורשים חיבור מחדש`,
+      message: `החשבונות הבאים לא הסתנכרנו (טוקן פג): ${names}`,
+      link: "/clients",
+      userId: null,
+    },
+  });
 }
