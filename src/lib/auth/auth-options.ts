@@ -112,6 +112,19 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
+      // שלוף assignedClientIds פעם אחת (לאכיפת הרשאות API ב-middleware)
+      if (token.id && token.assignedClientIds === undefined) {
+        const u = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { assignedClientIds: true },
+        });
+        try {
+          token.assignedClientIds = u ? JSON.parse(u.assignedClientIds || "[]") : [];
+        } catch {
+          token.assignedClientIds = [];
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
