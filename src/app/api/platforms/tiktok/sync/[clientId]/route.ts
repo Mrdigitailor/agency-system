@@ -2,9 +2,16 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { syncClientTikTok } from "@/lib/api/tiktok/sync";
 
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request, { params }: { params: Promise<{ clientId: string }> }) {
-  const result = await requireAuth();
-  if (result instanceof NextResponse) return result;
+  const secret = process.env.CRON_SECRET;
+  const provided = req.headers.get("authorization")?.replace("Bearer ", "") ?? new URL(req.url).searchParams.get("secret");
+  if (!(secret && provided === secret)) {
+    const result = await requireAuth();
+    if (result instanceof NextResponse) return result;
+  }
 
   const { clientId } = await params;
   const body = await req.json().catch(() => ({}));

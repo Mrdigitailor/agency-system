@@ -1,8 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/sync-meta",
-      "schedule": "0 0 * * *"
+      "path": "/api/cron/sync-all",
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/cron/weekly-reports",
