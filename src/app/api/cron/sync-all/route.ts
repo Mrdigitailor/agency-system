@@ -35,9 +35,13 @@ export async function GET(req: Request) {
   });
 
   const origin = process.env.APP_BASE_URL ?? new URL(req.url).origin;
-  const daysBack = 30;
+  const daysBack = 14;
 
-  const results = await Promise.allSettled(
+  // יורים את כל הסנכרונים מיד (כל אחד invocation נפרד שרץ עד הסוף בנפרד).
+  // ממתינים עד SOFT_LIMIT כדי להחזיר תשובה נקייה לפני מגבלת 60ש' — סנכרונים שלא
+  // הספיקו ממשיכים ברקע כ-invocations עצמאיים (Vercel לא מבטל אותם).
+  const SOFT_LIMIT_MS = 45_000;
+  const dispatch = Promise.allSettled(
     connections.map((c) =>
       fetch(`${origin}/api/platforms/${PLATFORM_PATH[c.platform]}/sync/${c.clientId}`, {
         method: "POST",
@@ -47,8 +51,10 @@ export async function GET(req: Request) {
     ),
   );
 
-  const ok = results.filter((r) => r.status === "fulfilled" && r.value === true).length;
-  console.log(`[Cron sync-all] dispatched ${connections.length} connections | ok=${ok}`);
+  const timeout = new Promise<"timeout">((res) => setTimeout(() => res("timeout"), SOFT_LIMIT_MS));
+  const raced = await Promise.race([dispatch, timeout]);
+  const succeeded = Array.isArray(raced) ? raced.filter((r) => r.status === "fulfilled" && r.value === true).length : null;
 
-  return NextResponse.json({ ok: true, connections: connections.length, succeeded: ok });
+  console.log(`[Cron sync-all] dispatched ${connections.length} connections | completed=${succeeded ?? "in-progress"}`);
+  return NextResponse.json({ ok: true, dispatched: connections.length, completed: succeeded });
 }
