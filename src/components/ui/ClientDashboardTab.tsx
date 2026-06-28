@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Pencil, Trash2, GripVertical, Loader2, Link2, Copy, ExternalLink, Eye, ArrowRight, FileText, Share2, ChevronLeft } from "lucide-react";
-import Modal from "@/components/ui/Modal";
-import { WidgetGrid, type WidgetDTO } from "@/components/dashboard/DashboardWidgets";
+import { Plus, Pencil, Trash2, GripVertical, Loader2, Link2, Copy, ExternalLink, ArrowRight, FileText, Share2, ChevronLeft } from "lucide-react";
+import { WidgetRenderer, type WidgetDTO } from "@/components/dashboard/DashboardWidgets";
 import { getMetricsForPlatform, PLATFORM_LABELS, DISPLAY_LABELS, DIMENSION_LABELS, validDimensions, type Platform, type DisplayType, type Dimension } from "@/lib/dashboard/metrics";
 
 interface Widget {
@@ -33,19 +32,35 @@ const SIZES = [
 ];
 const cardClass = "rounded-lg border border-brand-border bg-brand-light p-5 shadow-sm";
 const inputClass = "w-full rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-sm focus:border-brand-gold focus:outline-none";
+const SPAN: Record<string, string> = { full: "md:col-span-12", half: "md:col-span-6", third: "md:col-span-4" };
 
-function SortableRow({ w, onEdit, onDelete }: { w: Widget; onEdit: () => void; onDelete: () => void }) {
+const RANGE_PRESETS = [
+  { key: "month", label: "החודש" },
+  { key: "7", label: "7 ימים" },
+  { key: "28", label: "28 ימים" },
+  { key: "90", label: "90 ימים" },
+  { key: "custom", label: "מותאם" },
+];
+function presetDates(key: string): { since: string; until: string } {
+  const t = new Date();
+  const until = t.toISOString().slice(0, 10);
+  if (key === "month") return { since: `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-01`, until };
+  return { since: new Date(t.getTime() - (Number(key) - 1) * 86400000).toISOString().slice(0, 10), until };
+}
+
+// קוביה בקנבס — תצוגה חיה + בחירה לעריכה + גרירה
+function CanvasCard({ w, currency, selected, onSelect, onDelete }: { w: WidgetDTO; currency: string; selected: boolean; onSelect: () => void; onDelete: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: w.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-3 rounded-lg border border-brand-border bg-brand-bg p-3">
-      <button {...attributes} {...listeners} className="cursor-grab text-brand-muted hover:text-brand-dark"><GripVertical className="h-4 w-4" /></button>
-      <div className="flex-1">
-        <p className="text-sm font-medium text-brand-dark">{w.title || "(ללא כותרת)"}</p>
-        <p className="text-xs text-brand-muted">{PLATFORM_LABELS[w.platform]} · {DISPLAY_LABELS[w.displayType]} · {w.metrics.length} מדדים</p>
+    <div ref={setNodeRef} style={style} className={`${SPAN[w.size] ?? SPAN.full} group relative`}>
+      <div onClick={onSelect} className={`cursor-pointer rounded-lg transition ${selected ? "ring-2 ring-brand-gold ring-offset-2" : "hover:ring-1 hover:ring-brand-gold/40"}`}>
+        <WidgetRenderer widget={w} currency={currency} />
       </div>
-      <button onClick={onEdit} className="rounded p-1.5 text-brand-muted hover:bg-brand-light hover:text-brand-dark"><Pencil className="h-4 w-4" /></button>
-      <button onClick={onDelete} className="rounded p-1.5 text-brand-muted hover:bg-red-50 hover:text-brand-danger"><Trash2 className="h-4 w-4" /></button>
+      <div className="absolute left-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <button {...attributes} {...listeners} className="cursor-grab rounded bg-white/90 p-1 text-brand-muted shadow-sm hover:text-brand-dark"><GripVertical className="h-3.5 w-3.5" /></button>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="rounded bg-white/90 p-1 text-brand-muted shadow-sm hover:text-brand-danger"><Trash2 className="h-3.5 w-3.5" /></button>
+      </div>
     </div>
   );
 }
@@ -57,11 +72,16 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
   const [share, setShare] = useState<{ enabled: boolean; token: string | null }>({ enabled: false, token: null });
   const [copied, setCopied] = useState(false);
 
-  // modal
-  const [editing, setEditing] = useState<Widget | null>(null);
-  const [open, setOpen] = useState(false);
+  // עריכה — בחירת ווידג'ט מהקנבס (null=אין, "new"=חדש)
+  const [selectedId, setSelectedId] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<Widget>(emptyForm());
   const [saving, setSaving] = useState(false);
+
+  // טווח תאריכים לתצוגה המקדימה (הלקוח יכול לבחור גם בעמוד הציבורי)
+  const [range, setRange] = useState("month");
+  const [customSince, setCustomSince] = useState(() => presetDates("month").since);
+  const [customUntil, setCustomUntil] = useState(() => presetDates("month").until);
+  const { since, until } = range === "custom" ? { since: customSince, until: customUntil } : presetDates(range);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -75,22 +95,26 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
     if (res.ok) setShare(await res.json());
   }, [clientId, reportId]);
 
-  const loadPreview = useCallback(async () => {
+  const loadPreview = useCallback(async (s: string, u: string) => {
     setPreviewLoading(true);
     try {
-      const res = await fetch(`/api/clients/${clientId}/dashboard-preview?reportId=${reportId}`);
+      const res = await fetch(`/api/clients/${clientId}/dashboard-preview?reportId=${reportId}&since=${s}&until=${u}`);
       if (res.ok) setPreview(await res.json());
     } finally {
       setPreviewLoading(false);
     }
   }, [clientId, reportId]);
 
-  useEffect(() => { loadWidgets(); loadShare(); loadPreview(); }, [loadWidgets, loadShare, loadPreview]);
+  useEffect(() => { loadWidgets(); loadShare(); }, [loadWidgets, loadShare]);
+  useEffect(() => { loadPreview(since, until); }, [loadPreview, since, until]);
 
-  function openNew() {
-    setEditing(null);
+  function selectNew() {
+    setSelectedId("new");
     setForm(emptyForm());
-    setOpen(true);
+  }
+  function selectWidget(id: string) {
+    const w = widgets.find((x) => x.id === id);
+    if (w) { setSelectedId(id); setForm({ ...w }); }
   }
 
   // שינוי סוג תצוגה — מתאים את הפילוח לברירת מחדל חוקית
@@ -100,11 +124,6 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
       const dimension = dims.includes(f.dimension as Dimension) ? f.dimension : dims[0];
       return { ...f, displayType, dimension };
     });
-  }
-  function openEdit(w: Widget) {
-    setEditing(w);
-    setForm({ ...w });
-    setOpen(true);
   }
 
   function setPlatform(platform: Platform) {
@@ -126,14 +145,14 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
     setSaving(true);
     try {
       const payload = { ...form };
-      if (editing) {
-        await fetch(`/api/clients/${clientId}/widgets`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, id: editing.id }) });
+      if (selectedId && selectedId !== "new") {
+        await fetch(`/api/clients/${clientId}/widgets`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, id: selectedId }) });
       } else {
         await fetch(`/api/clients/${clientId}/widgets`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, reportId }) });
       }
-      setOpen(false);
+      setSelectedId(null);
       await loadWidgets();
-      await loadPreview();
+      await loadPreview(since, until);
     } finally {
       setSaving(false);
     }
@@ -142,19 +161,23 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
   async function deleteWidget(id: string) {
     if (!confirm("למחוק את הווידג'ט?")) return;
     await fetch(`/api/clients/${clientId}/widgets?widgetId=${id}`, { method: "DELETE" });
+    if (selectedId === id) setSelectedId(null);
     await loadWidgets();
-    await loadPreview();
+    await loadPreview(since, until);
   }
 
   async function onDragEnd(e: DragEndEvent) {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
-    const oldI = widgets.findIndex((w) => w.id === active.id);
-    const newI = widgets.findIndex((w) => w.id === over.id);
-    const next = arrayMove(widgets, oldI, newI);
-    setWidgets(next);
-    await fetch(`/api/clients/${clientId}/widgets`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: next.map((w) => w.id) }) });
-    await loadPreview();
+    const ids = preview ? preview.widgets.map((w) => w.id) : widgets.map((w) => w.id);
+    const oldI = ids.indexOf(String(active.id));
+    const newI = ids.indexOf(String(over.id));
+    if (oldI < 0 || newI < 0) return;
+    const order = arrayMove(ids, oldI, newI);
+    if (preview) setPreview({ ...preview, widgets: arrayMove(preview.widgets, oldI, newI) });
+    setWidgets((prev) => order.map((id) => prev.find((w) => w.id === id)).filter(Boolean) as Widget[]);
+    await fetch(`/api/clients/${clientId}/widgets`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order }) });
+    await loadPreview(since, until);
   }
 
   async function toggleShare(enable: boolean) {
@@ -165,138 +188,157 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
   const shareUrl = share.token ? `${typeof window !== "undefined" ? window.location.origin : ""}/share/${share.token}` : "";
 
   return (
-    <div className="space-y-6">
-      {/* כותרת דוח + חזרה לרשימה */}
-      <div className="flex items-center gap-3">
-        <button onClick={onBack} className="flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-sm text-brand-muted hover:bg-brand-bg"><ArrowRight className="h-4 w-4" />כל הדוחות</button>
-        <h2 className="text-lg font-semibold text-brand-dark">{reportName}</h2>
-      </div>
-
-      {/* שיתוף */}
-      <div className={`${cardClass} border-brand-gold/30 bg-brand-gold/5`}>
-        <div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-brand-gold" /><h3 className="text-sm font-semibold text-brand-dark">קישור ציבורי ללקוח</h3></div>
-        {share.enabled && share.token ? (
-          <div className="mt-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <input readOnly value={shareUrl} className={`${inputClass} font-mono text-xs`} dir="ltr" />
-              <button onClick={() => { navigator.clipboard.writeText(shareUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="flex shrink-0 items-center gap-1 rounded-lg border border-brand-border px-3 py-2 text-xs hover:bg-brand-bg"><Copy className="h-3.5 w-3.5" />{copied ? "הועתק" : "העתק"}</button>
-              <a href={shareUrl} target="_blank" rel="noreferrer" className="flex shrink-0 items-center gap-1 rounded-lg border border-brand-border px-3 py-2 text-xs hover:bg-brand-bg"><ExternalLink className="h-3.5 w-3.5" />פתח</a>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => toggleShare(true)} className="text-xs text-brand-muted hover:text-brand-dark">סבב קישור</button>
-              <span className="text-brand-border">·</span>
-              <button onClick={() => toggleShare(false)} className="text-xs text-brand-danger hover:underline">בטל קישור</button>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-3">
-            <p className="mb-2 text-xs text-brand-muted">צור קישור חי שניתן לשלוח ללקוח — בלי התחברות.</p>
-            <button onClick={() => toggleShare(true)} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">צור קישור</button>
-          </div>
-        )}
-      </div>
-
-      {/* ניהול ווידג'טים */}
-      <div className={cardClass}>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-brand-dark">ווידג'טים</h3>
-          <button onClick={openNew} className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80"><Plus className="h-3.5 w-3.5" />הוסף ווידג'ט</button>
+    <div className="space-y-4">
+      {/* בר עליון — חזרה, שם הדוח, טווח תאריכים, שיתוף */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-sm text-brand-muted hover:bg-brand-bg"><ArrowRight className="h-4 w-4" />כל הדוחות</button>
+          <h2 className="text-lg font-semibold text-brand-dark">{reportName}</h2>
+          {previewLoading && <Loader2 className="h-4 w-4 animate-spin text-brand-muted" />}
         </div>
-        {widgets.length === 0 ? (
-          <p className="py-6 text-center text-sm text-brand-muted">אין ווידג'טים. הוסף את הראשון.</p>
-        ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext items={widgets.map((w) => w.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2">
-                {widgets.map((w) => <SortableRow key={w.id} w={w} onEdit={() => openEdit(w)} onDelete={() => deleteWidget(w.id)} />)}
-              </div>
-            </SortableContext>
-          </DndContext>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light p-0.5">
+            {RANGE_PRESETS.map((r) => (
+              <button key={r.key} onClick={() => setRange(r.key)} className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${range === r.key ? "bg-brand-gold text-brand-dark" : "text-brand-muted hover:text-brand-dark"}`}>{r.label}</button>
+            ))}
+          </div>
+          {range === "custom" && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-brand-border bg-brand-light px-2 py-1" dir="ltr">
+              <input type="date" value={customSince} max={customUntil} onChange={(e) => setCustomSince(e.target.value)} className="bg-transparent text-xs text-brand-dark focus:outline-none" />
+              <span className="text-brand-muted">–</span>
+              <input type="date" value={customUntil} min={customSince} max={presetDates("month").until} onChange={(e) => setCustomUntil(e.target.value)} className="bg-transparent text-xs text-brand-dark focus:outline-none" />
+            </div>
+          )}
+          {share.enabled && share.token ? (
+            <a href={shareUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-lg bg-brand-dark px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark/90"><ExternalLink className="h-3.5 w-3.5" />פתח קישור</a>
+          ) : (
+            <button onClick={() => toggleShare(true)} className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80"><Share2 className="h-3.5 w-3.5" />צור קישור שיתוף</button>
+          )}
+        </div>
       </div>
 
-      {/* תצוגה מקדימה */}
-      <div>
-        <div className="mb-3 flex items-center gap-2"><Eye className="h-4 w-4 text-brand-gold" /><h3 className="text-sm font-semibold text-brand-dark">תצוגה מקדימה (כפי שהלקוח יראה)</h3>{previewLoading && <Loader2 className="h-4 w-4 animate-spin text-brand-muted" />}</div>
-        {preview ? <WidgetGrid widgets={preview.widgets} currency={preview.client.currency} /> : <p className="text-sm text-brand-muted">טוען...</p>}
-      </div>
+      {/* שורת קישור ציבורי כשפעיל */}
+      {share.enabled && share.token && (
+        <div className="flex items-center gap-2 rounded-lg border border-brand-gold/30 bg-brand-gold/5 p-2">
+          <Link2 className="h-4 w-4 shrink-0 text-brand-gold" />
+          <input readOnly value={shareUrl} className="flex-1 bg-transparent font-mono text-xs text-brand-dark focus:outline-none" dir="ltr" />
+          <button onClick={() => { navigator.clipboard.writeText(shareUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="flex shrink-0 items-center gap-1 rounded-lg border border-brand-border bg-brand-light px-2.5 py-1.5 text-xs hover:bg-brand-bg"><Copy className="h-3.5 w-3.5" />{copied ? "הועתק" : "העתק"}</button>
+          <button onClick={() => toggleShare(true)} className="shrink-0 text-xs text-brand-muted hover:text-brand-dark">סבב</button>
+          <button onClick={() => toggleShare(false)} className="shrink-0 text-xs text-brand-danger hover:underline">בטל</button>
+        </div>
+      )}
 
-      {/* מודל ווידג'ט */}
-      <Modal isOpen={open} onClose={() => setOpen(false)} title={editing ? "עריכת ווידג'ט" : "ווידג'ט חדש"} size="lg">
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-brand-muted">כותרת</label>
-            <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className={inputClass} placeholder="לדוגמה: הוצאה והמרות" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">סוג תצוגה</label>
-              <select value={form.displayType} onChange={(e) => setDisplay(e.target.value as DisplayType)} className={inputClass}>
-                {DISPLAYS.map((d) => <option key={d} value={d}>{DISPLAY_LABELS[d]}</option>)}
-              </select>
+      {/* שני פאנלים — מאפייני נתונים (שמאל) + קנבס (ימין) */}
+      <div className="flex flex-col gap-4 lg:flex-row">
+        {/* פאנל מאפייני נתונים */}
+        <aside className="lg:w-80 lg:shrink-0">
+          <div className="sticky top-4 rounded-lg border border-brand-border bg-brand-light shadow-sm">
+            <div className="flex items-center justify-between border-b border-brand-border px-4 py-3">
+              <h3 className="text-sm font-semibold text-brand-dark">מאפייני נתונים</h3>
+              <button onClick={selectNew} className="flex items-center gap-1 rounded-lg bg-brand-gold px-2.5 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80"><Plus className="h-3.5 w-3.5" />חדש</button>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">גודל</label>
-              <select value={form.size} onChange={(e) => setForm((f) => ({ ...f, size: e.target.value }))} className={inputClass}>
-                {SIZES.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
-              </select>
-            </div>
-          </div>
+            <div className="max-h-[70vh] overflow-y-auto p-4">
+              {selectedId === null ? (
+                <div className="py-8 text-center text-sm text-brand-muted">
+                  <FileText className="mx-auto mb-2 h-7 w-7 opacity-50" />
+                  בחר ווידג'ט מהקנבס לעריכה,<br />או הוסף חדש.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-brand-muted">כותרת</label>
+                    <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className={inputClass} placeholder="לדוגמה: הוצאה והמרות" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-brand-muted">סוג תצוגה</label>
+                    <select value={form.displayType} onChange={(e) => setDisplay(e.target.value as DisplayType)} className={inputClass}>
+                      {DISPLAYS.map((d) => <option key={d} value={d}>{DISPLAY_LABELS[d]}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-brand-muted">גודל</label>
+                    <select value={form.size} onChange={(e) => setForm((f) => ({ ...f, size: e.target.value }))} className={inputClass}>
+                      {SIZES.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
+                    </select>
+                  </div>
 
-          {isTextType(form.displayType) ? (
-            form.displayType === "text" && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-brand-muted">תוכן הטקסט</label>
-                <textarea value={form.textBody} onChange={(e) => setForm((f) => ({ ...f, textBody: e.target.value }))} rows={4} dir="rtl" className={inputClass} placeholder="טקסט חופשי שיוצג ללקוח..." />
-              </div>
-            )
-          ) : form.displayType === "platform_header" ? (
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">פלטפורמה</label>
-              <select value={form.platform} onChange={(e) => setForm((f) => ({ ...f, platform: e.target.value as Platform }))} className={inputClass}>
-                {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
-              </select>
-              <p className="mt-1.5 text-xs text-brand-muted">יוצג הלוגו של הפלטפורמה + שמה ככותרת סקשן. ניתן להוסיף כותרת מותאמת למעלה.</p>
+                  {isTextType(form.displayType) ? (
+                    form.displayType === "text" && (
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-brand-muted">תוכן הטקסט</label>
+                        <textarea value={form.textBody} onChange={(e) => setForm((f) => ({ ...f, textBody: e.target.value }))} rows={4} dir="rtl" className={inputClass} placeholder="טקסט חופשי שיוצג ללקוח..." />
+                      </div>
+                    )
+                  ) : form.displayType === "platform_header" ? (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-brand-muted">פלטפורמה</label>
+                      <select value={form.platform} onChange={(e) => setForm((f) => ({ ...f, platform: e.target.value as Platform }))} className={inputClass}>
+                        {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
+                      </select>
+                      <p className="mt-1.5 text-xs text-brand-muted">יוצג הלוגו + שם הפלטפורמה ככותרת סקשן.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-brand-muted">מקור נתונים (פלטפורמה)</label>
+                        <select value={form.platform} onChange={(e) => setPlatform(e.target.value as Platform)} className={inputClass}>
+                          {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-brand-muted">פילוח</label>
+                        <select value={form.dimension} onChange={(e) => setForm((f) => ({ ...f, dimension: e.target.value }))} className={inputClass}>
+                          {validDimensions(form.displayType, form.platform).map((d) => <option key={d} value={d}>{DIMENSION_LABELS[d]}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-brand-muted">מדדים</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {getMetricsForPlatform(form.platform).map((m) => (
+                            <button key={m.id} type="button" onClick={() => toggleMetric(m.id)} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${form.metrics.includes(m.id) ? "border-brand-gold bg-brand-gold/15 text-brand-dark" : "border-brand-border bg-brand-bg text-brand-muted hover:bg-brand-light"}`}>{m.label}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {form.displayType === "kpi" && (
+                        <label className="flex cursor-pointer items-center gap-2 text-sm text-brand-dark">
+                          <input type="checkbox" checked={form.compare} onChange={(e) => setForm((f) => ({ ...f, compare: e.target.checked }))} className="h-4 w-4 rounded border-brand-border" />
+                          השוואה לתקופה הקודמת
+                        </label>
+                      )}
+                    </>
+                  )}
+
+                  <div className="flex gap-2 border-t border-brand-border pt-3">
+                    <button onClick={saveWidget} disabled={saving || (!isNoMetrics(form.displayType) && form.metrics.length === 0)} className="flex-1 rounded-lg bg-brand-dark px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark/90 disabled:opacity-50">{saving ? "שומר..." : selectedId === "new" ? "הוסף לדוח" : "החל שינויים"}</button>
+                    <button onClick={() => setSelectedId(null)} className="rounded-lg border border-brand-border px-3 py-2 text-sm text-brand-muted hover:bg-brand-bg">סגור</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
+
+        {/* קנבס — תצוגה חיה, בחירה לעריכה, גרירה */}
+        <div className="min-w-0 flex-1">
+          {(preview?.widgets.length ?? 0) === 0 ? (
+            <div className="flex h-64 flex-col items-center justify-center rounded-lg border-2 border-dashed border-brand-border text-brand-muted">
+              <FileText className="mb-2 h-8 w-8 opacity-50" />
+              <p className="text-sm">אין ווידג'טים בדוח.</p>
+              <button onClick={selectNew} className="mt-3 flex items-center gap-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80"><Plus className="h-4 w-4" />הוסף ווידג'ט ראשון</button>
             </div>
           ) : (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-brand-muted">פלטפורמה</label>
-                  <select value={form.platform} onChange={(e) => setPlatform(e.target.value as Platform)} className={inputClass}>
-                    {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-brand-muted">פילוח</label>
-                  <select value={form.dimension} onChange={(e) => setForm((f) => ({ ...f, dimension: e.target.value }))} className={inputClass}>
-                    {validDimensions(form.displayType, form.platform).map((d) => <option key={d} value={d}>{DIMENSION_LABELS[d]}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-brand-muted">מדדים</label>
-                <div className="flex flex-wrap gap-2">
-                  {getMetricsForPlatform(form.platform).map((m) => (
-                    <button key={m.id} type="button" onClick={() => toggleMetric(m.id)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${form.metrics.includes(m.id) ? "border-brand-gold bg-brand-gold/15 text-brand-dark" : "border-brand-border bg-brand-bg text-brand-muted hover:bg-brand-light"}`}>{m.label}</button>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={(preview?.widgets ?? []).map((w) => w.id)} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
+                  {(preview?.widgets ?? []).map((w) => (
+                    <CanvasCard key={w.id} w={w} currency={preview!.client.currency} selected={selectedId === w.id} onSelect={() => selectWidget(w.id)} onDelete={() => deleteWidget(w.id)} />
                   ))}
                 </div>
-              </div>
-              {form.displayType === "kpi" && (
-                <label className="flex cursor-pointer items-center gap-2 text-sm text-brand-dark">
-                  <input type="checkbox" checked={form.compare} onChange={(e) => setForm((f) => ({ ...f, compare: e.target.checked }))} className="h-4 w-4 rounded border-brand-border" />
-                  השוואה לתקופה הקודמת (אחוז שינוי + חץ)
-                </label>
-              )}
-            </>
+              </SortableContext>
+            </DndContext>
           )}
-
-          <div className="flex justify-end gap-2 border-t border-brand-border pt-4">
-            <button onClick={() => setOpen(false)} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg">ביטול</button>
-            <button onClick={saveWidget} disabled={saving || (!isNoMetrics(form.displayType) && form.metrics.length === 0)} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">{saving ? "שומר..." : "שמור"}</button>
-          </div>
         </div>
-      </Modal>
+      </div>
     </div>
   );
 }
