@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Pencil, Trash2, GripVertical, Loader2, Link2, Copy, ExternalLink, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, Loader2, Link2, Copy, ExternalLink, Eye, ArrowRight, FileText, Share2, ChevronLeft } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { WidgetGrid, type WidgetDTO } from "@/components/dashboard/DashboardWidgets";
 import { getMetricsForPlatform, PLATFORM_LABELS, DISPLAY_LABELS, DIMENSION_LABELS, validDimensions, type Platform, type DisplayType, type Dimension } from "@/lib/dashboard/metrics";
@@ -49,7 +49,7 @@ function SortableRow({ w, onEdit, onDelete }: { w: Widget; onEdit: () => void; o
   );
 }
 
-export default function ClientDashboardTab({ clientId }: { clientId: string }) {
+function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: string; reportId: string; reportName: string; onBack: () => void }) {
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [preview, setPreview] = useState<{ widgets: WidgetDTO[]; client: { currency: string } } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -65,24 +65,24 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const loadWidgets = useCallback(async () => {
-    const res = await fetch(`/api/clients/${clientId}/widgets`);
+    const res = await fetch(`/api/clients/${clientId}/widgets?reportId=${reportId}`);
     if (res.ok) setWidgets(await res.json());
-  }, [clientId]);
+  }, [clientId, reportId]);
 
   const loadShare = useCallback(async () => {
-    const res = await fetch(`/api/clients/${clientId}/public-dashboard`);
+    const res = await fetch(`/api/clients/${clientId}/reports/${reportId}/public`);
     if (res.ok) setShare(await res.json());
-  }, [clientId]);
+  }, [clientId, reportId]);
 
   const loadPreview = useCallback(async () => {
     setPreviewLoading(true);
     try {
-      const res = await fetch(`/api/clients/${clientId}/dashboard-preview`);
+      const res = await fetch(`/api/clients/${clientId}/dashboard-preview?reportId=${reportId}`);
       if (res.ok) setPreview(await res.json());
     } finally {
       setPreviewLoading(false);
     }
-  }, [clientId]);
+  }, [clientId, reportId]);
 
   useEffect(() => { loadWidgets(); loadShare(); loadPreview(); }, [loadWidgets, loadShare, loadPreview]);
 
@@ -128,7 +128,7 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
       if (editing) {
         await fetch(`/api/clients/${clientId}/widgets`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, id: editing.id }) });
       } else {
-        await fetch(`/api/clients/${clientId}/widgets`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        await fetch(`/api/clients/${clientId}/widgets`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, reportId }) });
       }
       setOpen(false);
       await loadWidgets();
@@ -157,7 +157,7 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
   }
 
   async function toggleShare(enable: boolean) {
-    const res = await fetch(`/api/clients/${clientId}/public-dashboard`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: enable ? "generate" : "disable" }) });
+    const res = await fetch(`/api/clients/${clientId}/reports/${reportId}/public`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: enable ? "generate" : "disable" }) });
     if (res.ok) await loadShare();
   }
 
@@ -165,6 +165,12 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
 
   return (
     <div className="space-y-6">
+      {/* כותרת דוח + חזרה לרשימה */}
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-sm text-brand-muted hover:bg-brand-bg"><ArrowRight className="h-4 w-4" />כל הדוחות</button>
+        <h2 className="text-lg font-semibold text-brand-dark">{reportName}</h2>
+      </div>
+
       {/* שיתוף */}
       <div className={`${cardClass} border-brand-gold/30 bg-brand-gold/5`}>
         <div className="flex items-center gap-2"><Link2 className="h-4 w-4 text-brand-gold" /><h3 className="text-sm font-semibold text-brand-dark">קישור ציבורי ללקוח</h3></div>
@@ -282,6 +288,129 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
           </div>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+// ==================== רשימת דוחות (מסך כניסה) ====================
+
+interface ReportRow {
+  id: string;
+  name: string;
+  publicEnabled: boolean;
+  publicToken: string | null;
+  widgetCount: number;
+  createdAt: string;
+}
+
+export default function ClientDashboardTab({ clientId }: { clientId: string }) {
+  const [reports, setReports] = useState<ReportRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/reports`);
+      if (res.ok) setReports(await res.json());
+    } finally {
+      setLoading(false);
+    }
+  }, [clientId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function createReport() {
+    const name = prompt("שם הדוח:", "דוח חדש");
+    if (name === null) return;
+    setCreating(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/reports`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() || "דוח חדש" }) });
+      if (res.ok) { const r = await res.json(); await load(); setOpenId(r.id); }
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function renameReport(r: ReportRow) {
+    const name = prompt("שם הדוח:", r.name);
+    if (name === null || !name.trim() || name === r.name) return;
+    await fetch(`/api/clients/${clientId}/reports/${r.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() }) });
+    await load();
+  }
+
+  async function deleteReport(r: ReportRow) {
+    if (!confirm(`למחוק את הדוח "${r.name}" וכל הווידג'טים שבו?`)) return;
+    await fetch(`/api/clients/${clientId}/reports/${r.id}`, { method: "DELETE" });
+    await load();
+  }
+
+  if (openId) {
+    const r = reports.find((x) => x.id === openId);
+    return <ReportEditor clientId={clientId} reportId={openId} reportName={r?.name ?? "דוח"} onBack={() => { setOpenId(null); load(); }} />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-brand-dark">דוחות הלקוח</h2>
+          <p className="text-sm text-brand-muted">צור כמה דוחות — כללי, קריאייטיבים, פר-פלטפורמה — לכל אחד קישור שיתוף נפרד.</p>
+        </div>
+        <button onClick={createReport} disabled={creating} className="flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-dark px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark/90 disabled:opacity-50"><Plus className="h-4 w-4" />דוח חדש</button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12 text-brand-muted"><Loader2 className="h-5 w-5 animate-spin" /></div>
+      ) : reports.length === 0 ? (
+        <div className={`${cardClass} text-center`}>
+          <FileText className="mx-auto h-8 w-8 text-brand-muted" />
+          <p className="mt-2 text-sm text-brand-muted">אין דוחות עדיין.</p>
+          <button onClick={createReport} className="mt-3 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">צור דוח ראשון</button>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-brand-border bg-brand-light shadow-sm">
+          <table className="w-full text-sm">
+            <thead className="border-b border-brand-border bg-brand-bg text-xs text-brand-muted">
+              <tr>
+                <th className="px-4 py-3 text-right font-medium">שם הדוח</th>
+                <th className="px-4 py-3 text-right font-medium">ווידג'טים</th>
+                <th className="px-4 py-3 text-right font-medium">שיתוף</th>
+                <th className="px-4 py-3 text-right font-medium">נוצר</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {reports.map((r) => (
+                <tr key={r.id} className="border-b border-brand-border last:border-0 hover:bg-brand-bg/50">
+                  <td className="px-4 py-3">
+                    <button onClick={() => setOpenId(r.id)} className="flex items-center gap-2 font-medium text-brand-dark hover:text-brand-gold">
+                      <FileText className="h-4 w-4 text-brand-muted" />{r.name}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-brand-muted">{r.widgetCount}</td>
+                  <td className="px-4 py-3">
+                    {r.publicEnabled ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-brand-success/10 px-2 py-0.5 text-xs font-medium text-brand-success"><Share2 className="h-3 w-3" />משותף</span>
+                    ) : (
+                      <span className="text-xs text-brand-muted">לא משותף</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-brand-muted">{new Date(r.createdAt).toLocaleDateString("he-IL")}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => renameReport(r)} title="שנה שם" className="rounded p-1.5 text-brand-muted hover:bg-brand-bg hover:text-brand-dark"><Pencil className="h-4 w-4" /></button>
+                      <button onClick={() => deleteReport(r)} title="מחק" className="rounded p-1.5 text-brand-muted hover:bg-red-50 hover:text-brand-danger"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => setOpenId(r.id)} title="ערוך" className="rounded p-1.5 text-brand-muted hover:bg-brand-bg hover:text-brand-dark"><ChevronLeft className="h-4 w-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

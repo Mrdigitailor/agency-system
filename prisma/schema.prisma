@@ -863,9 +863,25 @@ model TikTokInsightDaily {
 
 // ==================== Dashboard Widgets ====================
 
+// דוח דינמי — לכל לקוח יכולים להיות כמה דוחות (כללי / קריאייטיבים / פר-פלטפורמה)
+model ClientReport {
+  id            String   @id @default(cuid())
+  clientId      String
+  name          String   @default("דשבורד")
+  publicToken   String?  @unique
+  publicEnabled Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([clientId])
+  @@map("client_reports")
+}
+
 model DashboardWidget {
   id          String   @id @default(cuid())
   clientId    String
+  reportId    String?  // משויך לדוח (ClientReport)
   sortOrder   Int      @default(0)
   platform    String   @default("meta") // meta | google_ads | tiktok | ga4 | all
   dataLevel   String   @default("campaign") // campaign | adset | ad | account | etc
@@ -880,6 +896,7 @@ model DashboardWidget {
   createdAt   DateTime @default(now())
 
   @@index([clientId, sortOrder])
+  @@index([reportId, sortOrder])
   @@map("dashboard_widgets")
 }
 

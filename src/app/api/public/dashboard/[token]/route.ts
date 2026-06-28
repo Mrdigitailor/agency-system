@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
-import { buildDashboardDTO, sanitizeRange, type DashboardDTO } from "@/lib/dashboard/dto";
+import { buildDashboardDTO, sanitizeRange, resolvePublicToken, type DashboardDTO } from "@/lib/dashboard/dto";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -22,11 +21,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const { token } = await params;
   if (!token || !/^[0-9a-f-]{36}$/i.test(token)) return notFound();
 
-  const client = await prisma.client.findFirst({
-    where: { publicDashboardToken: token, publicDashboardEnabled: true, deletedAt: null },
-    select: { id: true, name: true, currency: true, clientType: true, metaConversionEvent: true, googleConversionAction: true },
-  });
-  if (!client) return notFound();
+  const resolved = await resolvePublicToken(token);
+  if (!resolved) return notFound();
+  const { client, reportId } = resolved;
 
   const url = new URL(req.url);
   const range = sanitizeRange(url.searchParams.get("since"), url.searchParams.get("until"));
@@ -38,16 +35,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   }
 
   const dto = await buildDashboardDTO(
-    {
-      name: client.name,
-      clientId: client.id,
-      currency: client.currency || "ILS",
-      clientType: client.clientType || "לידים",
-      metaConversionEvent: client.metaConversionEvent || "",
-      googleConversionAction: client.googleConversionAction || "",
-    },
+    { name: client.name, clientId: client.id, currency: client.currency, clientType: client.clientType, metaConversionEvent: client.metaConversionEvent, googleConversionAction: client.googleConversionAction },
     range,
     new Date().toISOString(),
+    reportId,
   );
 
   CACHE.set(cacheKey, { at: Date.now(), dto });

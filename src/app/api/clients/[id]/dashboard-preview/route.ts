@@ -22,7 +22,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const client = await prisma.client.findUnique({ where: { id }, select: { name: true } });
   const url = new URL(req.url);
   const range = sanitizeRange(url.searchParams.get("since"), url.searchParams.get("until"));
+  const reportId = url.searchParams.get("reportId");
 
-  const dto = await buildDashboardDTO({ name: client?.name ?? "", ...ctx }, range, new Date().toISOString());
+  const dto = await buildDashboardDTO({ name: client?.name ?? "", ...ctx }, range, new Date().toISOString(), reportId);
   return NextResponse.json(dto);
 }

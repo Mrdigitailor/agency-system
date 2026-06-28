@@ -10,6 +10,36 @@ export interface DashboardDTO {
   generatedAt: string;
 }
 
+export interface ResolvedToken {
+  client: { id: string; name: string; currency: string; clientType: string; metaConversionEvent: string; googleConversionAction: string };
+  reportId: string | null;
+}
+
+/** מזהה token ציבורי → דוח + לקוח. קודם ClientReport (חדש), ואז fallback ל-Client (תאימות לאחור). */
+export async function resolvePublicToken(token: string): Promise<ResolvedToken | null> {
+  const sel = { id: true, name: true, currency: true, clientType: true, metaConversionEvent: true, googleConversionAction: true } as const;
+
+  const report = await prisma.clientReport.findFirst({ where: { publicToken: token, publicEnabled: true }, select: { id: true, clientId: true } });
+  if (report) {
+    const c = await prisma.client.findFirst({ where: { id: report.clientId, deletedAt: null }, select: sel });
+    if (c) return { client: normalizeClient(c), reportId: report.id };
+  }
+  const legacy = await prisma.client.findFirst({ where: { publicDashboardToken: token, publicDashboardEnabled: true, deletedAt: null }, select: sel });
+  if (legacy) return { client: normalizeClient(legacy), reportId: null };
+  return null;
+}
+
+function normalizeClient(c: { id: string; name: string; currency: string | null; clientType: string | null; metaConversionEvent: string | null; googleConversionAction: string | null }) {
+  return {
+    id: c.id,
+    name: c.name,
+    currency: c.currency || "ILS",
+    clientType: c.clientType || "לידים",
+    metaConversionEvent: c.metaConversionEvent || "",
+    googleConversionAction: c.googleConversionAction || "",
+  };
+}
+
 /** טווח ברירת מחדל — החודש הנוכחי */
 export function defaultRange(): DateRange {
   const now = new Date();
@@ -57,8 +87,12 @@ export async function buildDashboardDTO(
   client: { name: string } & ClientCtx,
   range: DateRange,
   generatedAt: string,
+  reportId?: string | null,
 ): Promise<DashboardDTO> {
-  const rawWidgets = await prisma.dashboardWidget.findMany({ where: { clientId: client.clientId }, orderBy: { sortOrder: "asc" } });
+  const rawWidgets = await prisma.dashboardWidget.findMany({
+    where: { clientId: client.clientId, ...(reportId ? { reportId } : {}) },
+    orderBy: { sortOrder: "asc" },
+  });
   const configs = rawWidgets.map((w) => toConfig(w as RawWidget));
   const computed = await computeDashboard(configs, client, range);
   const dataById = new Map(computed.map((c) => [c.widgetId, c.data]));

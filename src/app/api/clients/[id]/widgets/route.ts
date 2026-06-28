@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const { id: clientId } = await params;
+  const reportId = new URL(req.url).searchParams.get("reportId");
 
   const widgets = await prisma.dashboardWidget.findMany({
-    where: { clientId },
+    where: { clientId, ...(reportId ? { reportId } : {}) },
     orderBy: { sortOrder: "asc" },
   });
 
@@ -25,11 +26,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id: clientId } = await params;
   const body = await req.json();
 
-  const count = await prisma.dashboardWidget.count({ where: { clientId } });
+  const reportId = typeof body.reportId === "string" ? body.reportId : null;
+  const count = await prisma.dashboardWidget.count({ where: { clientId, ...(reportId ? { reportId } : {}) } });
 
   const widget = await prisma.dashboardWidget.create({
     data: {
       clientId,
+      reportId,
       sortOrder: count,
       platform: body.platform ?? "meta",
       dataLevel: body.dataLevel ?? "campaign",

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
 import { answerDashboardQuestion } from "@/lib/dashboard/ai";
-import { sanitizeRange } from "@/lib/dashboard/dto";
+import { sanitizeRange, resolvePublicToken } from "@/lib/dashboard/dto";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -24,11 +23,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const { token } = await params;
   if (!token || !/^[0-9a-f-]{36}$/i.test(token)) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const client = await prisma.client.findFirst({
-    where: { publicDashboardToken: token, publicDashboardEnabled: true, deletedAt: null },
-    select: { id: true, name: true, currency: true, clientType: true, metaConversionEvent: true, googleConversionAction: true },
-  });
-  if (!client) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const resolved = await resolvePublicToken(token);
+  if (!resolved) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const client = resolved.client;
 
   if (!allowed(token)) return NextResponse.json({ error: "יותר מדי שאלות. נסה שוב בעוד מספר דקות." }, { status: 429 });
 
@@ -39,10 +36,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const range = sanitizeRange(typeof body.since === "string" ? body.since : null, typeof body.until === "string" ? body.until : null);
   const ctx = {
     clientId: client.id,
-    currency: client.currency || "ILS",
-    clientType: client.clientType || "לידים",
-    metaConversionEvent: client.metaConversionEvent || "",
-    googleConversionAction: client.googleConversionAction || "",
+    currency: client.currency,
+    clientType: client.clientType,
+    metaConversionEvent: client.metaConversionEvent,
+    googleConversionAction: client.googleConversionAction,
   };
 
   try {
