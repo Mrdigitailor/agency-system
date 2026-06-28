@@ -5,6 +5,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db/prisma";
 import { notifyTaskAssigned } from "@/lib/notifications/task-notify";
+import { resolveManagerId } from "@/lib/utils/syncManagers";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = process.env.TELEGRAM_AI_MODEL ?? "claude-sonnet-4-6";
@@ -165,7 +166,7 @@ async function createTask(input: {
     client = m.best;
   }
 
-  // שיוך: מנהל הקמפיינים של הלקוח → fallback: אדמין ראשון
+  // שיוך: מנהל הקמפיינים של הלקוח (לפי ID, ואם חסר — לפי שם) → fallback: אדמין ראשון
   let assigneeId: string | null = null;
   let assigneeName = "";
   if (client?.campaignManagerId) {
@@ -173,6 +174,14 @@ async function createTask(input: {
     if (u) {
       assigneeId = u.id;
       assigneeName = u.name;
+    }
+  }
+  // הרבה לקוחות שמרו רק את שם מנהל הקמפיינים בלי ID — נפתור לפי שם
+  if (!assigneeId && client?.campaignManager) {
+    const id = await resolveManagerId(client.campaignManager);
+    if (id) {
+      const u = await prisma.user.findUnique({ where: { id } });
+      if (u) { assigneeId = u.id; assigneeName = u.name; }
     }
   }
   if (!assigneeId) {
