@@ -2,6 +2,7 @@
 
 import { ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { getCurrencySymbol } from "@/lib/utils/currency";
+import { PlatformLogos, PLATFORM_DISPLAY_NAMES } from "@/components/dashboard/PlatformLogo";
 
 // ----- טיפוסי נתונים (תואמים ל-engine WidgetData) -----
 interface KpiResult { type: "kpi"; metrics: { id: string; label: string; value: number; unit: string; change?: number | null }[] }
@@ -21,7 +22,7 @@ function Delta({ id, change }: { id: string; change?: number | null }) {
   return <span className={`text-xs font-medium ${color}`}>{arrow} {Math.abs(change).toFixed(1)}% מהתקופה הקודמת</span>;
 }
 
-export interface WidgetDTO { id: string; title: string; displayType: string; size: string; data: WidgetData }
+export interface WidgetDTO { id: string; title: string; displayType: string; size: string; platforms?: string[]; data: WidgetData }
 
 const PIE_COLORS = ["#eed89b", "#000000", "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6"];
 const fmtNum = (n: number) => Math.round(n).toLocaleString("he-IL");
@@ -138,6 +139,18 @@ function TableView({ data }: { data: TableResult }) {
 
 export function WidgetRenderer({ widget, currency }: { widget: WidgetDTO; currency: string }) {
   const { data } = widget;
+  const platforms = widget.platforms ?? [];
+
+  // כותרת פלטפורמה — לוגו גדול + שם הפלטפורמה
+  if (widget.displayType === "platform_header") {
+    const names = platforms.map((p) => PLATFORM_DISPLAY_NAMES[p] ?? p).join(" + ");
+    return (
+      <div className="flex items-center gap-3 border-b-2 border-brand-gold pb-3 pt-4">
+        <PlatformLogos platforms={platforms} className="h-8 w-8" />
+        <h2 className="text-xl font-bold text-brand-dark">{widget.title || names}</h2>
+      </div>
+    );
+  }
 
   // כותרת / מפריד — בלי תיבת כרטיס
   if (data.type === "text" && data.heading) {
@@ -154,7 +167,10 @@ export function WidgetRenderer({ widget, currency }: { widget: WidgetDTO; curren
 
   return (
     <div className="rounded-lg border border-brand-border bg-brand-light p-5 shadow-sm">
-      <p className="text-sm font-semibold text-brand-dark">{widget.title || " "}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-brand-dark">{widget.title || " "}</p>
+        <PlatformLogos platforms={platforms} />
+      </div>
       {data.type === "empty" ? (
         <p className="py-6 text-center text-xs text-brand-muted">{data.reason}</p>
       ) : data.type === "kpi" ? (

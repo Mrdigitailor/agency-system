@@ -104,7 +104,7 @@ function previousRange(r: DateRange): DateRange {
   return { since: prevSince.toISOString().slice(0, 10), until: prevUntil.toISOString().slice(0, 10) };
 }
 
-const isText = (w: WidgetConfig) => w.displayType === "heading" || w.displayType === "text";
+const isText = (w: WidgetConfig) => w.displayType === "heading" || w.displayType === "text" || w.displayType === "platform_header";
 const wantsCompare = (w: WidgetConfig) => w.compare && (w.displayType === "kpi" || w.dimension === "none") && !isText(w);
 
 const SEGMENT_DIMS = new Set(["age", "gender", "device"]);

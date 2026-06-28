@@ -15,6 +15,7 @@ const RANGES = [
   { key: "7", label: "7 ימים" },
   { key: "28", label: "28 ימים" },
   { key: "90", label: "90 ימים" },
+  { key: "custom", label: "מותאם" },
 ];
 
 function rangeDates(key: string): { since: string; until: string } {
@@ -25,10 +26,6 @@ function rangeDates(key: string): { since: string; until: string } {
   }
   return { since: new Date(today.getTime() - (Number(key) - 1) * 86400000).toISOString().slice(0, 10), until };
 }
-function rangeParams(key: string): string {
-  const { since, until } = rangeDates(key);
-  return `since=${since}&until=${until}`;
-}
 
 const SUGGESTIONS = ["מה זה יחס המרה?", "האם ההכנסות השתפרו לעומת התקופה הקודמת?", "מאיזה מקור מגיעות הכי הרבה תוצאות?"];
 
@@ -37,6 +34,11 @@ export default function PublicDashboardView({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [range, setRange] = useState("month");
+  const [customSince, setCustomSince] = useState(() => rangeDates("month").since);
+  const [customUntil, setCustomUntil] = useState(() => rangeDates("month").until);
+
+  // התאריכים בפועל — לפי הפריסט או טווח מותאם שהלקוח בחר
+  const { since, until } = range === "custom" ? { since: customSince, until: customUntil } : rangeDates(range);
 
   // צ'אט AI
   const [chat, setChat] = useState<{ role: "user" | "ai"; text: string }[]>([]);
@@ -50,7 +52,6 @@ export default function PublicDashboardView({ token }: { token: string }) {
     setChat((c) => [...c, { role: "user", text }]);
     setAsking(true);
     try {
-      const { since, until } = rangeDates(range);
       const res = await fetch(`/api/public/dashboard/${token}/ask`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: text, since, until }) });
       const data = await res.json();
       setChat((c) => [...c, { role: "ai", text: res.ok ? data.answer : (data.error ?? "שגיאה") }]);
@@ -59,12 +60,12 @@ export default function PublicDashboardView({ token }: { token: string }) {
     } finally {
       setAsking(false);
     }
-  }, [token, range, asking]);
+  }, [token, since, until, asking]);
 
-  const load = useCallback(async (key: string) => {
+  const load = useCallback(async (s: string, u: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/public/dashboard/${token}?${rangeParams(key)}`);
+      const res = await fetch(`/api/public/dashboard/${token}?since=${s}&until=${u}`);
       if (!res.ok) { setUnavailable(true); return; }
       setDto(await res.json());
     } catch {
@@ -74,7 +75,7 @@ export default function PublicDashboardView({ token }: { token: string }) {
     }
   }, [token]);
 
-  useEffect(() => { load(range); }, [load, range]);
+  useEffect(() => { load(since, until); }, [load, since, until]);
 
   if (unavailable) {
     return (
@@ -89,10 +90,19 @@ export default function PublicDashboardView({ token }: { token: string }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-brand-dark">{dto?.client.name ?? ""}</h1>
-        <div className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light p-0.5">
-          {RANGES.map((r) => (
-            <button key={r.key} onClick={() => setRange(r.key)} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === r.key ? "bg-brand-gold text-brand-dark" : "text-brand-muted hover:text-brand-dark"}`}>{r.label}</button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light p-0.5">
+            {RANGES.map((r) => (
+              <button key={r.key} onClick={() => setRange(r.key)} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === r.key ? "bg-brand-gold text-brand-dark" : "text-brand-muted hover:text-brand-dark"}`}>{r.label}</button>
+            ))}
+          </div>
+          {range === "custom" && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-brand-border bg-brand-light px-2 py-1" dir="ltr">
+              <input type="date" value={customSince} max={customUntil} onChange={(e) => setCustomSince(e.target.value)} className="bg-transparent text-xs text-brand-dark focus:outline-none" />
+              <span className="text-brand-muted">–</span>
+              <input type="date" value={customUntil} min={customSince} max={rangeDates("month").until} onChange={(e) => setCustomUntil(e.target.value)} className="bg-transparent text-xs text-brand-dark focus:outline-none" />
+            </div>
+          )}
         </div>
       </div>
 

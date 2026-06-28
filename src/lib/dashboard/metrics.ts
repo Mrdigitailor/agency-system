@@ -2,7 +2,7 @@
 import { getCurrencySymbol } from "@/lib/utils/currency";
 
 export type Platform = "meta" | "google_ads" | "tiktok" | "ga4" | "all";
-export type DisplayType = "kpi" | "line" | "area" | "bar" | "pie" | "table" | "heading" | "text";
+export type DisplayType = "kpi" | "line" | "area" | "bar" | "pie" | "table" | "heading" | "text" | "platform_header";
 export type Dimension = "none" | "date" | "week" | "month" | "platform" | "campaign" | "channel" | "age" | "gender" | "device";
 
 export interface MetricDef {
@@ -58,6 +58,7 @@ export const DISPLAY_LABELS: Record<DisplayType, string> = {
   table: "טבלה",
   heading: "כותרת / מפריד",
   text: "טקסט חופשי",
+  platform_header: "כותרת פלטפורמה (לוגו)",
 };
 
 export const DIMENSION_LABELS: Record<Dimension, string> = {
@@ -92,7 +93,10 @@ export function validDimensions(displayType: DisplayType, platform?: Platform): 
   return dims;
 }
 
-export const TEXT_DISPLAYS: DisplayType[] = ["heading", "text"];
+export const TEXT_DISPLAYS: DisplayType[] = ["heading", "text", "platform_header"];
+
+/** תצוגות ללא שליפת נתונים (טקסט/כותרת/כותרת-פלטפורמה) */
+export const NO_DATA_DISPLAYS: DisplayType[] = ["heading", "text", "platform_header"];
 
 const fmtNum = (n: number) => Math.round(n).toLocaleString("he-IL");
 

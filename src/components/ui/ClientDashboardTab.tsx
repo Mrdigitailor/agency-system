@@ -22,8 +22,9 @@ interface Widget {
 }
 
 const PLATFORMS: Platform[] = ["meta", "google_ads", "tiktok", "all", "ga4"];
-const DISPLAYS: DisplayType[] = ["kpi", "line", "area", "bar", "pie", "table", "heading", "text"];
+const DISPLAYS: DisplayType[] = ["kpi", "line", "area", "bar", "pie", "table", "platform_header", "heading", "text"];
 const isTextType = (d: DisplayType) => d === "heading" || d === "text";
+const isNoMetrics = (d: DisplayType) => isTextType(d) || d === "platform_header";
 const emptyForm = (): Widget => ({ id: "", platform: "meta", metrics: [], displayType: "kpi", dimension: "none", size: "full", title: "", textBody: "", compare: false });
 const SIZES = [
   { v: "full", label: "מלא" },
@@ -120,7 +121,7 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
 
   async function saveWidget() {
     const isText = isTextType(form.displayType);
-    if (!isText && form.metrics.length === 0) return;
+    if (!isNoMetrics(form.displayType) && form.metrics.length === 0) return;
     if (isText && !form.title.trim() && !form.textBody.trim()) return;
     setSaving(true);
     try {
@@ -249,6 +250,14 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
                 <textarea value={form.textBody} onChange={(e) => setForm((f) => ({ ...f, textBody: e.target.value }))} rows={4} dir="rtl" className={inputClass} placeholder="טקסט חופשי שיוצג ללקוח..." />
               </div>
             )
+          ) : form.displayType === "platform_header" ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-muted">פלטפורמה</label>
+              <select value={form.platform} onChange={(e) => setForm((f) => ({ ...f, platform: e.target.value as Platform }))} className={inputClass}>
+                {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
+              </select>
+              <p className="mt-1.5 text-xs text-brand-muted">יוצג הלוגו של הפלטפורמה + שמה ככותרת סקשן. ניתן להוסיף כותרת מותאמת למעלה.</p>
+            </div>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3">
@@ -284,7 +293,7 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
 
           <div className="flex justify-end gap-2 border-t border-brand-border pt-4">
             <button onClick={() => setOpen(false)} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg">ביטול</button>
-            <button onClick={saveWidget} disabled={saving || (!isTextType(form.displayType) && form.metrics.length === 0)} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">{saving ? "שומר..." : "שמור"}</button>
+            <button onClick={saveWidget} disabled={saving || (!isNoMetrics(form.displayType) && form.metrics.length === 0)} className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">{saving ? "שומר..." : "שמור"}</button>
           </div>
         </div>
       </Modal>

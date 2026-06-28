@@ -6,8 +6,15 @@ import type { Platform, Dimension, DisplayType } from "./metrics";
 export interface DashboardDTO {
   client: { name: string; currency: string; clientType: string };
   range: DateRange;
-  widgets: Array<{ id: string; title: string; displayType: string; size: string; data: unknown }>;
+  widgets: Array<{ id: string; title: string; displayType: string; size: string; platforms: string[]; data: unknown }>;
   generatedAt: string;
+}
+
+/** הפלטפורמות שמרכיבות ווידג'ט — לתצוגת לוגואים. טקסט/כותרת → ללא לוגו. */
+function widgetPlatforms(displayType: string, platform: string): string[] {
+  if (displayType === "text" || displayType === "heading") return [];
+  if (platform === "all") return ["meta", "google_ads", "tiktok"];
+  return [platform];
 }
 
 export interface ResolvedToken {
@@ -100,7 +107,7 @@ export async function buildDashboardDTO(
   return {
     client: { name: client.name, currency: client.currency, clientType: client.clientType },
     range,
-    widgets: configs.map((w) => ({ id: w.id, title: w.title, displayType: w.displayType, size: w.size, data: dataById.get(w.id) ?? { type: "empty", reason: "אין נתונים" } })),
+    widgets: configs.map((w) => ({ id: w.id, title: w.title, displayType: w.displayType, size: w.size, platforms: widgetPlatforms(w.displayType, w.platform), data: dataById.get(w.id) ?? { type: "empty", reason: "אין נתונים" } })),
     generatedAt,
   };
 }
