@@ -75,12 +75,15 @@ export async function GET(req: Request) {
 async function refreshExpiringMetaTokens(): Promise<number> {
   const now = Date.now();
   const horizon = new Date(now + 30 * 24 * 60 * 60 * 1000); // פג תוך 30 יום
+  // כולל גם טוקנים שכבר "פגו" — חלקם מסומנים פג בטעות (epoch) ע"י כשל סנכרון
+  // אך הטוקן עדיין תקין; ניסיון ההמרה יחייה אותם. טוקן מת באמת ייכשל בעדינות.
   const conns = await prisma.platformConnection.findMany({
     where: {
       platform: "meta",
       isActive: true,
+      accessToken: { not: "" },
       client: { deletedAt: null, status: { not: "inactive" } },
-      tokenExpiry: { gt: new Date(now), lt: horizon }, // עדיין תקף, אבל פג בקרוב
+      tokenExpiry: { lt: horizon },
     },
     select: { id: true, accessToken: true, client: { select: { name: true } } },
   });
