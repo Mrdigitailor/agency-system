@@ -230,6 +230,7 @@ export default function ClientDetailPage() {
     customAssets: [] as CustomAsset[],
     targetConversions: "" as string | number,
     targetCostPerConversion: "" as string | number,
+    paymentCurrency: "ILS",
     dealType: "",
     monthlyRetainer: 0 as number,
     percentageRate: 0 as number,
@@ -265,6 +266,7 @@ export default function ClientDetailPage() {
         customAssets: c.customAssets ?? [],
         targetConversions: c.performance.targetConversions,
         targetCostPerConversion: c.performance.targetCostPerConversion,
+        paymentCurrency: String(c.paymentCurrency ?? c.currency ?? "ILS"),
         dealType: String(c.dealType ?? ""),
         monthlyRetainer: Number(c.monthlyRetainer ?? 0),
         percentageRate: Number(c.percentageRate ?? 0),
@@ -403,6 +405,7 @@ export default function ClientDetailPage() {
         targetCostPerConversion: Number(editForm.targetCostPerConversion) || 0,
       },
       // deal terms (admin only — API will filter for non-admin)
+      paymentCurrency: editForm.paymentCurrency,
       dealType: editForm.dealType,
       monthlyRetainer: Number(editForm.monthlyRetainer) || 0,
       percentageRate: Number(editForm.percentageRate) || 0,
@@ -580,7 +583,7 @@ export default function ClientDetailPage() {
                   const historicalRevenue = client.historicalRevenue ?? 0;
                   const contractStart = client.contractStartDate ?? "";
                   const contractEnd = client.contractEndDate ?? "";
-                  const sym = getCurrencySymbol(client.currency);
+                  const sym = getCurrencySymbol(client.paymentCurrency ?? client.currency);
 
                   const DEAL_LABELS: Record<string, string> = { retainer: "ריטיינר", retainer_plus_percentage: "ריטיינר + אחוזים", percentage_only: "אחוזים בלבד", retainer_or_percentage_higher: "ריטיינר / אחוזים — הגבוה", project: "פרויקט", other: "אחר" };
                   const BASE_LABELS: Record<string, string> = { ad_spend: "תקציב פרסום", revenue: "הכנסות", profit: "רווח", cashflow: "תזרים" };
@@ -1105,7 +1108,7 @@ export default function ClientDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-brand-dark">תקציב חודשי</label>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">תקציב מדיה חודשי</label>
                 <input
                   type="number"
                   className={inputClass}
@@ -1114,7 +1117,7 @@ export default function ClientDetailPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-brand-dark">מטבע</label>
+                <label className="mb-1 block text-sm font-medium text-brand-dark">מטבע מדיה</label>
                 <select value={editForm.currency} onChange={(e) => setEditForm((p) => ({ ...p, currency: e.target.value }))} className={inputClass}>
                   {CURRENCIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
@@ -1224,7 +1227,10 @@ export default function ClientDetailPage() {
           {/* תנאי התקשרות — admin only */}
           {isAdmin && (
             <div className="space-y-4 border-t border-brand-border pt-4">
-              <h3 className="text-sm font-semibold text-brand-dark">תנאי התקשרות</h3>
+              <div>
+                <h3 className="text-sm font-semibold text-brand-dark">תנאי התקשרות — התשלום אלינו</h3>
+                <p className="mt-0.5 text-xs text-brand-muted">נפרד מתקציב המדיה. מוסתר ממנהל קמפיינים.</p>
+              </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-brand-dark">סוג עסקה</label>
@@ -1238,11 +1244,18 @@ export default function ClientDetailPage() {
                     <option value="other">אחר</option>
                   </select>
                 </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">מטבע תשלום</label>
+                  <select value={editForm.paymentCurrency} onChange={(e) => setEditForm((p) => ({ ...p, paymentCurrency: e.target.value }))} className={inputClass}>
+                    {CURRENCIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                  <p className="mt-1 text-xs text-brand-muted">המטבע שבו הלקוח משלם לנו — לא בהכרח מטבע המדיה.</p>
+                </div>
                 {/* ריטיינר — retainer / retainer_plus_percentage / retainer_or_percentage_higher */}
                 {(editForm.dealType === "retainer" || editForm.dealType === "retainer_plus_percentage" || editForm.dealType === "retainer_or_percentage_higher") && (
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-brand-dark">ריטיינר חודשי (₪)</label>
-                    <input type="number" className={inputClass} value={editForm.monthlyRetainer || ""} onChange={(e) => setEditForm((p) => ({ ...p, monthlyRetainer: Number(e.target.value) || 0 }))} placeholder="₪" />
+                    <label className="mb-1 block text-sm font-medium text-brand-dark">ריטיינר חודשי ({getCurrencySymbol(editForm.paymentCurrency)})</label>
+                    <input type="number" className={inputClass} value={editForm.monthlyRetainer || ""} onChange={(e) => setEditForm((p) => ({ ...p, monthlyRetainer: Number(e.target.value) || 0 }))} placeholder={getCurrencySymbol(editForm.paymentCurrency)} />
                   </div>
                 )}
                 {/* אחוזים — percentage_only / retainer_plus_percentage / retainer_or_percentage_higher */}
@@ -1267,8 +1280,8 @@ export default function ClientDetailPage() {
                 {/* פרויקט — project */}
                 {editForm.dealType === "project" && (
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-brand-dark">סכום פרויקט (₪)</label>
-                    <input type="number" className={inputClass} value={editForm.projectAmount || ""} onChange={(e) => setEditForm((p) => ({ ...p, projectAmount: Number(e.target.value) || 0 }))} placeholder="₪" />
+                    <label className="mb-1 block text-sm font-medium text-brand-dark">סכום פרויקט ({getCurrencySymbol(editForm.paymentCurrency)})</label>
+                    <input type="number" className={inputClass} value={editForm.projectAmount || ""} onChange={(e) => setEditForm((p) => ({ ...p, projectAmount: Number(e.target.value) || 0 }))} placeholder={getCurrencySymbol(editForm.paymentCurrency)} />
                   </div>
                 )}
                 {/* תחילת וסיום התקשרות */}
@@ -1282,7 +1295,7 @@ export default function ClientDetailPage() {
                 </div>
                 {/* הכנסות מצטברות עד היום */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-brand-dark">הכנסות מצטברות עד היום (₪)</label>
+                  <label className="mb-1 block text-sm font-medium text-brand-dark">הכנסות מצטברות עד היום ({getCurrencySymbol(editForm.paymentCurrency)})</label>
                   <input type="number" className={inputClass} value={editForm.historicalRevenue || ""} onChange={(e) => setEditForm((p) => ({ ...p, historicalRevenue: Number(e.target.value) || 0 }))} placeholder="סכום שנכנס מהלקוח לפני השימוש במערכת" />
                 </div>
               </div>

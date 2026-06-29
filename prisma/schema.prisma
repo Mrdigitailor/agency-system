@@ -61,7 +61,9 @@ model Client {
   updatedAt     DateTime @updatedAt
   deletedAt     DateTime?
 
-  // תנאי התקשרות (admin only)
+  // תנאי התקשרות / התשלום אלינו (admin only — מוסתר ממנהל קמפיינים)
+  // מטבע התשלום אלינו — נפרד ממטבע המדיה (currency); הלקוח יכול לשלם לנו במטבע אחר מזה שבו רץ התקציב
+  paymentCurrency   String   @default("ILS")
   dealType          String   @default("") // retainer / retainer_plus_percentage / percentage_only / retainer_or_percentage_higher / project / other
   monthlyRetainer   Float    @default(0)
   percentageRate    Float    @default(0)

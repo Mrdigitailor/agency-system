@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
+import { stripAgencyPayment } from "@/lib/utils/clientPrivacy";
 import { syncClientManagers } from "@/lib/utils/syncManagers";
 import { countConversions } from "@/lib/utils/metaMetrics";
 
@@ -125,7 +126,8 @@ export async function GET(req: Request) {
     };
   });
 
-  return NextResponse.json(parsed);
+  // "התשלום אלינו" לא שקוף למנהל קמפיינים
+  return NextResponse.json(parsed.map((c) => stripAgencyPayment(c, user.role)));
 }
 
 export async function POST(req: Request) {

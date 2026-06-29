@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
 import { syncClientManagers } from "@/lib/utils/syncManagers";
+import { stripAgencyPayment } from "@/lib/utils/clientPrivacy";
 
 // Whitelist — שדות שמנהל קמפיינים מורשה לערוך
 const CM_ALLOWED_FIELDS = new Set([
@@ -37,17 +38,22 @@ const EXCLUDE_FIELDS = new Set([
 ]);
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const result = await requireAuth();
+  if (result instanceof NextResponse) return result;
+  const user = result as AuthUser;
+
   const { id } = await params;
   const client = await prisma.client.findUnique({
     where: { id },
     include: { optimizations: { orderBy: { createdAt: "desc" } } },
   });
   if (!client || client.deletedAt) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({
+  // "התשלום אלינו" לא שקוף למנהל קמפיינים
+  return NextResponse.json(stripAgencyPayment({
     ...client,
     platforms: JSON.parse(client.platforms),
     customAssets: JSON.parse(client.customAssets ?? "[]"),
-  });
+  }, user.role));
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
