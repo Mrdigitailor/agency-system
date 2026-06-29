@@ -86,6 +86,7 @@ function mapClient(c: Record<string, unknown>): Client {
     hasMetaData: (c.hasMetaData as boolean) ?? false,
     platformSyncs: (c.platformSyncs as Array<{ platform: string; lastSyncAt: string | null }>) ?? [],
     // תנאי התקשרות
+    paymentCurrency: (c.paymentCurrency as string) ?? (c.currency as string) ?? "ILS",
     dealType: (c.dealType as string) ?? "",
     monthlyRetainer: (c.monthlyRetainer as number) ?? 0,
     percentageRate: (c.percentageRate as number) ?? 0,
