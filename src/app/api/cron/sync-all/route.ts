@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { exchangeForLongLivedToken } from "@/lib/api/meta/oauth";
 
 // Dispatcher — מפזר סנכרון לכל חיבור כ-invocation נפרד שרץ במקביל
 export const maxDuration = 60;
@@ -23,6 +24,9 @@ export async function GET(req: Request) {
   if (expected && auth !== expected && querySecret !== expected) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // רענון אוטומטי של טוקני Meta שעומדים לפוג — לפני הסנכרון, כדי שיסתנכרנו עם טוקן טרי
+  const refreshed = await refreshExpiringMetaTokens();
 
   // כל חיבור פרסום פעיל של לקוח פעיל
   const connections = await prisma.platformConnection.findMany({
@@ -59,8 +63,49 @@ export async function GET(req: Request) {
   // התראה: חשבונות שלא הסתנכרנו יותר מיממה (כנראה דורשים חיבור מחדש)
   await alertStaleConnections();
 
-  console.log(`[Cron sync-all] dispatched ${connections.length} connections | completed=${succeeded ?? "in-progress"}`);
-  return NextResponse.json({ ok: true, dispatched: connections.length, completed: succeeded });
+  console.log(`[Cron sync-all] dispatched ${connections.length} connections | completed=${succeeded ?? "in-progress"} | refreshed tokens=${refreshed}`);
+  return NextResponse.json({ ok: true, dispatched: connections.length, completed: succeeded, refreshedTokens: refreshed });
+}
+
+/**
+ * מרענן טוקני Meta long-lived שעדיין תקפים אך פגים תוך 30 יום — מחליף אותם
+ * בטוקן 60-יום טרי (fb_exchange_token) בלי שום פעולה ידנית. טוקן שכבר פג לא
+ * ניתן לרענן ודורש חיבור מחדש (תופס ע"י alertStaleConnections). מחזיר כמה רוענן.
+ */
+async function refreshExpiringMetaTokens(): Promise<number> {
+  const now = Date.now();
+  const horizon = new Date(now + 30 * 24 * 60 * 60 * 1000); // פג תוך 30 יום
+  const conns = await prisma.platformConnection.findMany({
+    where: {
+      platform: "meta",
+      isActive: true,
+      client: { deletedAt: null, status: { not: "inactive" } },
+      tokenExpiry: { gt: new Date(now), lt: horizon }, // עדיין תקף, אבל פג בקרוב
+    },
+    select: { id: true, accessToken: true, client: { select: { name: true } } },
+  });
+  if (conns.length === 0) return 0;
+
+  let refreshed = 0;
+  for (const c of conns) {
+    try {
+      const fresh = await exchangeForLongLivedToken(c.accessToken);
+      if (fresh?.access_token) {
+        const expiresIn = fresh.expires_in ?? 5184000; // 60 ימים ברירת מחדל
+        await prisma.platformConnection.update({
+          where: { id: c.id },
+          data: { accessToken: fresh.access_token, tokenExpiry: new Date(now + expiresIn * 1000) },
+        });
+        refreshed++;
+        console.log(`[Cron refresh-meta] ✅ ${c.client?.name} — חודש ל-${Math.round(expiresIn / 86400)} ימים`);
+      } else {
+        console.warn(`[Cron refresh-meta] ⚠️ ${c.client?.name} — רענון נכשל (יידרש חיבור מחדש בקרוב)`);
+      }
+    } catch (err) {
+      console.error(`[Cron refresh-meta] ${c.client?.name} שגיאה:`, err instanceof Error ? err.message : err);
+    }
+  }
+  return refreshed;
 }
 
 /**
