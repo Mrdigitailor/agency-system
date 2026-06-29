@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { syncClientGoogleAds } from "@/lib/api/google-ads/sync";
 
@@ -22,6 +22,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ clientI
   const { clientId } = await params;
   const body = await req.json().catch(() => ({}));
   const daysBack = body.daysBack ?? 30;
+
+  // סנכרון יומי (cron): תשובה מיידית + סנכרון ברקע, כדי שה-dispatcher לא יקטע בקשות באוויר
+  if (isCron) {
+    after(async () => {
+      try { await syncClientGoogleAds(clientId, daysBack); }
+      catch (err) { console.error(`[cron google sync ${clientId}] failed:`, err instanceof Error ? err.message : err); }
+    });
+    return NextResponse.json({ ok: true, queued: true });
+  }
 
   try {
     const stats = await syncClientGoogleAds(clientId, daysBack);
