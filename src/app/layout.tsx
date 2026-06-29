@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "DigiTailors — מערכת ניהול סוכנות",
+  title: "Mr.digitailor Agency",
   description: "מערכת ניהול פנימית לסוכנות שיווק ופרסום דיגיטלי",
 };
 
