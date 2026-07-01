@@ -784,6 +784,30 @@ model MetaCreative {
   @@map("meta_creatives")
 }
 
+// נתונים יומיים פר-קריאייטיב (מודעה) — מאפשר בורר תאריכים בטאב קריאייטיבים
+model MetaCreativeDaily {
+  id               String   @id @default(cuid())
+  clientId         String
+  adId             String
+  date             String   // YYYY-MM-DD
+  spend            Float    @default(0)
+  impressions      Int      @default(0)
+  reach            Int      @default(0)
+  clicks           Int      @default(0)
+  inlineLinkClicks Int      @default(0)
+  conversions      Int      @default(0)
+  actionsJson      String   @default("[]") // actions לספירת המרות לפי האירוע הנבחר
+  vp25             Int      @default(0)
+  vp50             Int      @default(0)
+  vp75             Int      @default(0)
+  vp100            Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@unique([clientId, adId, date])
+  @@index([clientId, date])
+  @@map("meta_creative_daily")
+}
+
 // ==================== נתוני Google Ads ====================
 
 model GoogleAdsInsightDaily {

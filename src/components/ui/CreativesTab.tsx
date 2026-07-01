@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw, BarChart3, Image as ImageIcon } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import DateRangePicker, { DateRange, getPresetRange } from "./DateRangePicker";
 import { getCurrencySymbol } from "@/lib/utils/currency";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 
@@ -125,6 +126,7 @@ export default function CreativesTab({ clientId, currency }: Props) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange>(() => getPresetRange("this_month"));
 
   // Filters & sort
   const [statusFilter, setStatusFilter] = useState("all");
@@ -148,7 +150,7 @@ export default function CreativesTab({ clientId, currency }: Props) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/clients/${clientId}/creatives`);
+      const res = await fetch(`/api/clients/${clientId}/creatives?since=${dateRange.since}&until=${dateRange.until}`);
       if (!res.ok) throw new Error("שגיאה בטעינת קריאייטיבים");
       const data = await res.json();
       setCreatives(data.creatives ?? []);
@@ -157,7 +159,7 @@ export default function CreativesTab({ clientId, currency }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [clientId]);
+  }, [clientId, dateRange.since, dateRange.until]);
 
   useEffect(() => {
     fetchCreatives();
@@ -168,6 +170,8 @@ export default function CreativesTab({ clientId, currency }: Props) {
     try {
       const res = await fetch(`/api/clients/${clientId}/creatives`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ since: dateRange.since, until: dateRange.until }),
       });
       if (!res.ok) throw new Error("שגיאה בסנכרון");
       await fetchCreatives();
@@ -259,6 +263,7 @@ export default function CreativesTab({ clientId, currency }: Props) {
     <div className="space-y-4">
       {/* ── Top bar ── */}
       <div className="flex flex-wrap items-center gap-3">
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
         <button
           onClick={handleSync}
           disabled={syncing}
