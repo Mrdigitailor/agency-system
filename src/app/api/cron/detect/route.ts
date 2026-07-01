@@ -24,7 +24,7 @@ async function run(req: Request) {
     top.map(async (det) => {
       const diag = await diagnoseClient(det);
       if (!diag) return null;
-      const tasks = await createTasksFromDiagnosis(det, diag).catch(() => 0);
+      const tasks = await createTasksFromDiagnosis(det, diag, { dedupeDays: 4 }).catch(() => 0);
       return { det, diag, tasks };
     }),
   );

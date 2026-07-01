@@ -118,8 +118,11 @@ export async function diagnoseClient(det: ClientDetection): Promise<Diagnosis | 
 
 const PRIO_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 
-/** יוצר משימות פעולה: מוקצות למנהל הקמפיינר, creator=בעלים (למעקב). */
-export async function createTasksFromDiagnosis(det: ClientDetection, diag: Diagnosis): Promise<number> {
+/**
+ * יוצר משימות פעולה: מוקצות למנהל הקמפיינר, creator=בעלים (למעקב).
+ * dedupeDays: אם ללקוח כבר יש משימת-אבחון פתוחה מהימים האחרונים — מדלגים (מונע הצפה יומית).
+ */
+export async function createTasksFromDiagnosis(det: ClientDetection, diag: Diagnosis, opts?: { dedupeDays?: number }): Promise<number> {
   const client = await prisma.client.findUnique({ where: { id: det.clientId }, select: { campaignManagerId: true, campaignManager: true } });
   let assigneeId = client?.campaignManagerId ?? null;
   if (!assigneeId && client?.campaignManager) assigneeId = await resolveManagerId(client.campaignManager);
@@ -127,6 +130,15 @@ export async function createTasksFromDiagnosis(det: ClientDetection, diag: Diagn
     assigneeId ? prisma.user.findUnique({ where: { id: assigneeId }, select: { name: true } }) : Promise.resolve(null),
     prisma.user.findFirst({ where: { role: "admin", isActive: true }, select: { id: true, name: true } }),
   ]);
+
+  // דדופ: אם כבר יש משימת-אבחון פתוחה של המערכת ללקוח מהימים האחרונים — לא מציפים שוב
+  if (opts?.dedupeDays && opts.dedupeDays > 0 && owner?.id) {
+    const cutoff = new Date(Date.now() - opts.dedupeDays * 86400000);
+    const existing = await prisma.task.count({
+      where: { clientId: det.clientId, taskType: "advertising", creatorId: owner.id, status: { not: "done" }, deletedAt: null, createdAt: { gte: cutoff } },
+    });
+    if (existing > 0) return 0;
+  }
 
   const due = ymd(new Date(Date.now() + 3 * 86400000));
   const actions = [...diag.actions].sort((a, b) => (PRIO_RANK[a.priority] ?? 2) - (PRIO_RANK[b.priority] ?? 2)).slice(0, 3);
