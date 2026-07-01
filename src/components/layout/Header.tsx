@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Search, ChevronDown, Globe } from "lucide-react";
+import { Bell, Search, ChevronDown, Globe, Check } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -92,6 +92,16 @@ export default function Header() {
     if (alert.link) router.push(alert.link);
   };
 
+  // סימון התראה בודדת כנקראה (הוי) — מסיר אותה מהרשימה בלי לנווט
+  const markRead = async (id: string) => {
+    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, isRead: true } : a)));
+    await fetch("/api/alerts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+  };
+
   const { t } = useLanguage();
 
   return (
@@ -144,28 +154,33 @@ export default function Header() {
                 )}
               </div>
               <div className="max-h-96 overflow-y-auto">
-                {alerts.length === 0 ? (
-                  <p className="p-6 text-center text-sm text-brand-muted">אין התראות</p>
+                {alerts.filter((a) => !a.isRead).length === 0 ? (
+                  <p className="p-6 text-center text-sm text-brand-muted">אין התראות חדשות</p>
                 ) : (
-                  alerts.map((alert) => {
+                  alerts.filter((a) => !a.isRead).map((alert) => {
                     const colors = getAlertColor(alert.type);
                     return (
-                      <button
-                        key={alert.id}
-                        onClick={() => handleAlertClick(alert)}
-                        className={`block w-full border-b border-brand-border px-4 py-3 text-right transition-colors duration-200 hover:bg-brand-bg/50 ${!alert.isRead ? "bg-brand-gold/5" : ""}`}
-                      >
-                        <div className="flex items-start gap-3">
-                          {!alert.isRead && (
-                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-gold" />
-                          )}
+                      <div key={alert.id} className="flex items-stretch border-b border-brand-border bg-brand-gold/5">
+                        <button
+                          onClick={() => handleAlertClick(alert)}
+                          className="flex flex-1 items-start gap-3 px-4 py-3 text-right transition-colors duration-200 hover:bg-brand-bg/50"
+                        >
+                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-gold" />
                           <div className="flex-1">
                             <p className={`text-sm font-medium ${colors.text}`}>{alert.title}</p>
                             <p className="mt-0.5 text-xs text-brand-muted line-clamp-2">{alert.message}</p>
                             <p className="mt-1 text-[10px] text-brand-muted">{formatTimeAgo(alert.createdAt)}</p>
                           </div>
-                        </div>
-                      </button>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); markRead(alert.id); }}
+                          title="סמן כנקרא"
+                          aria-label="סמן כנקרא"
+                          className="flex w-11 shrink-0 items-center justify-center border-r border-brand-border/60 text-brand-muted transition-colors hover:bg-brand-success/10 hover:text-brand-success"
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                      </div>
                     );
                   })
                 )}
