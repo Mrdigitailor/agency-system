@@ -6,7 +6,7 @@ import { notifyTaskAssigned } from "@/lib/notifications/task-notify";
 import { resolveManagerId } from "@/lib/utils/syncManagers";
 import { sendTelegramMessage } from "@/lib/api/telegram/client";
 import { getCurrencySymbol } from "@/lib/utils/currency";
-import { recentRange, baselineRange, type ClientDetection } from "./detect";
+import { recentRange, baselineRange, datesLabel, type ClientDetection } from "./detect";
 
 const MODEL = process.env.DIAGNOSIS_AI_MODEL ?? "claude-sonnet-4-6";
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -49,6 +49,7 @@ async function buildContext(det: ClientDetection): Promise<string> {
   const r = det.recent, b = det.baseline;
   return [
     `לקוח: ${det.clientName} | סוג: ${det.clientType} | מטבע: ${det.currency} | תקציב חודשי: ${sym}${Math.round(det.monthlyBudget)}${det.targetCpa > 0 ? ` | יעד CPA: ${sym}${Math.round(det.targetCpa)}` : ""}`,
+    `תאריכי ההשוואה: ${datesLabel()}`,
     ``,
     `סיגנלים שזוהו אוטומטית:`,
     ...det.signals.map((s) => `- ${s.label}: ${s.detail}`),
@@ -91,7 +92,7 @@ const TOOL: Anthropic.Tool = {
   },
 };
 
-const SYSTEM = `אתה מנהל קמפיינים בכיר ומנוסה בסוכנות פרסום דיגיטלי. קיבלת נתוני ביצועים של לקוח שירד. נתח את הירידה, אבחן את הסיבה הסבירה ביותר, והפק רשימת פעולות קונקרטיות וברות-ביצוע להחזרת התוצאות. התבסס רק על הנתונים שקיבלת, היה ספציפי (שמות קמפיינים, מספרים), ואל תמציא נתונים שאין. תמיד השתמש בכלי report_diagnosis. עברית בלבד.`;
+const SYSTEM = `אתה מנהל קמפיינים בכיר ומנוסה בסוכנות פרסום דיגיטלי. קיבלת נתוני ביצועים של לקוח שירד. נתח את הירידה, אבחן את הסיבה הסבירה ביותר, והפק רשימת פעולות קונקרטיות וברות-ביצוע להחזרת התוצאות. התבסס רק על הנתונים שקיבלת, היה ספציפי (שמות קמפיינים, מספרים), ואל תמציא נתונים שאין. **כשאתה מזכיר ירידה או עלייה — ציין תמיד את התאריכים/התקופות שעליהם השווית** (הם ניתנים לך בשדה "תאריכי ההשוואה"), כדי שנוכל לאמת. תמיד השתמש בכלי report_diagnosis. עברית בלבד.`;
 
 /** מאבחן לקוח בודד ב-AI. מחזיר null אם נכשל. */
 export async function diagnoseClient(det: ClientDetection): Promise<Diagnosis | null> {
@@ -145,7 +146,7 @@ export async function createTasksFromDiagnosis(det: ClientDetection, diag: Diagn
 
   let created = 0;
   for (const a of actions) {
-    const description = `${a.detail}${a.campaign ? `\nקמפיין: ${a.campaign}` : ""}\n\n🔎 אבחון אוטומטי: ${diag.summary}`;
+    const description = `${a.detail}${a.campaign ? `\nקמפיין: ${a.campaign}` : ""}\n\n📅 נותח: ${datesLabel()}\n🔎 אבחון אוטומטי: ${diag.summary}`;
     const task = await prisma.task.create({
       data: {
         title: a.title,

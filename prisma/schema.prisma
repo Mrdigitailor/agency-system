@@ -808,6 +808,28 @@ model MetaCreativeDaily {
   @@map("meta_creative_daily")
 }
 
+// טיוטת פעולה מאבחון AI — נשלחת לאישור בטלגרם לפני שהופכת למשימה
+model ActionDraft {
+  id           String   @id @default(cuid())
+  clientId     String
+  clientName   String
+  summary      String   @default("") // אבחון הלקוח (הקשר לחידוד)
+  severity     String   @default("medium")
+  title        String
+  detail       String   @default("")
+  priority     String   @default("medium")
+  platform     String   @default("")
+  campaign     String   @default("")
+  datesInfo    String   @default("") // התאריכים שנותחו
+  status       String   @default("pending") // pending | approved | dismissed
+  awaitingNotes Boolean @default(false) // ממתין להערת המשתמש (לחידוד)
+  chatId       String   @default("")
+  createdAt    DateTime @default(now())
+
+  @@index([chatId, awaitingNotes])
+  @@map("action_drafts")
+}
+
 // ==================== נתוני Google Ads ====================
 
 model GoogleAdsInsightDaily {

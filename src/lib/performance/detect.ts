@@ -24,6 +24,13 @@ export function mtdRange(): DateRange {
   return { since: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`, until: ymd(shift(1)) };
 }
 
+/** תיאור התאריכים שנותחו — לשקיפות באבחון ("מול אילו תאריכים השוויתי") */
+export function datesLabel(): string {
+  const dm = (s: string) => { const [, mo, d] = s.split("-"); return `${d}/${mo}`; };
+  const r = recentRange(), b = baselineRange();
+  return `7 ימים אחרונים (${dm(r.since)}–${dm(r.until)}) מול 7 הימים שלפניהם (${dm(b.since)}–${dm(b.until)})`;
+}
+
 export interface Signal {
   code: string;
   label: string;

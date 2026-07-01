@@ -32,6 +32,54 @@ export async function sendTelegramMessage(chatId: number | string, text: string)
   }
 }
 
+export type InlineKeyboard = { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> };
+
+/** שליחת הודעה עם כפתורים inline. מחזיר את message_id או null. */
+export async function sendTelegramWithButtons(chatId: number | string, text: string, keyboard: InlineKeyboard): Promise<number | null> {
+  if (!isTelegramConfigured()) return null;
+  try {
+    const res = await fetch(`${API}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, reply_markup: keyboard }),
+    });
+    const json = await res.json();
+    if (!json.ok) { console.error("[Telegram] sendWithButtons failed:", JSON.stringify(json).slice(0, 200)); return null; }
+    return json.result?.message_id ?? null;
+  } catch (err) {
+    console.error("[Telegram] sendWithButtons error:", err);
+    return null;
+  }
+}
+
+/** מענה ל-callback query (הקלקת כפתור) — חובה כדי לעצור את ה-loading בכפתור. */
+export async function answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
+  if (!isTelegramConfigured()) return;
+  try {
+    await fetch(`${API}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callback_query_id: callbackQueryId, text: text || undefined }),
+    });
+  } catch (err) {
+    console.error("[Telegram] answerCallbackQuery error:", err);
+  }
+}
+
+/** עדכון הכפתורים של הודעה קיימת (למשל אחרי אישור). */
+export async function editMessageReplyMarkup(chatId: number | string, messageId: number, keyboard: InlineKeyboard): Promise<void> {
+  if (!isTelegramConfigured()) return;
+  try {
+    await fetch(`${API}/editMessageReplyMarkup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, message_id: messageId, reply_markup: keyboard }),
+    });
+  } catch (err) {
+    console.error("[Telegram] editMessageReplyMarkup error:", err);
+  }
+}
+
 /**
  * מוריד קובץ מטלגרם לפי file_id (לדוגמה הודעה קולית) ומחזיר את התוכן כ-ArrayBuffer.
  */
@@ -69,7 +117,7 @@ export async function setTelegramWebhook(url: string, secret?: string): Promise<
     body: JSON.stringify({
       url,
       secret_token: secret || undefined,
-      allowed_updates: ["message"],
+      allowed_updates: ["message", "callback_query"],
       drop_pending_updates: true,
     }),
   });

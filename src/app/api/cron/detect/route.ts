@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { detectAllClients } from "@/lib/performance/detect";
-import { diagnoseClient, createTasksFromDiagnosis, buildTelegramDigest, sendOwnerDigest, type Diagnosis } from "@/lib/performance/diagnose";
+import { diagnoseClient, type Diagnosis } from "@/lib/performance/diagnose";
+import { sendDiagnosesForApproval } from "@/lib/performance/approval";
 import type { ClientDetection } from "@/lib/performance/detect";
 
 export const maxDuration = 60;
@@ -9,8 +10,8 @@ export const dynamic = "force-dynamic";
 const TOP_N = 10; // כמה לקוחות מסומנים לאבחן ב-AI (מקבילי) בכל ריצה
 
 /**
- * GET/POST /api/cron/detect — מנוע זיהוי ירידות + אבחון AI + דיגסט בוקר.
- * מופעל ע"י sync-all (fire-and-forget). Auth: CRON_SECRET.
+ * GET/POST /api/cron/detect — מנוע זיהוי ירידות + אבחון AI → שליחה לאישור בטלגרם.
+ * לא יוצר משימות אוטומטית; המשתמש מאשר כל פעולה. מופעל ע"י sync-all. Auth: CRON_SECRET.
  */
 async function run(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -23,21 +24,19 @@ async function run(req: Request) {
   const diagnosed = await Promise.all(
     top.map(async (det) => {
       const diag = await diagnoseClient(det);
-      if (!diag) return null;
-      const tasks = await createTasksFromDiagnosis(det, diag, { dedupeDays: 4 }).catch(() => 0);
-      return { det, diag, tasks };
+      return diag ? { det, diag } : null;
     }),
   );
-  const items = diagnosed.filter((x): x is { det: ClientDetection; diag: Diagnosis; tasks: number } => x !== null);
+  const items = diagnosed.filter((x): x is { det: ClientDetection; diag: Diagnosis } => x !== null);
 
-  await sendOwnerDigest(buildTelegramDigest(items.map((i) => ({ det: i.det, diag: i.diag }))));
+  const actionsSent = await sendDiagnosesForApproval(items);
 
-  console.log(`[Cron detect] flagged=${flagged.length} diagnosed=${items.length} tasks=${items.reduce((s, i) => s + i.tasks, 0)}`);
+  console.log(`[Cron detect] flagged=${flagged.length} diagnosed=${items.length} actionsSent=${actionsSent}`);
   return NextResponse.json({
     ok: true,
     flagged: flagged.length,
     diagnosed: items.length,
-    tasksCreated: items.reduce((s, i) => s + i.tasks, 0),
+    actionsSent,
     clients: items.map((i) => ({ name: i.det.clientName, score: i.det.score, severity: i.diag.severity, actions: i.diag.actions.length })),
   });
 }
