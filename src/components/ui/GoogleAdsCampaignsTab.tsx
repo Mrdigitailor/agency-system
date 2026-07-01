@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Settings2, RefreshCw } from "lucide-react";
 import DateRangePicker, { DateRange, getPresetRange } from "./DateRangePicker";
+import CampaignTrendTable from "./CampaignTrendTable";
 import { getCurrencySymbol } from "@/lib/utils/currency";
 
 interface Props {
@@ -284,6 +285,8 @@ export default function GoogleAdsCampaignsTab({ clientId, currency }: Props) {
           </table>
         </div>
       )}
+
+      <CampaignTrendTable clientId={clientId} endpoint="google-campaigns" currency={currency} />
     </div>
   );
 }

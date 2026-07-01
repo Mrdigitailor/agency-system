@@ -16,7 +16,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (auth instanceof NextResponse) return auth;
 
   const { id: clientId } = await params;
-  const days = Math.min(Math.max(Number(new URL(req.url).searchParams.get("days")) || 28, 1), 365);
+  const url = new URL(req.url);
+  const isYmd = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const sinceParam = url.searchParams.get("since");
+  const untilParam = url.searchParams.get("until");
+  const explicitRange = isYmd(sinceParam) && isYmd(untilParam) ? { since: sinceParam, until: untilParam } : undefined;
+  const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 28, 1), 365);
 
   const client = await prisma.client.findUnique({
     where: { id: clientId },
@@ -48,11 +53,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
 
   try {
-    const data = await fetchAnalytics(property.externalId, token, days, mode);
+    const data = await fetchAnalytics(property.externalId, token, days, mode, explicitRange);
     return NextResponse.json({
       connected: true,
       property: { id: property.externalId, name: property.name },
-      days,
+      days: explicitRange ? undefined : days,
+      range: explicitRange,
       currency,
       ...data,
     });

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Settings2 } from "lucide-react";
 import DateRangePicker, { DateRange, getPresetRange } from "./DateRangePicker";
+import CampaignTrendTable from "./CampaignTrendTable";
 import { getCurrencySymbol } from "@/lib/utils/currency";
 
 interface Props {
@@ -311,6 +312,8 @@ export default function MetaCampaignsTab({ clientId, currency }: Props) {
           </table>
         )}
       </div>
+
+      <CampaignTrendTable clientId={clientId} endpoint="meta-campaigns" currency={currency} />
     </div>
   );
 }

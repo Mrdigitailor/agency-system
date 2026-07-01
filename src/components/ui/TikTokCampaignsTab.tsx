@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Settings2, RefreshCw } from "lucide-react";
 import DateRangePicker, { DateRange, getPresetRange } from "./DateRangePicker";
+import CampaignTrendTable from "./CampaignTrendTable";
 import { getCurrencySymbol } from "@/lib/utils/currency";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 
@@ -263,6 +264,8 @@ export default function TikTokCampaignsTab({ clientId, currency }: Props) {
           </table>
         </div>
       )}
+
+      <CampaignTrendTable clientId={clientId} endpoint="tiktok-campaigns" currency={currency} />
     </div>
   );
 }

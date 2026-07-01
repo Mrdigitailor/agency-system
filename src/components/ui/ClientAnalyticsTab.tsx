@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { BarChart3, Loader2, Users, MousePointerClick, RefreshCw, ShoppingCart, Target, TrendingUp, Percent, DollarSign, Award } from "lucide-react";
+import DateRangePicker, { DateRange, getPresetRange } from "./DateRangePicker";
 
 interface ChannelRow { name: string; sessions: number; value: number; convRate: number }
 interface ItemRow { name: string; primary: number; secondary: number }
@@ -32,21 +33,15 @@ const fmtDate = (d: string) => {
   return isNaN(dt.getTime()) ? d : dt.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" });
 };
 
-const RANGES = [
-  { days: 7, label: "7 ימים" },
-  { days: 28, label: "28 ימים" },
-  { days: 90, label: "90 ימים" },
-];
-
 export default function ClientAnalyticsTab({ clientId }: { clientId: string }) {
   const [data, setData] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [days, setDays] = useState(28);
+  const [dateRange, setDateRange] = useState<DateRange>(() => getPresetRange("this_month"));
 
-  const load = useCallback(async (d: number) => {
+  const load = useCallback(async (r: DateRange) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/clients/${clientId}/analytics?days=${d}`);
+      const res = await fetch(`/api/clients/${clientId}/analytics?since=${r.since}&until=${r.until}`);
       setData(await res.json());
     } catch {
       setData({ connected: true, error: "שגיאה בטעינה" });
@@ -55,7 +50,7 @@ export default function ClientAnalyticsTab({ clientId }: { clientId: string }) {
     }
   }, [clientId]);
 
-  useEffect(() => { load(days); }, [load, days]);
+  useEffect(() => { load(dateRange); }, [load, dateRange]);
 
   if (loading && !data) {
     return <div className={cardClass}><div className="flex items-center justify-center py-12 text-brand-muted"><Loader2 className="h-5 w-5 animate-spin" /></div></div>;
@@ -76,7 +71,7 @@ export default function ClientAnalyticsTab({ clientId }: { clientId: string }) {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <BarChart3 className="mb-3 h-10 w-10 text-brand-danger/50" />
           <p className="text-sm text-brand-danger">{data.error}</p>
-          <button onClick={() => load(days)} className="mt-4 flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-xs font-medium text-brand-muted hover:bg-brand-bg"><RefreshCw className="h-3.5 w-3.5" /> נסה שוב</button>
+          <button onClick={() => load(dateRange)} className="mt-4 flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-xs font-medium text-brand-muted hover:bg-brand-bg"><RefreshCw className="h-3.5 w-3.5" /> נסה שוב</button>
         </div>
       </div>
     );
@@ -116,11 +111,7 @@ export default function ClientAnalyticsTab({ clientId }: { clientId: string }) {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light p-0.5">
-          {RANGES.map((r) => (
-            <button key={r.days} onClick={() => setDays(r.days)} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${days === r.days ? "bg-brand-gold text-brand-dark" : "text-brand-muted hover:text-brand-dark"}`}>{r.label}</button>
-          ))}
-        </div>
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
       </div>
 
       {/* KPIs */}
