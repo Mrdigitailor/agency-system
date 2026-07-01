@@ -63,6 +63,9 @@ export async function GET(req: Request) {
   // התראה: חשבונות שלא הסתנכרנו יותר מיממה (כנראה דורשים חיבור מחדש)
   await alertStaleConnections();
 
+  // מנוע זיהוי ירידות + אבחון AI + דיגסט בוקר — invocation נפרד (fire-and-forget)
+  fetch(`${origin}/api/cron/detect`, { method: "POST", headers: { authorization: `Bearer ${expected ?? ""}` } }).catch(() => {});
+
   console.log(`[Cron sync-all] dispatched ${connections.length} connections | completed=${succeeded ?? "in-progress"} | refreshed tokens=${refreshed}`);
   return NextResponse.json({ ok: true, dispatched: connections.length, completed: succeeded, refreshedTokens: refreshed });
 }

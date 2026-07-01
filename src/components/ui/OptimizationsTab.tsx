@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, AlertCircle, CheckCircle2, Clock, Filter } from "lucide-react";
+import { Plus, AlertCircle, CheckCircle2, Clock, Filter, Sparkles, Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 
@@ -103,6 +103,31 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
 
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [checkText, setCheckText] = useState("");
+
+  // אבחון AI ידני
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [diagResult, setDiagResult] = useState<
+    | null
+    | {
+        flagged: boolean;
+        message?: string;
+        tasksCreated?: number;
+        diagnosis?: { summary: string; severity: string; actions: { title: string; detail: string; priority: string }[] };
+      }
+  >(null);
+
+  const runDiagnose = async () => {
+    setDiagnosing(true);
+    setDiagResult(null);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/diagnose`, { method: "POST" });
+      setDiagResult(await res.json());
+    } catch {
+      setDiagResult({ flagged: false, message: "שגיאה באבחון. נסה שוב." });
+    } finally {
+      setDiagnosing(false);
+    }
+  };
 
   // פילטרים
   const [filterPlatform, setFilterPlatform] = useState("all");
@@ -245,13 +270,47 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
   return (
     <div className="space-y-6">
       {/* ============ Header ============ */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-brand-dark">{t("optimizations")}</h2>
-        <button onClick={() => setShowAddModal(true)} className={`inline-flex items-center gap-2 ${btnPrimary}`}>
-          <Plus className="h-4 w-4" />
-          {t("addOptimization")}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={runDiagnose} disabled={diagnosing} className="inline-flex items-center gap-2 rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-dark transition-colors hover:bg-brand-bg disabled:opacity-50">
+            {diagnosing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-brand-gold" />}
+            {diagnosing ? "מאבחן..." : "אבחן ביצועים עכשיו"}
+          </button>
+          <button onClick={() => setShowAddModal(true)} className={`inline-flex items-center gap-2 ${btnPrimary}`}>
+            <Plus className="h-4 w-4" />
+            {t("addOptimization")}
+          </button>
+        </div>
       </div>
+
+      {/* ============ AI Diagnosis Result ============ */}
+      {diagResult && (
+        <div className={`rounded-lg border p-5 ${diagResult.flagged ? "border-brand-gold/40 bg-brand-gold/5" : "border-brand-border bg-brand-bg"}`}>
+          {diagResult.flagged && diagResult.diagnosis ? (
+            <>
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-brand-gold" />
+                <h3 className="text-sm font-semibold text-brand-dark">אבחון AI</h3>
+              </div>
+              <p className="mt-2 text-sm text-brand-dark">{diagResult.diagnosis.summary}</p>
+              <div className="mt-3 space-y-2">
+                {diagResult.diagnosis.actions.map((a, i) => (
+                  <div key={i} className="rounded-lg border border-brand-border bg-brand-light p-3">
+                    <p className="text-sm font-medium text-brand-dark">{a.title}</p>
+                    <p className="mt-0.5 text-xs text-brand-muted">{a.detail}</p>
+                  </div>
+                ))}
+              </div>
+              {typeof diagResult.tasksCreated === "number" && diagResult.tasksCreated > 0 && (
+                <p className="mt-3 text-xs text-brand-success">✓ {diagResult.tasksCreated} משימות נוצרו ושויכו למנהל הקמפיינר.</p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-brand-muted">{diagResult.message ?? "לא זוהתה ירידת ביצועים משמעותית."}</p>
+          )}
+        </div>
+      )}
 
       {/* ============ Waiting for Check Section ============ */}
       {waitingForCheck.length > 0 && (
