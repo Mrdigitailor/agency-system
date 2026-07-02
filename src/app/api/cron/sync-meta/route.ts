@@ -21,6 +21,21 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Self-healing: המפעיל השעתי החיצוני אמין יותר מה-cron של Vercel (שמושהה כשחורגים ממכסות).
+  // אם הסנכרון המלא (sync-all) לא רץ ב-22 השעות האחרונות — מפעילים אותו מכאן.
+  try {
+    const lastFull = await prisma.cronRun.findFirst({ where: { job: "sync-all" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+    const hoursSince = lastFull ? (Date.now() - lastFull.createdAt.getTime()) / 3600000 : Infinity;
+    if (hoursSince >= 22) {
+      const origin = process.env.APP_BASE_URL ?? new URL(req.url).origin;
+      console.log(`[Cron sync-meta] sync-all לא רץ ${Math.round(hoursSince)} שעות — מפעיל self-heal`);
+      fetch(`${origin}/api/cron/sync-all?src=self-heal`, { headers: { authorization: `Bearer ${expected ?? ""}` } }).catch(() => {});
+      return NextResponse.json({ ok: true, selfHealed: true, hoursSinceFullSync: Math.round(hoursSince) });
+    }
+  } catch (e) {
+    console.error("[Cron sync-meta] self-heal check failed:", e);
+  }
+
   const startTime = Date.now();
 
   // Yesterday's date

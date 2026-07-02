@@ -25,8 +25,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // רענון אוטומטי של טוקני Meta שעומדים לפוג — לפני הסנכרון, כדי שיסתנכרנו עם טוקן טרי
-  const refreshed = await refreshExpiringMetaTokens();
+  // heartbeat — רישום שהריצה קרתה (לניטור ול-self-healing מ-sync-meta)
+  await prisma.cronRun.create({ data: { job: "sync-all", detail: new URL(req.url).searchParams.get("src") ?? "cron" } }).catch(() => {});
+
+  // רענון אוטומטי של טוקני Meta שעומדים לפוג — כשל כאן לעולם לא מפיל את הסנכרון
+  const refreshed = await refreshExpiringMetaTokens().catch((e) => { console.error("[Cron sync-all] token refresh failed:", e); return 0; });
 
   // כל חיבור פרסום פעיל של לקוח פעיל
   const connections = await prisma.platformConnection.findMany({
@@ -60,8 +63,8 @@ export async function GET(req: Request) {
   const raced = await Promise.race([dispatch, timeout]);
   const succeeded = Array.isArray(raced) ? raced.filter((r) => r.status === "fulfilled" && r.value === true).length : null;
 
-  // התראה: חשבונות שלא הסתנכרנו יותר מיממה (כנראה דורשים חיבור מחדש)
-  await alertStaleConnections();
+  // התראה: חשבונות שלא הסתנכרנו יותר מיממה (כנראה דורשים חיבור מחדש) — כשל לא מפיל
+  await alertStaleConnections().catch((e) => console.error("[Cron sync-all] stale alert failed:", e));
 
   // מנוע זיהוי ירידות + אבחון AI + דיגסט בוקר — invocation נפרד (fire-and-forget)
   fetch(`${origin}/api/cron/detect`, { method: "POST", headers: { authorization: `Bearer ${expected ?? ""}` } }).catch(() => {});

@@ -808,6 +808,17 @@ model MetaCreativeDaily {
   @@map("meta_creative_daily")
 }
 
+// רישום ריצות cron — heartbeat כדי לדעת מה רץ ומתי (וגם בסיס ל-self-healing)
+model CronRun {
+  id        String   @id @default(cuid())
+  job       String   // sync-all | detect | weekly-reports
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([job, createdAt])
+  @@map("cron_runs")
+}
+
 // טיוטת פעולה מאבחון AI — נשלחת לאישור בטלגרם לפני שהופכת למשימה
 model ActionDraft {
   id           String   @id @default(cuid())
