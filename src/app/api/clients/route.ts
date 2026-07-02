@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
+import { safeParseArray } from "@/lib/utils/safeJson";
+import { monthStartIL, todayIL } from "@/lib/utils/ildate";
 import { stripAgencyPayment } from "@/lib/utils/clientPrivacy";
 import { syncClientManagers } from "@/lib/utils/syncManagers";
 import { countConversions } from "@/lib/utils/metaMetrics";
@@ -21,7 +23,7 @@ export async function GET(req: Request) {
       where: { id: user.id },
       select: { assignedClientIds: true },
     });
-    const assignedIds: string[] = JSON.parse(dbUser?.assignedClientIds ?? "[]");
+    const assignedIds = safeParseArray(dbUser?.assignedClientIds) as string[];
     if (assignedIds.length === 0) {
       return NextResponse.json([]);
     }
@@ -32,7 +34,7 @@ export async function GET(req: Request) {
       where: { id: user.id },
       select: { assignedClientIds: true },
     });
-    const assignedIds: string[] = JSON.parse(dbUser?.assignedClientIds ?? "[]");
+    const assignedIds = safeParseArray(dbUser?.assignedClientIds) as string[];
     if (assignedIds.length === 0) {
       return NextResponse.json([]);
     }
@@ -45,12 +47,9 @@ export async function GET(req: Request) {
     orderBy: { createdAt: "desc" },
   });
 
-  // שליפת insights לפי טווח תאריכים (ברירת מחדל: החודש הנוכחי)
-  const now = new Date();
-  const defaultStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const defaultEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const since = searchParams.get("since") ?? defaultStart;
-  const until = searchParams.get("until") ?? defaultEnd;
+  // שליפת insights לפי טווח תאריכים (ברירת מחדל: החודש הנוכחי, שעון ישראל)
+  const since = searchParams.get("since") ?? monthStartIL();
+  const until = searchParams.get("until") ?? todayIL();
 
   const clientIds = clients.map((c) => c.id);
 
@@ -116,8 +115,8 @@ export async function GET(req: Request) {
     const costPerConv = totalConv > 0 ? totalSpend / totalConv : 0;
     return {
       ...c,
-      platforms: JSON.parse(c.platforms),
-      customAssets: JSON.parse(c.customAssets ?? "[]"),
+      platforms: safeParseArray(c.platforms),
+      customAssets: safeParseArray(c.customAssets),
       currentMonthSpend: totalSpend,
       currentMonthConversions: totalConv,
       currentMonthCostPerConv: costPerConv,
@@ -171,5 +170,5 @@ export async function POST(req: Request) {
   // סנכרון assignedClientIds של העובדים הנבחרים
   await syncClientManagers(client.id, body.campaignManager ?? "", body.accountManager ?? "");
 
-  return NextResponse.json({ ...client, platforms: JSON.parse(client.platforms) }, { status: 201 });
+  return NextResponse.json({ ...client, platforms: safeParseArray(client.platforms) }, { status: 201 });
 }

@@ -1,10 +1,6 @@
-// אבחון AI לירידת ביצועים + יצירת משימות פעולה + דיגסט טלגרם.
+// אבחון AI לירידת ביצועים — מפיק סיכום + פעולות מדורגות. שליחה לאישור: approval.ts
 import Anthropic from "@anthropic-ai/sdk";
-import { prisma } from "@/lib/db/prisma";
 import { getWeeklyClientData } from "@/lib/reports/weekly-data";
-import { notifyTaskAssigned } from "@/lib/notifications/task-notify";
-import { resolveManagerId } from "@/lib/utils/syncManagers";
-import { sendTelegramMessage } from "@/lib/api/telegram/client";
 import { getCurrencySymbol } from "@/lib/utils/currency";
 import { recentRange, baselineRange, datesLabel, type ClientDetection } from "./detect";
 
@@ -22,10 +18,6 @@ export interface Diagnosis {
   summary: string;
   severity: "low" | "medium" | "high";
   actions: Action[];
-}
-
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 async function buildContext(det: ClientDetection): Promise<string> {
@@ -126,86 +118,4 @@ export async function diagnoseClient(det: ClientDetection): Promise<Diagnosis | 
     console.error(`[Diagnose ${det.clientName}]`, err instanceof Error ? err.message : err);
     return null;
   }
-}
-
-const PRIO_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
-
-/**
- * יוצר משימות פעולה: מוקצות למנהל הקמפיינר, creator=בעלים (למעקב).
- * dedupeDays: אם ללקוח כבר יש משימת-אבחון פתוחה מהימים האחרונים — מדלגים (מונע הצפה יומית).
- */
-export async function createTasksFromDiagnosis(det: ClientDetection, diag: Diagnosis, opts?: { dedupeDays?: number }): Promise<number> {
-  const client = await prisma.client.findUnique({ where: { id: det.clientId }, select: { campaignManagerId: true, campaignManager: true } });
-  let assigneeId = client?.campaignManagerId ?? null;
-  if (!assigneeId && client?.campaignManager) assigneeId = await resolveManagerId(client.campaignManager);
-  const [assignee, owner] = await Promise.all([
-    assigneeId ? prisma.user.findUnique({ where: { id: assigneeId }, select: { name: true } }) : Promise.resolve(null),
-    prisma.user.findFirst({ where: { role: "admin", isActive: true }, select: { id: true, name: true } }),
-  ]);
-
-  // דדופ: אם כבר יש משימת-אבחון פתוחה של המערכת ללקוח מהימים האחרונים — לא מציפים שוב
-  if (opts?.dedupeDays && opts.dedupeDays > 0 && owner?.id) {
-    const cutoff = new Date(Date.now() - opts.dedupeDays * 86400000);
-    const existing = await prisma.task.count({
-      where: { clientId: det.clientId, taskType: "advertising", creatorId: owner.id, status: { not: "done" }, deletedAt: null, createdAt: { gte: cutoff } },
-    });
-    if (existing > 0) return 0;
-  }
-
-  const due = ymd(new Date(Date.now() + 3 * 86400000));
-  const actions = [...diag.actions].sort((a, b) => (PRIO_RANK[a.priority] ?? 2) - (PRIO_RANK[b.priority] ?? 2)).slice(0, 3);
-
-  let created = 0;
-  for (const a of actions) {
-    const description = `${a.detail}${a.campaign ? `\nקמפיין: ${a.campaign}` : ""}\n\n📅 נותח: ${datesLabel()}\n🔎 אבחון אוטומטי: ${diag.summary}`;
-    const task = await prisma.task.create({
-      data: {
-        title: a.title,
-        description,
-        clientId: det.clientId,
-        assigneeId,
-        assignee: assignee?.name ?? "",
-        creatorId: owner?.id ?? null,
-        priority: a.priority,
-        dueDate: due,
-        status: "pending",
-        taskType: "advertising",
-        platform: a.platform ?? "",
-      },
-    });
-    created++;
-    if (assigneeId && owner?.id && assigneeId !== owner.id) {
-      await notifyTaskAssigned({
-        taskId: task.id, taskTitle: task.title, taskDescription: description, taskDueDate: due, taskPriority: a.priority,
-        clientId: det.clientId, assigneeId, creatorId: owner.id, creatorName: owner.name ?? "אבחון אוטומטי",
-      }).catch(() => {});
-    }
-  }
-  return created;
-}
-
-const SEV_EMOJI: Record<string, string> = { high: "🔴", medium: "🟠", low: "🟡" };
-
-/** בונה את טקסט הדיגסט לבעלים */
-export function buildTelegramDigest(items: Array<{ det: ClientDetection; diag: Diagnosis }>): string {
-  if (items.length === 0) return "🌅 בוקר טוב! כל הלקוחות יציבים — לא זוהו ירידות ביצועים משמעותיות היום. 👍";
-  const lines = [`🌅 בוקר טוב! ${items.length} לקוחות דורשים תשומת לב היום:`, ""];
-  for (const { det, diag } of items) {
-    lines.push(`${SEV_EMOJI[diag.severity] ?? "🟠"} *${det.clientName}*`);
-    lines.push(diag.summary);
-    if (diag.actions[0]) lines.push(`▪️ ${diag.actions[0].title}`);
-    lines.push("");
-  }
-  lines.push("המשימות המלאות נכנסו למערכת ושויכו למנהלים.");
-  return lines.join("\n");
-}
-
-/** שולח דיגסט לבעלים (chat id מ-env או מרשימת המורשים) */
-export async function sendOwnerDigest(text: string): Promise<void> {
-  const chatId = process.env.TELEGRAM_OWNER_CHAT_ID ?? (process.env.TELEGRAM_ALLOWED_USER_IDS ?? "").split(",")[0]?.trim();
-  if (!chatId) {
-    console.warn("[Diagnose] אין TELEGRAM_OWNER_CHAT_ID — דיגסט לא נשלח");
-    return;
-  }
-  await sendTelegramMessage(chatId, text).catch((e) => console.error("[Diagnose] telegram digest failed:", e));
 }

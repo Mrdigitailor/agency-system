@@ -217,6 +217,9 @@ model Task {
 
   notes TaskNote[]
 
+  @@index([clientId, status])
+  @@index([assigneeId, status])
+  @@index([taskType, creatorId, status])
   @@map("tasks")
 }
 
@@ -330,6 +333,8 @@ model Alert {
   client    Client?  @relation(fields: [clientId], references: [id])
   createdAt DateTime @default(now())
 
+  @@index([userId, isRead, createdAt])
+  @@index([type, createdAt])
   @@map("alerts")
 }
 
