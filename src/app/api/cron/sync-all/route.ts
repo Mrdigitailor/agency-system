@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { dayOfMonthIL } from "@/lib/utils/ildate";
 import { exchangeForLongLivedToken } from "@/lib/api/meta/oauth";
 
 // Dispatcher — מפזר סנכרון לכל חיבור כ-invocation נפרד שרץ במקביל
@@ -41,8 +42,8 @@ export async function GET(req: Request) {
   });
 
   const origin = process.env.APP_BASE_URL ?? new URL(req.url).origin;
-  // תמיד מסנכרנים את כל החודש הקלנדרי הנוכחי (1 בחודש → היום), כי כך מוגדרים תקציבים ויעדים
-  const daysBack = new Date().getDate();
+  // תמיד מסנכרנים את כל החודש הקלנדרי הנוכחי (1 בחודש → היום, שעון ישראל)
+  const daysBack = dayOfMonthIL();
 
   // יורים את כל הסנכרונים מיד (כל אחד invocation נפרד שרץ עד הסוף בנפרד).
   // ממתינים עד SOFT_LIMIT כדי להחזיר תשובה נקייה לפני מגבלת 60ש' — סנכרונים שלא

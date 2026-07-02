@@ -1,27 +1,20 @@
 // מנוע זיהוי ירידות ביצועים — רץ על הדאטה היומי המסונכרן, בלי לגעת בחשבונות.
 // משווה 7 ימים אחרונים (מסתיימים אתמול) מול 7 הימים שלפניהם, + חודש-עד-היום מול יעד.
 import { prisma } from "@/lib/db/prisma";
+import { daysAgoIL, monthStartIL } from "@/lib/utils/ildate";
 import { loadClientCtx, computeSnapshot, type DateRange, type PlatformSnapshot } from "@/lib/dashboard/engine";
 
 const RECENT_DAYS = 7;
 const FLAG_THRESHOLD = 30; // ניקוד מינימלי לסימון לקוח
 
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function shift(days: number): Date {
-  return new Date(Date.now() - days * 86400000);
-}
-
 export function recentRange(): DateRange {
-  return { since: ymd(shift(RECENT_DAYS)), until: ymd(shift(1)) }; // 7 ימים שמסתיימים אתמול
+  return { since: daysAgoIL(RECENT_DAYS), until: daysAgoIL(1) }; // 7 ימים שמסתיימים אתמול (שעון ישראל)
 }
 export function baselineRange(): DateRange {
-  return { since: ymd(shift(RECENT_DAYS * 2)), until: ymd(shift(RECENT_DAYS + 1)) }; // 7 הימים שלפני כן
+  return { since: daysAgoIL(RECENT_DAYS * 2), until: daysAgoIL(RECENT_DAYS + 1) }; // 7 הימים שלפני כן
 }
 export function mtdRange(): DateRange {
-  const now = new Date();
-  return { since: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`, until: ymd(shift(1)) };
+  return { since: monthStartIL(), until: daysAgoIL(1) };
 }
 
 /** תיאור התאריכים שנותחו — לשקיפות באבחון ("מול אילו תאריכים השוויתי") */

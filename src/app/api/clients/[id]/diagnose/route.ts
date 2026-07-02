@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { detectClientIssues } from "@/lib/performance/detect";
-import { diagnoseClient, createTasksFromDiagnosis } from "@/lib/performance/diagnose";
+import { diagnoseClient } from "@/lib/performance/diagnose";
+import { sendDiagnosesForApproval } from "@/lib/performance/approval";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const diag = await diagnoseClient(det);
   if (!diag) return NextResponse.json({ ok: false, error: "האבחון נכשל. נסה שוב." }, { status: 500 });
 
-  const tasksCreated = await createTasksFromDiagnosis(det, diag).catch(() => 0);
-  return NextResponse.json({ ok: true, flagged: true, score: det.score, signals: det.signals, diagnosis: diag, tasksCreated });
+  // עקבי עם זרימת הבוקר: לא יוצרים משימות אוטומטית — שולחים לאישור בטלגרם
+  const actionsSent = await sendDiagnosesForApproval([{ det, diag }]).catch(() => 0);
+  return NextResponse.json({ ok: true, flagged: true, score: det.score, signals: det.signals, diagnosis: diag, sentToTelegram: actionsSent > 0, actionsSent });
 }

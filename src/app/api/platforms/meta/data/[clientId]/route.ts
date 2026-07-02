@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
+import { daysAgoIL, todayIL } from "@/lib/utils/ildate";
 
 /**
  * שליפת נתוני Meta מסונכרנים של לקוח
@@ -12,8 +13,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ clientId
 
   const { clientId } = await params;
   const { searchParams } = new URL(req.url);
-  const since = searchParams.get("since") ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const until = searchParams.get("until") ?? new Date().toISOString().split("T")[0];
+  const since = searchParams.get("since") ?? daysAgoIL(30);
+  const until = searchParams.get("until") ?? todayIL();
 
   const [insights, pagePosts, igMedia] = await Promise.all([
     prisma.metaInsightDaily.findMany({

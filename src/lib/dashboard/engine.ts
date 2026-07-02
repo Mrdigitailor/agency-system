@@ -186,29 +186,37 @@ function computeAdWidget(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, prevAd?: A
 
   // טבלה לפי קמפיין
   if (w.dimension === "campaign" || w.displayType === "table") {
-    const map = new Map<string, Components>();
-    const bump = (name: string, comp: Components) => { const e = map.get(name) ?? zero(); addInto(e, comp); map.set(name, e); };
+    // ב-"כל הפלטפורמות" ממפתחים לפי פלטפורמה+שם כדי שקמפיינים שונים בעלי אותו שם לא ימוזגו
+    const isAll = w.platform === "all";
+    const PLAT_LABEL: Record<string, string> = { meta: "Meta", google_ads: "Google", tiktok: "TikTok" };
+    const map = new Map<string, { comp: Components; label: string }>();
+    const bump = (plat: string, name: string, comp: Components) => {
+      const key = isAll ? `${plat}|${name}` : name;
+      const label = isAll ? `${PLAT_LABEL[plat]} · ${name}` : name;
+      const e = map.get(key) ?? { comp: zero(), label };
+      addInto(e.comp, comp); map.set(key, e);
+    };
     if (w.platform === "meta" || w.platform === "all") {
       const byName = new Map<string, MetaRow[]>();
       for (const r of ad.meta) { const k = r.name || "(ללא שם)"; (byName.get(k) ?? byName.set(k, []).get(k)!).push(r); }
-      for (const [name, rows] of byName) bump(name, metaComp(rows, ctx.metaConversionEvent));
+      for (const [name, rows] of byName) bump("meta", name, metaComp(rows, ctx.metaConversionEvent));
     }
     if (w.platform === "google_ads" || w.platform === "all") {
       const byName = new Map<string, GoogleRow[]>();
       for (const r of ad.google) { const k = r.campaignName || "(ללא שם)"; (byName.get(k) ?? byName.set(k, []).get(k)!).push(r); }
-      for (const [name, rows] of byName) bump(name, googleComp(rows, ctx.googleConversionAction));
+      for (const [name, rows] of byName) bump("google_ads", name, googleComp(rows, ctx.googleConversionAction));
     }
     if (w.platform === "tiktok" || w.platform === "all") {
       const byName = new Map<string, TiktokRow[]>();
       for (const r of ad.tiktok) { const k = r.campaignName || "(ללא שם)"; (byName.get(k) ?? byName.set(k, []).get(k)!).push(r); }
-      for (const [name, rows] of byName) bump(name, tiktokComp(rows));
+      for (const [name, rows] of byName) bump("tiktok", name, tiktokComp(rows));
     }
     const sortMetric = metrics[0];
-    const entries = [...map.entries()].sort((a, b) => metricValue(sortMetric, b[1]) - metricValue(sortMetric, a[1])).slice(0, 20);
+    const entries = [...map.values()].sort((a, b) => metricValue(sortMetric, b.comp) - metricValue(sortMetric, a.comp)).slice(0, 20);
     return {
       type: "table",
       columns: [{ id: "name", label: "קמפיין" }, ...metrics.map((id) => ({ id, label: METRIC_BY_ID[id].label }))],
-      rows: entries.map(([name, c]) => [name, ...metrics.map((id) => Math.round(metricValue(id, c) * 100) / 100)]),
+      rows: entries.map((e) => [e.label, ...metrics.map((id) => Math.round(metricValue(id, e.comp) * 100) / 100)]),
     };
   }
 

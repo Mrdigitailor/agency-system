@@ -32,6 +32,16 @@ export async function POST(req: Request) {
 
   const body = await req.json();
 
+  // לקוח קצה — רשאי ליצור משימות רק ללקוח/ות שלו (מונע זיהום נתונים בין לקוחות)
+  if (creator.role === "client") {
+    const dbUser = await prisma.user.findUnique({ where: { id: creator.id }, select: { assignedClientIds: true } });
+    let assignedIds: string[] = [];
+    try { assignedIds = JSON.parse(dbUser?.assignedClientIds ?? "[]"); } catch {}
+    if (!body.clientId || !assignedIds.includes(body.clientId)) {
+      return NextResponse.json({ error: "אין הרשאה ללקוח זה" }, { status: 403 });
+    }
+  }
+
   // חיפוש assigneeId מהשם אם לא סופק
   let assigneeId = body.assigneeId ?? null;
   console.log(`[Tasks POST] Creating task "${body.title}" | assignee="${body.assignee}" | assigneeId=${assigneeId} | creator=${creator.name} (${creator.id})`);

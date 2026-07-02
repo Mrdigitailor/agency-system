@@ -111,7 +111,7 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
     | {
         flagged: boolean;
         message?: string;
-        tasksCreated?: number;
+        sentToTelegram?: boolean;
         diagnosis?: { summary: string; severity: string; actions: { title: string; detail: string; priority: string }[] };
       }
   >(null);
@@ -302,8 +302,8 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
                   </div>
                 ))}
               </div>
-              {typeof diagResult.tasksCreated === "number" && diagResult.tasksCreated > 0 && (
-                <p className="mt-3 text-xs text-brand-success">✓ {diagResult.tasksCreated} משימות נוצרו ושויכו למנהל הקמפיינר.</p>
+              {diagResult.sentToTelegram && (
+                <p className="mt-3 text-xs text-brand-success">✓ הפעולות נשלחו לטלגרם לאישור — אשר כל אחת כדי שתיכנס כמשימה.</p>
               )}
             </>
           ) : (

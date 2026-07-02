@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { countConversions } from "@/lib/utils/metaMetrics";
+import { monthStartIL, todayIL } from "@/lib/utils/ildate";
 
 /**
  * GET /api/clients/[id]/meta-campaigns?since=...&until=...
@@ -14,11 +15,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id: clientId } = await params;
   const { searchParams } = new URL(req.url);
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-  const today = now.toISOString().split("T")[0];
-  const since = searchParams.get("since") ?? monthStart;
-  const until = searchParams.get("until") ?? today;
+  const since = searchParams.get("since") ?? monthStartIL();
+  const until = searchParams.get("until") ?? todayIL();
 
   const client = await prisma.client.findUnique({
     where: { id: clientId },

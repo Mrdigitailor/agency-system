@@ -1,5 +1,6 @@
 // בניית DTO אחיד לדשבורד — משמש גם את ה-route הציבורי וגם את ה-preview.
 import { prisma } from "@/lib/db/prisma";
+import { monthStartIL, todayIL } from "@/lib/utils/ildate";
 import { computeDashboard, type ClientCtx, type DateRange, type WidgetConfig } from "./engine";
 import type { Platform, Dimension, DisplayType } from "./metrics";
 
@@ -47,12 +48,9 @@ function normalizeClient(c: { id: string; name: string; currency: string | null;
   };
 }
 
-/** טווח ברירת מחדל — החודש הנוכחי */
+/** טווח ברירת מחדל — החודש הנוכחי (לפי שעון ישראל) */
 export function defaultRange(): DateRange {
-  const now = new Date();
-  const since = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const until = now.toISOString().slice(0, 10);
-  return { since, until };
+  return { since: monthStartIL(), until: todayIL() };
 }
 
 const isYmd = (s: string | null) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s).getTime());

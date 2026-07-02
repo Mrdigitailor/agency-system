@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { metaApiGetAll, metaApiGet } from "@/lib/api/meta/client";
 import { countConversions } from "@/lib/utils/metaMetrics";
+import { monthStartIL, todayIL } from "@/lib/utils/ildate";
 
 export const maxDuration = 60;
 
@@ -16,8 +17,7 @@ function isYmd(s: string | null): s is string {
   return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 function defaultRange(): { since: string; until: string } {
-  const now = new Date();
-  return { since: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`, until: toDateStr(now) };
+  return { since: monthStartIL(), until: todayIL() };
 }
 
 /**
