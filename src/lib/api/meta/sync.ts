@@ -297,6 +297,9 @@ export async function syncClientMeta(clientId: string, daysBack = 30, forceAll =
     try {
       if (asset.assetType === "ad_account") {
         await syncAdAccount(clientId, connection.accessToken, asset.id, asset.externalId, effectiveSince, effectiveUntil, stats);
+        // מסמנים סנכרון מיד אחרי ה-ad insights (הדאטה הקריטי) — כדי שסנכרון עמוד/אינסטגרם
+        // איטי שנקטע ב-60ש' לא ישאיר את החיבור מסומן "לא סונכרן"
+        await prisma.platformConnection.update({ where: { id: connection.id }, data: { lastSyncAt: new Date() } }).catch(() => {});
       } else if (asset.assetType === "facebook_page") {
         const extra = JSON.parse(asset.extraData ?? "{}");
         const pageToken = extra.pageAccessToken ?? connection.accessToken;
