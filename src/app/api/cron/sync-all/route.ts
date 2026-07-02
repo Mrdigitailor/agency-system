@@ -66,8 +66,7 @@ export async function GET(req: Request) {
   // התראה: חשבונות שלא הסתנכרנו יותר מיממה (כנראה דורשים חיבור מחדש) — כשל לא מפיל
   await alertStaleConnections().catch((e) => console.error("[Cron sync-all] stale alert failed:", e));
 
-  // מנוע זיהוי ירידות + אבחון AI + דיגסט בוקר — invocation נפרד (fire-and-forget)
-  fetch(`${origin}/api/cron/detect`, { method: "POST", headers: { authorization: `Bearer ${expected ?? ""}` } }).catch(() => {});
+  // הערה: ניתוח הבוקר (detect) רץ עכשיו ב-cron עצמאי ב-05:20 — לא מופעל מכאן (מונע ריצה כפולה)
 
   console.log(`[Cron sync-all] dispatched ${connections.length} connections | completed=${succeeded ?? "in-progress"} | refreshed tokens=${refreshed}`);
   return NextResponse.json({ ok: true, dispatched: connections.length, completed: succeeded, refreshedTokens: refreshed });

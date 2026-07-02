@@ -23,14 +23,23 @@ export async function GET(req: Request) {
 
   // Self-healing: המפעיל השעתי החיצוני אמין יותר מה-cron של Vercel (שמושהה כשחורגים ממכסות).
   // אם הסנכרון המלא (sync-all) לא רץ ב-22 השעות האחרונות — מפעילים אותו מכאן.
+  // אם הסנכרון רץ אבל ניתוח הבוקר (detect) לא רץ 26 שעות — מפעילים גם אותו.
   try {
-    const lastFull = await prisma.cronRun.findFirst({ where: { job: "sync-all" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
-    const hoursSince = lastFull ? (Date.now() - lastFull.createdAt.getTime()) / 3600000 : Infinity;
+    const origin = process.env.APP_BASE_URL ?? new URL(req.url).origin;
+    const lastOf = async (job: string) => {
+      const r = await prisma.cronRun.findFirst({ where: { job }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+      return r ? (Date.now() - r.createdAt.getTime()) / 3600000 : Infinity;
+    };
+    const hoursSince = await lastOf("sync-all");
     if (hoursSince >= 22) {
-      const origin = process.env.APP_BASE_URL ?? new URL(req.url).origin;
       console.log(`[Cron sync-meta] sync-all לא רץ ${Math.round(hoursSince)} שעות — מפעיל self-heal`);
       fetch(`${origin}/api/cron/sync-all?src=self-heal`, { headers: { authorization: `Bearer ${expected ?? ""}` } }).catch(() => {});
       return NextResponse.json({ ok: true, selfHealed: true, hoursSinceFullSync: Math.round(hoursSince) });
+    }
+    const detectHours = await lastOf("detect");
+    if (detectHours >= 26 && hoursSince >= 0.5) {
+      console.log(`[Cron sync-meta] detect לא רץ ${Math.round(detectHours)} שעות — מפעיל self-heal`);
+      fetch(`${origin}/api/cron/detect?src=self-heal`, { method: "POST", headers: { authorization: `Bearer ${expected ?? ""}` } }).catch(() => {});
     }
   } catch (e) {
     console.error("[Cron sync-meta] self-heal check failed:", e);
