@@ -966,25 +966,6 @@ model DashboardWidget {
 
 // ==================== נתוני Google Analytics ====================
 
-model GoogleAnalyticsDaily {
-  id                  String   @id @default(cuid())
-  clientId            String
-  propertyId          String
-  date                String
-  sessions            Int      @default(0)
-  users               Int      @default(0)
-  newUsers            Int      @default(0)
-  bounceRate          Float    @default(0)
-  avgSessionDuration  Float    @default(0)
-  pageViews           Int      @default(0)
-  conversions         Int      @default(0)
-  events              Int      @default(0)
-  createdAt           DateTime @default(now())
-
-  @@unique([clientId, propertyId, date])
-  @@index([clientId, date])
-  @@map("google_analytics_daily")
-}
 
 // לוג סנכרון — תיעוד כל ריצה של שליפת נתונים
 model SyncLog {
