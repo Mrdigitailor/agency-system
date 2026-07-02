@@ -38,12 +38,15 @@ async function buildContext(det: ClientDetection): Promise<string> {
   ]);
 
   const key = (c: { platform: string; campaignName: string }) => `${c.platform}|${c.campaignName}`;
+  const ctrOf = (imp: number, clk: number) => (imp > 0 ? (clk / imp) * 100 : 0);
   const baseMap = new Map((baseWk?.perCampaign ?? []).map((c) => [key(c), c]));
   const campLines = (recentWk?.perCampaign ?? []).slice(0, 8).map((c) => {
     const b = baseMap.get(key(c));
     const cpa = c.conversions > 0 ? c.spend / c.conversions : 0;
     const bcpa = b && b.conversions > 0 ? b.spend / b.conversions : 0;
-    return `- [${c.platform}] ${c.campaignName}: 7 ימים אחרונים — הוצאה ${sym}${Math.round(c.spend)}, ${Math.round(c.conversions)} המרות, CPA ${cpa ? sym + Math.round(cpa) : "—"} | שבוע קודם: CPA ${bcpa ? sym + Math.round(bcpa) : "—"}, ${b ? Math.round(b.conversions) : 0} המרות`;
+    const ctr = ctrOf(c.impressions, c.clicks);
+    const bctr = b ? ctrOf(b.impressions, b.clicks) : 0;
+    return `- [${c.platform}] ${c.campaignName}: 7 ימים אחרונים — הוצאה ${sym}${Math.round(c.spend)}, ${Math.round(c.conversions)} המרות, CPA ${cpa ? sym + Math.round(cpa) : "—"}, CTR ${ctr.toFixed(2)}%, ${Math.round(c.impressions).toLocaleString()} חשיפות | שבוע קודם: CPA ${bcpa ? sym + Math.round(bcpa) : "—"}, ${b ? Math.round(b.conversions) : 0} המרות, CTR ${bctr.toFixed(2)}%`;
   }).join("\n");
 
   const r = det.recent, b = det.baseline;
@@ -55,8 +58,8 @@ async function buildContext(det: ClientDetection): Promise<string> {
     ...det.signals.map((s) => `- ${s.label}: ${s.detail}`),
     ``,
     `מדדים מצטברים (כל הפלטפורמות):`,
-    `- 7 ימים אחרונים: הוצאה ${sym}${Math.round(r.spend)}, ${Math.round(r.conversions)} המרות, CPA ${r.cpa ? sym + Math.round(r.cpa) : "—"}${det.clientType === "ecom" ? `, ROAS ${r.roas.toFixed(1)}` : ""}`,
-    `- 7 ימים שלפני כן: הוצאה ${sym}${Math.round(b.spend)}, ${Math.round(b.conversions)} המרות, CPA ${b.cpa ? sym + Math.round(b.cpa) : "—"}${det.clientType === "ecom" ? `, ROAS ${b.roas.toFixed(1)}` : ""}`,
+    `- 7 ימים אחרונים: הוצאה ${sym}${Math.round(r.spend)}, ${Math.round(r.conversions)} המרות, CPA ${r.cpa ? sym + Math.round(r.cpa) : "—"}, CTR ${r.ctr.toFixed(2)}%${det.clientType === "ecom" ? `, ROAS ${r.roas.toFixed(1)}` : ""}`,
+    `- 7 ימים שלפני כן: הוצאה ${sym}${Math.round(b.spend)}, ${Math.round(b.conversions)} המרות, CPA ${b.cpa ? sym + Math.round(b.cpa) : "—"}, CTR ${b.ctr.toFixed(2)}%${det.clientType === "ecom" ? `, ROAS ${b.roas.toFixed(1)}` : ""}`,
     `- החודש עד היום: הוצאה ${sym}${Math.round(det.mtdSpend)}, CPA ${det.mtdCpa ? sym + Math.round(det.mtdCpa) : "—"}${det.targetCpa > 0 ? ` (יעד ${sym}${Math.round(det.targetCpa)})` : ""}`,
     ``,
     `קמפיינים (7 ימים אחרונים מול שבוע קודם):`,
@@ -92,7 +95,15 @@ const TOOL: Anthropic.Tool = {
   },
 };
 
-const SYSTEM = `אתה מנהל קמפיינים בכיר ומנוסה בסוכנות פרסום דיגיטלי. קיבלת נתוני ביצועים של לקוח שירד. נתח את הירידה, אבחן את הסיבה הסבירה ביותר, והפק רשימת פעולות קונקרטיות וברות-ביצוע להחזרת התוצאות. התבסס רק על הנתונים שקיבלת, היה ספציפי (שמות קמפיינים, מספרים), ואל תמציא נתונים שאין. **כשאתה מזכיר ירידה או עלייה — ציין תמיד את התאריכים/התקופות שעליהם השווית** (הם ניתנים לך בשדה "תאריכי ההשוואה"), כדי שנוכל לאמת. תמיד השתמש בכלי report_diagnosis. עברית בלבד.`;
+const SYSTEM = `אתה מנהל קמפיינים בכיר ומנוסה בסוכנות פרסום דיגיטלי. קיבלת נתוני ביצועים מלאים של לקוח שירד (הוצאה, המרות, CPA, CTR, חשיפות — פר-פלטפורמה ופר-קמפיין, שבוע אחרון מול הקודם).
+
+**החוק החשוב ביותר: אתה המנתח. אסור לך לכתוב לבעל הסוכנות "בדוק / בחן / בדוק אם / תשומת לב ל..." על שום מדד.** יש לך את כל הנתונים — אתה זה שבודק ומסיק. במקום "בדוק אם ה-CTR ירד" — קבע: "ה-CTR ירד מ-2.1% ל-1.3% (שחיקת קריאייטיב)". כל פעולה חייבת להיות **מסקנה סופית + צעד ביצוע קונקרטי** (עצור אדסט X, חתוך תקציב ב-30% בקמפיין Y, החלף קריאייטיב, העלה תקציב ל-Z) — לא משימת חקירה.
+
+הנחיות נוספות:
+- התבסס רק על הנתונים שקיבלת. אם חסר לך מדד מסוים כדי להסיק — הסק ממה שיש (CTR, CPA, המרות, הוצאה) ואל תבקש לבדוק אותו.
+- היה ספציפי: שמות קמפיינים ומספרים אמיתיים מהנתונים.
+- **ציין תמיד את התאריכים/התקופות שהשווית** (מהשדה "תאריכי ההשוואה"), כדי שנוכל לאמת.
+- תמיד השתמש בכלי report_diagnosis. עברית בלבד.`;
 
 /** מאבחן לקוח בודד ב-AI. מחזיר null אם נכשל. */
 export async function diagnoseClient(det: ClientDetection): Promise<Diagnosis | null> {

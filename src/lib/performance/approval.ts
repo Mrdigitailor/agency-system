@@ -41,7 +41,7 @@ export function draftTextById(d: { clientName: string; severity: string; title: 
   return draftText(d);
 }
 
-/** שולח את כל הפעולות לאישור בטלגרם (בלי ליצור משימות). מחזיר כמה פעולות נשלחו. */
+/** שולח לאישור בטלגרם — הודעה אחת מסכמת לכל לקוח, עם כפתורי אשר/הערה לכל פעולה. */
 export async function sendDiagnosesForApproval(items: Array<{ det: ClientDetection; diag: Diagnosis }>): Promise<number> {
   const chat = ownerChatId();
   if (!chat) { console.warn("[Approval] אין TELEGRAM_OWNER_CHAT_ID — לא נשלח"); return 0; }
@@ -51,21 +51,35 @@ export async function sendDiagnosesForApproval(items: Array<{ det: ClientDetecti
     await sendTelegramMessage(chat, "🌅 בוקר טוב! כל הלקוחות יציבים — לא זוהו ירידות ביצועים משמעותיות היום. 👍");
     return 0;
   }
-  await sendTelegramMessage(chat, `🌅 בוקר טוב! זוהו ${items.length} לקוחות בירידה.\n📅 השוואה: ${dates}\n\nלכל פעולה: "אשר כמשימה" או "הערות" לחידוד.`);
+  await sendTelegramMessage(chat, `🌅 בוקר טוב! זוהו ${items.length} לקוחות בירידה.\n📅 השוואה: ${dates}\n\nלכל לקוח — סיכום ופעולות. אשר כל פעולה כמשימה, או שלח הערה לחידוד.`);
 
   let sent = 0;
   for (const { det, diag } of items) {
-    for (const a of diag.actions.slice(0, 3)) {
-      const draft = await prisma.actionDraft.create({
+    const actions = diag.actions.slice(0, 3);
+    // יצירת טיוטה לכל פעולה
+    const drafts = [];
+    for (const a of actions) {
+      const d = await prisma.actionDraft.create({
         data: {
           clientId: det.clientId, clientName: det.clientName, summary: diag.summary, severity: diag.severity,
           title: a.title, detail: a.detail, priority: a.priority, platform: a.platform ?? "", campaign: a.campaign ?? "",
           datesInfo: dates, chatId: chat,
         },
       });
-      await sendTelegramWithButtons(chat, draftText({ clientName: det.clientName, severity: diag.severity, title: a.title, detail: a.detail, priority: a.priority, datesInfo: dates }), draftKeyboard(draft.id));
-      sent++;
+      drafts.push(d);
     }
+    // הודעה אחת: כותרת + אבחון + פעולות ממוספרות
+    const emoji = SEV_EMOJI[diag.severity] ?? "🟠";
+    const body = drafts.map((d, i) => `${i + 1}. ${d.title}\n${d.detail}${d.campaign ? `\n(קמפיין: ${d.campaign})` : ""}`).join("\n\n");
+    const text = `${emoji} ${det.clientName}\n${diag.summary}\n📅 נותח: ${dates}\n\n${body}`;
+    const keyboard: InlineKeyboard = {
+      inline_keyboard: drafts.map((d, i) => [
+        { text: `✅ אשר ${i + 1}`, callback_data: `ok:${d.id}` },
+        { text: `💬 הערה ${i + 1}`, callback_data: `note:${d.id}` },
+      ]),
+    };
+    await sendTelegramWithButtons(chat, text, keyboard);
+    sent += drafts.length;
   }
   return sent;
 }
@@ -124,7 +138,7 @@ export async function refineDraft(draftId: string, note: string): Promise<string
     const res = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 700,
-      system: `אתה מנהל קמפיינים בכיר. קיבלת פעולה מומלצת ללקוח, והערה של בעל הסוכנות עליה. נסח מחדש את הפעולה לפי ההערה — עדכן כותרת/פירוט/עדיפות בהתאם למה שביקש. שמור על ספציפיות, מספרים ותאריכים. השתמש בכלי revise_action. עברית בלבד.`,
+      system: `אתה מנהל קמפיינים בכיר. קיבלת פעולה מומלצת ללקוח, והערה של בעל הסוכנות עליה. נסח מחדש את הפעולה לפי ההערה — עדכן כותרת/פירוט/עדיפות בהתאם למה שביקש. הפעולה חייבת להיות **מסקנה סופית + צעד ביצוע קונקרטי**, לעולם לא "בדוק/בחן" מדד. שמור על ספציפיות, מספרים ותאריכים. השתמש בכלי revise_action. עברית בלבד.`,
       tools: [REVISE_TOOL],
       tool_choice: { type: "tool", name: "revise_action" },
       messages: [{

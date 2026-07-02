@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { runCampaignAssistant } from "@/lib/assistant/campaign-assistant";
-import { sendTelegramMessage, sendTelegramWithButtons, answerCallbackQuery, editMessageReplyMarkup, isTelegramConfigured, downloadTelegramFile } from "@/lib/api/telegram/client";
+import { sendTelegramMessage, sendTelegramWithButtons, answerCallbackQuery, isTelegramConfigured, downloadTelegramFile } from "@/lib/api/telegram/client";
 import { transcribeAudio, isTranscriptionConfigured } from "@/lib/api/transcription/client";
-import { createTaskFromDraft, refineDraft, draftKeyboard, approvedKeyboard } from "@/lib/performance/approval";
+import { createTaskFromDraft, refineDraft, draftKeyboard } from "@/lib/performance/approval";
 
 // עיבוד ה-AI עשוי לקחת כמה שניות
 export const maxDuration = 60;
@@ -40,14 +40,12 @@ interface TelegramUpdate {
 async function handleCallback(cb: NonNullable<TelegramUpdate["callback_query"]>, allowed: Set<string>): Promise<void> {
   const userId = cb.from?.id;
   const chatId = cb.message?.chat?.id;
-  const messageId = cb.message?.message_id;
   if (!userId || !allowed.has(String(userId))) { await answerCallbackQuery(cb.id, "אין הרשאה"); return; }
 
   const [kind, id] = (cb.data ?? "").split(":");
   if (kind === "ok" && id) {
     const created = await createTaskFromDraft(id).catch(() => false);
     await answerCallbackQuery(cb.id, created ? "✅ נוצרה משימה" : "כבר טופל");
-    if (created && chatId && messageId) await editMessageReplyMarkup(chatId, messageId, approvedKeyboard());
   } else if (kind === "note" && id) {
     // מסמנים שהטיוטה הזו ממתינה להערה, ומנקים ממתינות אחרות באותו צ'אט
     await prisma.actionDraft.updateMany({ where: { chatId: String(chatId), awaitingNotes: true }, data: { awaitingNotes: false } });
