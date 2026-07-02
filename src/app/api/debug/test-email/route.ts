@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { requireRole } from "@/lib/auth/api-guard";
 
 /**
  * GET /api/debug/test-email
- * בדיקה ישירה של Resend API — שולח מייל בדיקה ל-saar@digitailors.co.il
+ * בדיקה ישירה של Resend API — שולח מייל בדיקה ל-saar@digitailors.co.il (admin בלבד)
  */
 export async function GET() {
+  const auth = await requireRole(["admin"]);
+  if (auth instanceof NextResponse) return auth;
+
   const apiKey = process.env.RESEND_API_KEY;
 
   console.log("=== [Test Email] START ===");

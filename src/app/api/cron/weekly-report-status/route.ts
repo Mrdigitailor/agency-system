@@ -5,11 +5,10 @@ import { getLastWeekRange, formatWeekRange } from "@/lib/utils/dates";
 import { getCampaignManagerForClient } from "@/lib/utils/resolveManagers";
 
 export async function GET(req: Request) {
-  const querySecret = new URL(req.url).searchParams.get("secret");
   const authHeader = req.headers.get("authorization")?.replace("Bearer ", "");
   const expected = process.env.CRON_SECRET;
 
-  if (expected && authHeader !== expected && querySecret !== expected) {
+  if (!expected || authHeader !== expected) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

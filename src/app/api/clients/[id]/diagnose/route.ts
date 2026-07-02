@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const secret = process.env.CRON_SECRET;
-  const provided = req.headers.get("authorization")?.replace("Bearer ", "") ?? new URL(req.url).searchParams.get("secret");
+  const provided = req.headers.get("authorization")?.replace("Bearer ", "");
   if (!(secret && provided === secret)) {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;

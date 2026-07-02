@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getWeekRangeForDate } from "@/lib/utils/dates";
+import { requireRole } from "@/lib/auth/api-guard";
 
 /**
  * GET /api/fix-migrate-reports
- * מיגרציה חד-פעמית: העברת נתוני ReportTracker → WeeklyReport
- * לכל tracker עם weeklyLastSent — יוצר רשומת WeeklyReport לשבוע שחלף
+ * מיגרציה חד-פעמית: העברת נתוני ReportTracker → WeeklyReport (admin בלבד; מומלץ למחוק אחרי אישור)
  */
 export async function GET() {
+  const auth = await requireRole(["admin"]);
+  if (auth instanceof NextResponse) return auth;
+
   const trackers = await prisma.reportTracker.findMany({
     where: { weeklyLastSent: { not: "" } },
   });

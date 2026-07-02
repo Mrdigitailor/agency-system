@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   // אימות — session או סוד ה-cron
   const secret = process.env.CRON_SECRET;
-  const provided = req.headers.get("authorization")?.replace("Bearer ", "") ?? url.searchParams.get("secret");
+  const provided = req.headers.get("authorization")?.replace("Bearer ", "");
   const isCron = Boolean(secret && provided === secret);
   if (!isCron) {
     const auth = await requireAuth();

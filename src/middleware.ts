@@ -35,9 +35,15 @@ export default withAuth(
 
     // ===== אכיפת הרשאות API (מחזיר JSON) =====
     if (pathname.startsWith("/api/")) {
-      // בקשות עם Bearer (cron/אינטגרציות) — מועברות ל-route שמאמת את הסוד בעצמו
-      const hasBearer = !!req.headers.get("authorization");
-      if (!token && !hasBearer) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
+      // בקשות cron פנימיות — עוברות רק אם ה-Bearer הוא באמת CRON_SECRET (לא כל Authorization)
+      const bearer = req.headers.get("authorization")?.replace("Bearer ", "");
+      const cronOk = !!process.env.CRON_SECRET && bearer === process.env.CRON_SECRET;
+      if (!token && !cronOk) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
+
+      // נתיבי debug — אדמין בלבד (או cron)
+      if (pathname.startsWith("/api/debug") && role !== "admin" && !cronOk) {
+        return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
+      }
 
       if (role === "client") {
         if (CLIENT_API_DENY.some((d) => pathname.startsWith(d))) {
@@ -91,6 +97,8 @@ export const config = {
     "/profile/:path*",
     "/client-portal/:path*",
     // אכיפת API — נתיבים רגישים בלבד (לא כולל ציבוריים: /api/public, /api/cron, /api/telegram, /api/auth)
+    "/api/debug/:path*",
+    "/api/tasks/:path*",
     "/api/clients/:path*",
     "/api/crm/:path*",
     "/api/leads/:path*",

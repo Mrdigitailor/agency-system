@@ -50,11 +50,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({ ...widget, metrics: JSON.parse(widget.metrics), filters: JSON.parse(widget.filters) }, { status: 201 });
 }
 
-export async function PATCH(req: Request) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const { id: clientId } = await params;
   const body = await req.json();
   if (!body.id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+  // בעלות: הווידג'ט חייב להשתייך ללקוח שב-URL
+  const owned = await prisma.dashboardWidget.findFirst({ where: { id: body.id, clientId }, select: { id: true } });
+  if (!owned) return NextResponse.json({ error: "ווידג'ט לא נמצא" }, { status: 404 });
 
   const data: Record<string, unknown> = {};
   if (body.platform !== undefined) data.platform = body.platform;
@@ -73,23 +78,28 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ ...widget, metrics: JSON.parse(widget.metrics), filters: JSON.parse(widget.filters) });
 }
 
-export async function DELETE(req: Request) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const { id: clientId } = await params;
   const id = new URL(req.url).searchParams.get("widgetId");
   if (!id) return NextResponse.json({ error: "Missing widgetId" }, { status: 400 });
-  await prisma.dashboardWidget.delete({ where: { id } });
+  // deleteMany עם clientId — מוחק רק אם הווידג'ט שייך ללקוח שב-URL
+  const res = await prisma.dashboardWidget.deleteMany({ where: { id, clientId } });
+  if (res.count === 0) return NextResponse.json({ error: "ווידג'ט לא נמצא" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }
 
 // PUT — סידור מחדש (drag & drop): { order: [widgetId,...] }
-export async function PUT(req: Request) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  const { id: clientId } = await params;
   const body = await req.json();
   const order: string[] = Array.isArray(body.order) ? body.order : [];
   if (order.length === 0) return NextResponse.json({ error: "Missing order" }, { status: 400 });
 
-  await prisma.$transaction(order.map((id, i) => prisma.dashboardWidget.update({ where: { id }, data: { sortOrder: i } })));
+  // updateMany עם clientId — מסדר רק ווידג'טים של הלקוח שב-URL
+  await prisma.$transaction(order.map((id, i) => prisma.dashboardWidget.updateMany({ where: { id, clientId }, data: { sortOrder: i } })));
   return NextResponse.json({ ok: true });
 }

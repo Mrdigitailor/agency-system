@@ -16,7 +16,7 @@ const TOP_N = 10; // כמה לקוחות מסומנים לאבחן ב-AI (מקב
  */
 async function run(req: Request) {
   const secret = process.env.CRON_SECRET;
-  const provided = req.headers.get("authorization")?.replace("Bearer ", "") ?? new URL(req.url).searchParams.get("secret");
+  const provided = req.headers.get("authorization")?.replace("Bearer ", "");
   if (!(secret && provided === secret)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // heartbeat — לניטור ול-self-healing

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: Promise<{ clientId: string }> }) {
   const url = new URL(req.url);
   const secret = process.env.CRON_SECRET;
-  const provided = req.headers.get("authorization")?.replace("Bearer ", "") ?? url.searchParams.get("secret");
+  const provided = req.headers.get("authorization")?.replace("Bearer ", "");
   const isCron = Boolean(secret && provided === secret);
   if (!isCron) {
     const result = await requireAuth();

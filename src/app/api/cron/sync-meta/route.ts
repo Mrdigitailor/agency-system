@@ -14,10 +14,12 @@ export async function GET(req: Request) {
   console.log(`[Cron] Hit at ${new Date().toISOString()}`);
 
   const authHeader = req.headers.get("authorization")?.replace("Bearer ", "");
+  // חריג יחיד: המתזמן החיצוני השעתי (רשת הביטחון) מוגדר עם ?secret= ב-URL ואי אפשר לשנות אותו מכאן.
+  // בכל שאר הנתיבים התמיכה ב-query secret הוסרה.
   const querySecret = new URL(req.url).searchParams.get("secret");
   const expected = process.env.CRON_SECRET;
 
-  if (expected && authHeader !== expected && querySecret !== expected) {
+  if (!expected || (authHeader !== expected && querySecret !== expected)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
