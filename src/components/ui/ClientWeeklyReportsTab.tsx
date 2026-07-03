@@ -1,10 +1,11 @@
 "use client";
 
+// טאב הדוח השבועי — מבנה נקי: כרטיס הדוח של השבוע (הכל בו) + היסטוריה מקופלת.
+
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
-import { Eye, Pencil, FileText, CheckCircle2, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
+import { Eye, Pencil, FileText, ChevronDown } from "lucide-react";
 import Modal from "@/components/ui/Modal";
-import WeeklyReportDraft from "@/components/ui/WeeklyReportDraft";
+import WeeklyReportDraft, { type SentInfo } from "@/components/ui/WeeklyReportDraft";
 
 interface WeeklyReport {
   id: string;
@@ -20,8 +21,6 @@ interface WeeklyReport {
 
 const inputClass =
   "w-full rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-sm text-brand-dark placeholder:text-brand-muted focus:border-brand-gold focus:bg-brand-light focus:outline-none focus:ring-1 focus:ring-brand-gold";
-
-const cardClass = "rounded-lg border border-brand-border bg-brand-light p-6 shadow-sm";
 
 function formatDateHe(dateStr: string): string {
   if (!dateStr) return "—";
@@ -50,23 +49,13 @@ function getLastWeekRange(): { start: Date; end: Date } {
 }
 
 export default function ClientWeeklyReportsTab({ clientId }: { clientId: string }) {
-  const { data: session } = useSession();
-  const userName = (session?.user as { name?: string } | undefined)?.name ?? "";
-  const userRole = (session?.user as { role?: string } | undefined)?.role ?? "";
-  const canMark = userRole === "admin" || userRole === "manager" || userRole === "campaignManager";
-
   const [reports, setReports] = useState<WeeklyReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [viewReport, setViewReport] = useState<WeeklyReport | null>(null);
   const [editReport, setEditReport] = useState<WeeklyReport | null>(null);
   const [editText, setEditText] = useState("");
   const [editSaving, setEditSaving] = useState(false);
-
-  // מודל סימון כנשלח
-  const [markModal, setMarkModal] = useState(false);
-  const [markContent, setMarkContent] = useState("");
-  const [markSaving, setMarkSaving] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
 
   const loadReports = useCallback(() => {
     fetch(`/api/clients/${clientId}/weekly-reports`)
@@ -80,79 +69,16 @@ export default function ClientWeeklyReportsTab({ clientId }: { clientId: string 
 
   useEffect(() => { loadReports(); }, [loadReports]);
 
-  // השבוע האחרון שחלף
+  // השבוע האחרון שחלף — האם כבר נשלח עליו דוח?
   const lastWeek = getLastWeekRange();
   const lastWeekStartStr = lastWeek.start.toISOString().split("T")[0];
-  const lastWeekEndStr = lastWeek.end.toISOString().split("T")[0];
-  const lastWeekPeriod = formatWeekPeriod(lastWeekStartStr, lastWeekEndStr);
-
-  // האם נשלח דוח על השבוע הנוכחי?
   const currentWeekReport = reports.find((r) => r.weekStart === lastWeekStartStr);
-  const isCurrentWeekSent = !!currentWeekReport;
+  const sentInfo: SentInfo | null = currentWeekReport
+    ? { sentAt: currentWeekReport.sentAt, by: currentWeekReport.campaignManagerName }
+    : null;
 
-  // היסטוריה (ללא השבוע הנוכחי אם קיים)
+  // היסטוריה — כל מה שלא השבוע הנוכחי
   const historyReports = reports.filter((r) => r.weekStart !== lastWeekStartStr);
-
-  async function handleMarkAsSent() {
-    if (!markContent.trim()) return;
-    setMarkSaving(true);
-    const today = new Date().toISOString().split("T")[0];
-    await fetch("/api/reports/trackers", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        clientId,
-        type: "weekly",
-        date: today,
-        content: markContent.trim(),
-        author: userName,
-      }),
-    });
-    setMarkSaving(false);
-    setMarkModal(false);
-    setMarkContent("");
-    loadReports();
-  }
-
-  async function generateAiSummary() {
-    setAiLoading(true);
-    try {
-      const res = await fetch(`/api/clients/${clientId}/performance`);
-      const perf = await res.json();
-      const prompt = `צור סיכום שבועי קצר בעברית. הנתונים: הוצאה ${Math.round(perf.totalSpend ?? 0)} ש"ח, ${Math.round(perf.totalConversions ?? 0)} המרות, עלות להמרה ${Math.round(perf.avgCostPerConv ?? 0)} ש"ח. כתוב 3-5 משפטים עם תובנות.`;
-
-      const aiRes = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt, clientId }),
-      });
-
-      if (aiRes.ok) {
-        const reader = aiRes.body?.getReader();
-        const decoder = new TextDecoder();
-        let text = "";
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value);
-            for (const line of chunk.split("\n")) {
-              if (line.startsWith("data: ")) {
-                const data = line.slice(6);
-                if (data === "[DONE]") break;
-                try { text += JSON.parse(data).text ?? ""; } catch {}
-              }
-            }
-          }
-        }
-        setMarkContent(text.trim());
-      }
-    } catch (err) {
-      console.error("AI summary failed:", err);
-    } finally {
-      setAiLoading(false);
-    }
-  }
 
   async function saveEdit() {
     if (!editReport || !editText.trim()) return;
@@ -171,164 +97,64 @@ export default function ClientWeeklyReportsTab({ clientId }: { clientId: string 
 
   return (
     <div className="space-y-4">
-      {/* הפקת דוח שבועי — טיוטה + צ'אט תיקון */}
-      <WeeklyReportDraft clientId={clientId} onChanged={loadReports} />
+      {/* כרטיס הדוח של השבוע — סטטוס, פעולות, תוכן וצ'אט תיקון, הכל במקום אחד */}
+      <WeeklyReportDraft clientId={clientId} onChanged={loadReports} sentInfo={sentInfo} />
 
-      {/* שורת סטטוס השבוע הנוכחי */}
-      <div className={`${cardClass} border-brand-gold/20 bg-brand-gold/5`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {isCurrentWeekSent ? (
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
-            ) : (
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-            )}
-            <div>
-              <p className="text-sm font-semibold text-brand-dark">דוח שבועי — {lastWeekPeriod}</p>
-              <p className="text-xs text-brand-muted">
-                {isCurrentWeekSent
-                  ? `נשלח ב-${formatDateHe(currentWeekReport!.sentAt)} על ידי ${currentWeekReport!.campaignManagerName || "—"}`
-                  : "טרם נשלח"}
-              </p>
-            </div>
-          </div>
+      {/* היסטוריה — מקופלת כברירת מחדל, נפתחת רק כשצריך */}
+      <div className="rounded-lg border border-brand-border bg-brand-light shadow-sm">
+        <button
+          onClick={() => setHistoryOpen((v) => !v)}
+          className="flex w-full items-center justify-between px-6 py-4 text-right"
+        >
           <div className="flex items-center gap-2">
-            {isCurrentWeekSent ? (
-              <>
-                <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">נשלח</span>
-                {currentWeekReport!.content && (
-                  <button
-                    onClick={() => setViewReport(currentWeekReport!)}
-                    className="flex items-center gap-1.5 rounded-lg border border-brand-border px-2.5 py-1 text-xs font-medium text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                    צפה
-                  </button>
-                )}
-                <button
-                  onClick={() => { setEditReport(currentWeekReport!); setEditText(currentWeekReport!.content); }}
-                  className="rounded p-1 text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
-                  title="ערוך"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">לא נשלח</span>
-                {canMark && (
-                  <button
-                    onClick={() => setMarkModal(true)}
-                    className="rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80"
-                  >
-                    סמן כנשלח
-                  </button>
-                )}
-              </>
+            <FileText className="h-4 w-4 text-brand-gold" />
+            <h3 className="text-sm font-semibold text-brand-dark">דוחות קודמים</h3>
+            {!loading && (
+              <span className="rounded-full bg-brand-bg px-2 py-0.5 text-xs text-brand-muted">{historyReports.length}</span>
             )}
           </div>
-        </div>
-      </div>
+          <ChevronDown className={`h-4 w-4 text-brand-muted transition-transform ${historyOpen ? "rotate-180" : ""}`} />
+        </button>
 
-      {/* היסטוריית דוחות */}
-      <div className={cardClass}>
-        <div className="mb-4 flex items-center gap-2">
-          <FileText className="h-5 w-5 text-brand-gold" />
-          <h2 className="text-lg font-semibold text-brand-dark">היסטוריית דוחות שבועיים</h2>
-        </div>
-
-        {loading ? (
-          <p className="text-sm text-brand-muted">טוען...</p>
-        ) : historyReports.length === 0 ? (
-          <div className="py-8 text-center">
-            <FileText className="mx-auto mb-2 h-8 w-8 text-brand-muted/40" />
-            <p className="text-sm text-brand-muted">טרם נשלחו דוחות קודמים</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-brand-border bg-brand-bg/50">
-                  <th className="px-4 py-3 text-right font-medium text-brand-muted">תקופה</th>
-                  <th className="px-4 py-3 text-right font-medium text-brand-muted">תאריך שליחה</th>
-                  <th className="px-4 py-3 text-right font-medium text-brand-muted">מנהל קמפיינים</th>
-                  <th className="px-4 py-3 text-right font-medium text-brand-muted">תוכן</th>
-                </tr>
-              </thead>
-              <tbody>
+        {historyOpen && (
+          <div className="border-t border-brand-border">
+            {loading ? (
+              <p className="px-6 py-4 text-sm text-brand-muted">טוען...</p>
+            ) : historyReports.length === 0 ? (
+              <p className="px-6 py-6 text-center text-sm text-brand-muted">טרם נשלחו דוחות קודמים</p>
+            ) : (
+              <ul className="divide-y divide-brand-border">
                 {historyReports.map((report) => (
-                  <tr key={report.id} className="border-b border-brand-border transition-colors hover:bg-brand-bg">
-                    <td className="px-4 py-3 font-medium text-brand-dark">
-                      {formatWeekPeriod(report.weekStart, report.weekEnd)}
-                    </td>
-                    <td className="px-4 py-3 text-brand-muted">
-                      {formatDateHe(report.sentAt)}
-                    </td>
-                    <td className="px-4 py-3 text-brand-muted">
-                      {report.campaignManagerName || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setViewReport(report)}
-                          className="flex items-center gap-1.5 rounded-lg border border-brand-border px-2.5 py-1 text-xs font-medium text-brand-muted transition-colors duration-200 hover:bg-brand-bg hover:text-brand-dark"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          צפה
-                        </button>
-                        <button
-                          onClick={() => { setEditReport(report); setEditText(report.content); }}
-                          className="rounded p-1 text-brand-muted transition-colors duration-200 hover:bg-brand-bg hover:text-brand-dark"
-                          title="ערוך"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <li key={report.id} className="flex items-center justify-between gap-3 px-6 py-3 transition-colors hover:bg-brand-bg">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-brand-dark">{formatWeekPeriod(report.weekStart, report.weekEnd)}</p>
+                      <p className="text-xs text-brand-muted">
+                        נשלח {formatDateHe(report.sentAt)}{report.campaignManagerName ? ` · ${report.campaignManagerName}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        onClick={() => setViewReport(report)}
+                        className="flex items-center gap-1.5 rounded-lg border border-brand-border px-2.5 py-1 text-xs font-medium text-brand-muted transition-colors duration-200 hover:bg-brand-light hover:text-brand-dark"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        צפה
+                      </button>
+                      <button
+                        onClick={() => { setEditReport(report); setEditText(report.content); }}
+                        className="rounded p-1.5 text-brand-muted transition-colors duration-200 hover:bg-brand-light hover:text-brand-dark"
+                        title="ערוך"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            )}
           </div>
         )}
       </div>
-
-      {/* מודל סימון כנשלח */}
-      <Modal isOpen={markModal} onClose={() => setMarkModal(false)} title={`סימון דוח שבועי כנשלח — ${lastWeekPeriod}`} size="lg">
-        <div className="space-y-4">
-          <p className="text-sm text-brand-muted">הזן את הסיכום ששלחת ללקוח. לא ניתן לסמן כנשלח ללא תוכן.</p>
-          <textarea
-            value={markContent}
-            onChange={(e) => setMarkContent(e.target.value)}
-            rows={8}
-            className={inputClass}
-            placeholder="הדבק כאן את תוכן הדוח..."
-            dir="rtl"
-          />
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-brand-border pt-4">
-            <button
-              onClick={generateAiSummary}
-              disabled={aiLoading}
-              className="flex items-center gap-2 rounded-lg border border-brand-gold bg-brand-gold/10 px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/20 disabled:opacity-50"
-            >
-              {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-brand-gold" />}
-              {aiLoading ? "יוצר..." : "צור עם AI"}
-            </button>
-            <div className="flex gap-3">
-              <button onClick={() => setMarkModal(false)} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg">
-                ביטול
-              </button>
-              <button
-                onClick={handleMarkAsSent}
-                disabled={!markContent.trim() || markSaving}
-                className="rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
-              >
-                {markSaving ? "שומר..." : "שמור וסמן כנשלח"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
 
       {/* מודל צפייה בדוח */}
       <Modal isOpen={!!viewReport} onClose={() => setViewReport(null)} title={viewReport ? `דוח שבועי — ${formatWeekPeriod(viewReport.weekStart, viewReport.weekEnd)}` : ""} size="lg">
