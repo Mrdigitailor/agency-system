@@ -34,8 +34,10 @@ export function approvedKeyboard(): InlineKeyboard {
   return { inline_keyboard: [[{ text: "✅ אושר — משימה נוצרה", callback_data: "done" }]] };
 }
 
-function draftText(d: { clientName: string; severity: string; title: string; detail: string; priority: string; datesInfo: string }): string {
-  return `${SEV_EMOJI[d.severity] ?? "🟠"} ${d.clientName}\n\n▪️ ${d.title}\n${d.detail}\n\n📅 נותח: ${d.datesInfo}\n🔸 עדיפות: ${PRIO_LABEL[d.priority] ?? d.priority}`;
+function draftText(d: { clientName: string; severity: string; title: string; detail: string; priority: string; datesInfo: string; platform?: string; campaign?: string }): string {
+  const parts = [d.platform, d.campaign ? `"${d.campaign}"` : ""].filter(Boolean);
+  const loc = parts.length ? `\n📍 ${parts.join(" · ")}` : "";
+  return `${SEV_EMOJI[d.severity] ?? "🟠"} ${d.clientName}\n\n▪️ ${d.title}${loc}\n${d.detail}\n\n📅 נותח: ${d.datesInfo}\n🔸 עדיפות: ${PRIO_LABEL[d.priority] ?? d.priority}`;
 }
 export function draftTextById(d: { clientName: string; severity: string; title: string; detail: string; priority: string; datesInfo: string }): string {
   return draftText(d);
@@ -57,11 +59,13 @@ export async function sendDiagnosesForApproval(items: Array<{ det: ClientDetecti
   let delivered = 0;
   for (const { det, diag } of items) {
     const actions = diag.actions.slice(0, 3);
+    // הסיבה השורשית נשמרת עם האבחון (לצורך חידוד + תיאור המשימה)
+    const fullSummary = diag.rootCause ? `${diag.summary}\n🔍 סיבה: ${diag.rootCause}` : diag.summary;
     const drafts = [];
     for (const a of actions) {
       const d = await prisma.actionDraft.create({
         data: {
-          clientId: det.clientId, clientName: det.clientName, summary: diag.summary, severity: diag.severity,
+          clientId: det.clientId, clientName: det.clientName, summary: fullSummary, severity: diag.severity,
           title: a.title, detail: a.detail, priority: a.priority, platform: a.platform ?? "", campaign: a.campaign ?? "",
           datesInfo: dates, chatId: chat,
         },
@@ -69,8 +73,12 @@ export async function sendDiagnosesForApproval(items: Array<{ det: ClientDetecti
       drafts.push(d);
     }
     const emoji = SEV_EMOJI[diag.severity] ?? "🟠";
-    const body = drafts.map((d, i) => `${i + 1}. ${d.title}\n${d.detail}${d.campaign ? `\n(קמפיין: ${d.campaign})` : ""}`).join("\n\n");
-    const text = `${emoji} ${det.clientName}\n${diag.summary}\n📅 נותח: ${dates}\n\n${body}`;
+    const loc = (d: { platform: string; campaign: string }) => {
+      const parts = [d.platform, d.campaign ? `"${d.campaign}"` : ""].filter(Boolean);
+      return parts.length ? `\n📍 ${parts.join(" · ")}` : "";
+    };
+    const body = drafts.map((d, i) => `${i + 1}. ${d.title}${loc(d)}\n${d.detail}`).join("\n\n");
+    const text = `${emoji} ${det.clientName}\n${fullSummary}\n📅 נותח: ${dates}\n\n${body}`;
     const keyboard: InlineKeyboard = {
       inline_keyboard: drafts.map((d, i) => [
         { text: `✅ אשר ${i + 1}`, callback_data: `ok:${d.id}` },
@@ -99,7 +107,8 @@ export async function createTaskFromDraft(draftId: string): Promise<boolean> {
   ]);
 
   const due = ymd(new Date(Date.now() + 3 * 86400000));
-  const description = `${d.detail}${d.campaign ? `\nקמפיין: ${d.campaign}` : ""}\n\n📅 נותח: ${d.datesInfo}\n🔎 אבחון: ${d.summary}`;
+  const locLine = [d.platform, d.campaign ? `"${d.campaign}"` : ""].filter(Boolean).join(" · ");
+  const description = `${d.detail}${locLine ? `\n📍 ${locLine}` : ""}\n\n📅 נותח: ${d.datesInfo}\n🔎 אבחון: ${d.summary}`;
   const task = await prisma.task.create({
     data: {
       title: d.title, description, clientId: d.clientId, assigneeId, assignee: assignee?.name ?? "",
@@ -151,7 +160,7 @@ export async function refineDraft(draftId: string, note: string): Promise<string
     if (!block || block.type !== "tool_use") return null;
     const out = block.input as { title: string; detail: string; priority: string };
     await prisma.actionDraft.update({ where: { id: draftId }, data: { title: out.title, detail: out.detail, priority: out.priority, awaitingNotes: false } });
-    return draftText({ clientName: d.clientName, severity: d.severity, title: out.title, detail: out.detail, priority: out.priority, datesInfo: d.datesInfo });
+    return draftText({ clientName: d.clientName, severity: d.severity, title: out.title, detail: out.detail, priority: out.priority, datesInfo: d.datesInfo, platform: d.platform, campaign: d.campaign });
   } catch (err) {
     console.error("[refineDraft]", err instanceof Error ? err.message : err);
     return null;
