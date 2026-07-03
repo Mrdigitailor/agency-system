@@ -41,22 +41,22 @@ export function draftTextById(d: { clientName: string; severity: string; title: 
   return draftText(d);
 }
 
-/** שולח לאישור בטלגרם — הודעה אחת מסכמת לכל לקוח, עם כפתורי אשר/הערה לכל פעולה. */
+/** שולח לאישור בטלגרם — הודעה אחת מסכמת לכל לקוח. מחזיר כמה הודעות **נמסרו בפועל** (לא נספרות טיוטות). */
 export async function sendDiagnosesForApproval(items: Array<{ det: ClientDetection; diag: Diagnosis }>): Promise<number> {
   const chat = ownerChatId();
-  if (!chat) { console.warn("[Approval] אין TELEGRAM_OWNER_CHAT_ID — לא נשלח"); return 0; }
+  if (!chat) { console.error("[Approval] ⚠️ אין owner chat (TELEGRAM_OWNER_CHAT_ID / ALLOWED_USER_IDS) — לא נשלח כלום"); return 0; }
   const dates = datesLabel();
 
   if (items.length === 0) {
     await sendTelegramMessage(chat, "🌅 בוקר טוב! כל הלקוחות יציבים — לא זוהו ירידות ביצועים משמעותיות היום. 👍");
     return 0;
   }
-  await sendTelegramMessage(chat, `🌅 בוקר טוב! זוהו ${items.length} לקוחות בירידה.\n📅 השוואה: ${dates}\n\nלכל לקוח — סיכום ופעולות. אשר כל פעולה כמשימה, או שלח הערה לחידוד.`);
+  const leadOk = await sendTelegramMessage(chat, `🌅 בוקר טוב! זוהו ${items.length} לקוחות בירידה.\n📅 השוואה: ${dates}\n\nלכל לקוח — סיכום ופעולות. אשר כל פעולה כמשימה, או שלח הערה לחידוד.`);
+  if (!leadOk) console.error("[Approval] ⚠️ שליחת הודעת הפתיחה נכשלה — בדוק TELEGRAM_BOT_TOKEN בשרת");
 
-  let sent = 0;
+  let delivered = 0;
   for (const { det, diag } of items) {
     const actions = diag.actions.slice(0, 3);
-    // יצירת טיוטה לכל פעולה
     const drafts = [];
     for (const a of actions) {
       const d = await prisma.actionDraft.create({
@@ -68,7 +68,6 @@ export async function sendDiagnosesForApproval(items: Array<{ det: ClientDetecti
       });
       drafts.push(d);
     }
-    // הודעה אחת: כותרת + אבחון + פעולות ממוספרות
     const emoji = SEV_EMOJI[diag.severity] ?? "🟠";
     const body = drafts.map((d, i) => `${i + 1}. ${d.title}\n${d.detail}${d.campaign ? `\n(קמפיין: ${d.campaign})` : ""}`).join("\n\n");
     const text = `${emoji} ${det.clientName}\n${diag.summary}\n📅 נותח: ${dates}\n\n${body}`;
@@ -78,10 +77,12 @@ export async function sendDiagnosesForApproval(items: Array<{ det: ClientDetecti
         { text: `💬 הערה ${i + 1}`, callback_data: `note:${d.id}` },
       ]),
     };
-    await sendTelegramWithButtons(chat, text, keyboard);
-    sent += drafts.length;
+    const messageId = await sendTelegramWithButtons(chat, text, keyboard);
+    if (messageId) delivered += drafts.length;
+    else console.error(`[Approval] ⚠️ שליחת אבחון ל-${det.clientName} נכשלה (טיוטות נוצרו אך ההודעה לא נמסרה)`);
   }
-  return sent;
+  console.log(`[Approval] delivered ${delivered} actions across ${items.length} clients`);
+  return delivered;
 }
 
 /** אישור טיוטה → יצירת משימה (מוקצית למנהל, creator=בעלים). */
