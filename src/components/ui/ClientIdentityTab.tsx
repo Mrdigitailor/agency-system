@@ -38,6 +38,7 @@ interface Profile {
   marketingLanguages: string[]; toneOfVoice: string; forbiddenWords: string; addressStyle: string;
   competitors: Competitor[]; brandColors: string[]; logoUrl: string; adDesignStyle: string; assetBankUrl: string;
   leadSource: string; lifetimeValue: number; paymentHistory: any[]; documents: DocItem[]; internalNotes: NoteItem[];
+  leadFunnel: string; crmAccess: string;
 }
 
 const emptyProfile: Profile = {
@@ -47,6 +48,7 @@ const emptyProfile: Profile = {
   marketingLanguages: [], toneOfVoice: "", forbiddenWords: "", addressStyle: "",
   competitors: [], brandColors: [], logoUrl: "", adDesignStyle: "", assetBankUrl: "",
   leadSource: "", lifetimeValue: 0, paymentHistory: [], documents: [], internalNotes: [],
+  leadFunnel: "landing_page", crmAccess: "none",
 };
 
 const emptyProduct = (): Product => ({ name: "", description: "", priceRange: "", pricingModel: "", seasonality: "", promotions: "" });
@@ -222,11 +224,19 @@ export default function ClientIdentityTab({ clientId, userRole, clientData }: Pr
             <Label>תיאור העסק</Label>
             <textarea value={p.businessDescription} onChange={e => update("businessDescription", e.target.value)} className={inputClass} rows={3} placeholder="תאר את העסק בקצרה" />
           </div>
+          <div>
+            <Label>גישת CRM (לדוחות)</Label>
+            <select value={p.crmAccess} onChange={e => update("crmAccess", e.target.value)} className={inputClass}>
+              <option value="none">אין — עוצרים בליד/רכישה שהפלטפורמה יודעת</option>
+              <option value="connected">מחובר — אפשר סגירות ו-ROAS אמיתי</option>
+            </select>
+            <p className="mt-1 text-[11px] text-brand-muted">סוג המשפך (דף נחיתה / טופס לידים) מזוהה אוטומטית מנתוני הקמפיינים</p>
+          </div>
         </div>
         <SaveBtn
           onClick={async () => {
             await Promise.all([
-              patchSection("business", { businessSector: p.businessSector, businessDescription: p.businessDescription, serviceArea: p.serviceArea, serviceAreaDetails: p.serviceAreaDetails, physicalAddress: p.physicalAddress }),
+              patchSection("business", { businessSector: p.businessSector, businessDescription: p.businessDescription, serviceArea: p.serviceArea, serviceAreaDetails: p.serviceAreaDetails, physicalAddress: p.physicalAddress, crmAccess: p.crmAccess }),
               patchClient({ website: website.trim() }),
             ]);
           }}

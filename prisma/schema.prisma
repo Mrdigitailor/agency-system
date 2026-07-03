@@ -165,6 +165,10 @@ model ClientProfile {
   // סקשן 10 — הערות פנימיות (JSON array)
   internalNotes String @default("[]") // [{ content, date, author }]
 
+  // סיווג עסקי לדוחות — קובע אילו מדדים הסוכן מדגיש (ר' business-knowledge.ts)
+  leadFunnel String @default("landing_page") // landing_page | native_form (רלוונטי ללקוחות לידים)
+  crmAccess  String @default("none")         // none | connected (יש גישה ל-CRM → אפשר סגירות/ROAS אמיתי)
+
   // הגדרות דוח שבועי — לכל לקוח פורמט מועדף
   weeklyReportFormat       String @default("standard") // standard | per_product
   weeklyReportInstructions String @default("")         // הוראות חופשיות ל-AI (טון, דגשים)

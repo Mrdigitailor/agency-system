@@ -19,6 +19,13 @@ export function daysAgoIL(n: number): string {
   return ymdIL(new Date(Date.now() - n * 86400000));
 }
 
+/** מזיז תאריך YYYY-MM-DD ב-N ימים (חשבון תאריך טהור ב-UTC, בלי תלות באזור זמן) */
+export function shiftYmd(ymd: string, deltaDays: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d) + deltaDays * 86400000);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
 /** ה-1 בחודש הנוכחי בישראל */
 export function monthStartIL(): string {
   return `${todayIL().slice(0, 7)}-01`;

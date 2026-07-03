@@ -4,6 +4,9 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { getWeeklyClientData } from "@/lib/reports/weekly-data";
 import { buildWeeklyDataText } from "@/lib/reports/generate";
+import { detectClientFunnel } from "@/lib/agent/funnel-detect";
+import { classifyBusinessType } from "@/lib/agent/business-knowledge";
+import { shiftYmd } from "@/lib/utils/ildate";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -32,13 +35,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // הקשר הנתונים — כדי שהתיקון יישאר מעוגן במספרים האמיתיים
   const [profile, client] = await Promise.all([
     prisma.clientProfile.findUnique({ where: { clientId } }),
-    prisma.client.findUnique({ where: { id: clientId }, select: { currency: true } }),
+    prisma.client.findUnique({ where: { id: clientId }, select: { currency: true, clientType: true } }),
   ]);
   const format = profile?.weeklyReportFormat ?? "standard";
   const products: Array<{ name: string }> = profile ? JSON.parse(profile.products ?? "[]") : [];
   const currency = client?.currency || "ILS";
-  const data = await getWeeklyClientData(clientId, report.weekStart, report.weekEnd);
-  const dataText = buildWeeklyDataText(data, format, products, currency);
+  const [data, prevData, funnelDetection] = await Promise.all([
+    getWeeklyClientData(clientId, report.weekStart, report.weekEnd),
+    getWeeklyClientData(clientId, shiftYmd(report.weekStart, -7), shiftYmd(report.weekEnd, -7)),
+    detectClientFunnel(clientId, { until: report.weekEnd }),
+  ]);
+  const campaignFunnels =
+    classifyBusinessType(client?.clientType) === "leads" ? funnelDetection.metaCampaigns : undefined;
+  const dataText = buildWeeklyDataText(data, format, products, currency, prevData, campaignFunnels);
 
   try {
     const response = await anthropic.messages.create({
