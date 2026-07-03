@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Pencil, Trash2, GripVertical, Loader2, Link2, Copy, ExternalLink, ArrowRight, FileText, Share2, ChevronLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, Loader2, Link2, Copy, ExternalLink, ArrowRight, FileText, Share2, ChevronLeft, Sparkles } from "lucide-react";
 import { WidgetRenderer, type WidgetDTO } from "@/components/dashboard/DashboardWidgets";
 import { getMetricsForPlatform, PLATFORM_LABELS, DISPLAY_LABELS, DIMENSION_LABELS, validDimensions, type Platform, type DisplayType, type Dimension } from "@/lib/dashboard/metrics";
 
@@ -359,6 +359,7 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [autoBuild, setAutoBuild] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -381,6 +382,23 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
       if (res.ok) { const r = await res.json(); await load(); setOpenId(r.id); }
     } finally {
       setCreating(false);
+    }
+  }
+
+  // דשבורד חכם — הסוכן בונה סט ווידג'טים אוטומטית מפרופיל העסק
+  async function createSmartDashboard() {
+    setAutoBuild(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/reports/auto-build`, { method: "POST" });
+      if (res.ok) {
+        const r = await res.json();
+        await load();
+        setOpenId(r.id);
+      } else {
+        alert("שגיאה בבניית הדשבורד — נסה שוב");
+      }
+    } finally {
+      setAutoBuild(false);
     }
   }
 
@@ -409,7 +427,13 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
           <h2 className="text-lg font-semibold text-brand-dark">דוחות הלקוח</h2>
           <p className="text-sm text-brand-muted">צור כמה דוחות — כללי, קריאייטיבים, פר-פלטפורמה — לכל אחד קישור שיתוף נפרד.</p>
         </div>
-        <button onClick={createReport} disabled={creating} className="flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-dark px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark/90 disabled:opacity-50"><Plus className="h-4 w-4" />דוח חדש</button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button onClick={createSmartDashboard} disabled={autoBuild} className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">
+            {autoBuild ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {autoBuild ? "בונה..." : "דשבורד חכם"}
+          </button>
+          <button onClick={createReport} disabled={creating} className="flex items-center gap-1.5 rounded-lg bg-brand-dark px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark/90 disabled:opacity-50"><Plus className="h-4 w-4" />דוח חדש</button>
+        </div>
       </div>
 
       {loading ? (
@@ -417,8 +441,15 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
       ) : reports.length === 0 ? (
         <div className={`${cardClass} text-center`}>
           <FileText className="mx-auto h-8 w-8 text-brand-muted" />
-          <p className="mt-2 text-sm text-brand-muted">אין דוחות עדיין.</p>
-          <button onClick={createReport} className="mt-3 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80">צור דוח ראשון</button>
+          <p className="mt-2 text-sm text-brand-muted">אין דשבורדים עדיין.</p>
+          <p className="mt-1 text-xs text-brand-muted">תן לסוכן לבנות דשבורד מותאם לסוג העסק — או בנה ידנית מאפס.</p>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <button onClick={createSmartDashboard} disabled={autoBuild} className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">
+              {autoBuild ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {autoBuild ? "בונה..." : "דשבורד חכם"}
+            </button>
+            <button onClick={createReport} className="rounded-lg border border-brand-border px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg hover:text-brand-dark">בנה ידנית</button>
+          </div>
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-brand-border bg-brand-light shadow-sm">

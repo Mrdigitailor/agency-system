@@ -37,7 +37,7 @@ import PlatformConnections from "@/components/ui/PlatformConnections";
 import ConversionEventSelector from "@/components/ui/ConversionEventSelector";
 import GoogleConversionActionSelector from "@/components/ui/GoogleConversionActionSelector";
 import ClientAnalyticsTab from "@/components/ui/ClientAnalyticsTab";
-import ClientDashboardTab from "@/components/ui/ClientDashboardTab";
+import ClientReportsHubTab from "@/components/ui/ClientReportsHubTab";
 import MetaCampaignsTab from "@/components/ui/MetaCampaignsTab";
 import GoogleAdsCampaignsTab from "@/components/ui/GoogleAdsCampaignsTab";
 import TikTokCampaignsTab from "@/components/ui/TikTokCampaignsTab";
@@ -47,7 +47,6 @@ import ClientIdentityTab from "@/components/ui/ClientIdentityTab";
 import QuickProfileCard from "@/components/ui/QuickProfileCard";
 import AiChatTab from "@/components/ui/AiChatTab";
 import MonthPerformanceKpis from "@/components/ui/MonthPerformanceKpis";
-import ClientWeeklyReportsTab from "@/components/ui/ClientWeeklyReportsTab";
 import OptimizationsTab from "@/components/ui/OptimizationsTab";
 import TaskModal from "@/components/ui/TaskModal";
 import CreativesTab from "@/components/ui/CreativesTab";
@@ -86,10 +85,9 @@ const TAB_DEFS = [
   { id: "performance", heLabel: "ביצועים", tKey: "performance", icon: TrendingUp },
   { id: "optimizations", heLabel: "אופטימיזציות", tKey: "optimizations", icon: Zap },
   { id: "creatives", heLabel: "קריאייטיבים", tKey: "creatives", icon: Monitor },
-  { id: "reports", heLabel: "דוחות", tKey: "reportsList", icon: FileText },
+  { id: "reports", heLabel: "דוחות ודשבורד", tKey: "reportsList", icon: FileText },
   { id: "messages", heLabel: "הודעות", tKey: "messages", icon: MessageSquare },
   { id: "analytics", heLabel: "אנליטיקס", tKey: "analytics", icon: BarChart3 },
-  { id: "dashboard", heLabel: "דשבורד ציבורי", tKey: "publicDashboard", icon: BarChart3 },
   { id: "tasks", heLabel: "משימות", tKey: "tasksList", icon: ListTodo },
   { id: "ai", heLabel: "צ׳אט AI", tKey: "aiChat", icon: BarChart3 },
 ] as const;
@@ -779,16 +777,14 @@ export default function ClientDetailPage() {
       {/* ===== טאב קריאייטיבים ===== */}
       {activeTab === "creatives" && <CreativesTab clientId={client.id} currency={client.currency ?? "ILS"} />}
 
-      {/* ===== טאב דוחות ===== */}
-      {activeTab === "reports" && <ClientWeeklyReportsTab clientId={client.id} />}
+      {/* ===== טאב דוחות ודשבורד (מאוחד) ===== */}
+      {activeTab === "reports" && <ClientReportsHubTab clientId={client.id} />}
 
       {/* ===== טאב 5 — הודעות ===== */}
       {activeTab === "messages" && <MessagesTab clientId={client.id} />}
 
       {/* ===== טאב 6 — אנליטיקס ===== */}
       {activeTab === "analytics" && <ClientAnalyticsTab clientId={client.id} />}
-
-      {activeTab === "dashboard" && <ClientDashboardTab clientId={client.id} />}
 
       {/* ===== טאב 7 — משימות ===== */}
       {activeTab === "tasks" && (() => {
