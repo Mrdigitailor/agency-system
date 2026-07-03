@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
-import { getWeeklyClientData } from "@/lib/reports/weekly-data";
+import { getWeeklyClientData, getWeeklyBreakdowns } from "@/lib/reports/weekly-data";
 import { buildWeeklyDataText } from "@/lib/reports/generate";
 import { detectClientFunnel } from "@/lib/agent/funnel-detect";
 import { classifyBusinessType } from "@/lib/agent/business-knowledge";
@@ -40,14 +40,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const format = profile?.weeklyReportFormat ?? "standard";
   const products: Array<{ name: string }> = profile ? JSON.parse(profile.products ?? "[]") : [];
   const currency = client?.currency || "ILS";
-  const [data, prevData, funnelDetection] = await Promise.all([
+  const [data, prevData, funnelDetection, breakdowns] = await Promise.all([
     getWeeklyClientData(clientId, report.weekStart, report.weekEnd),
     getWeeklyClientData(clientId, shiftYmd(report.weekStart, -7), shiftYmd(report.weekEnd, -7)),
     detectClientFunnel(clientId, { until: report.weekEnd }),
+    getWeeklyBreakdowns(clientId, report.weekStart, report.weekEnd),
   ]);
   const campaignFunnels =
     classifyBusinessType(client?.clientType) === "leads" ? funnelDetection.metaCampaigns : undefined;
-  const dataText = buildWeeklyDataText(data, format, products, currency, prevData, campaignFunnels);
+  const dataText = buildWeeklyDataText(data, format, products, currency, prevData, campaignFunnels, breakdowns);
 
   try {
     const response = await anthropic.messages.create({

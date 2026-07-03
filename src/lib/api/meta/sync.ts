@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { fetchAdInsights, extractMetrics, type MetaInsight } from "./ad-insights";
 import { fetchPagePosts, fetchPostInsights, fetchPostEngagement, extractMediaInfo } from "./page";
 import { fetchIgMedia, fetchIgMediaInsights } from "./instagram";
+import { shiftYmd } from "@/lib/utils/ildate";
 
 export interface SyncStats {
   adInsightsFetched: number;
@@ -65,49 +66,28 @@ export async function syncAdAccount(
   console.log(`[Sync] Ad Account ${externalId} → ${insights.length} total insight rows`);
 
   for (const ins of insights) {
-    const m = extractMetrics(ins);
-    const data = {
-      name: ins.campaign_name ?? "",
-      spend: parseFloat(ins.spend) || 0,
-      impressions: parseInt(ins.impressions) || 0,
-      clicks: parseInt(ins.clicks) || 0,
-      reach: parseInt(ins.reach) || 0,
-      frequency: parseFloat(ins.frequency) || 0,
-      ctr: parseFloat(ins.ctr) || 0,
-      cpc: parseFloat(ins.cpc) || 0,
-      cpm: parseFloat(ins.cpm) || 0,
-      conversions: m.conversions,
-      costPerConversion: m.costPerConversion,
-      purchaseValue: m.purchaseValue,
-      roas: m.roas,
-      linkClicks: m.linkClicks,
-      landingPageViews: m.landingPageViews,
-      videoViews: m.videoViews,
-      videoThruplay: m.videoThruplay,
-      engagement: m.engagement,
-      purchases: m.purchases,
-      leads: m.leads,
-      costPerLead: m.costPerLead,
-      actionsJson: JSON.stringify(ins),
-    };
-
     await prisma.metaInsightDaily.upsert({
       where: {
         assetId_level_externalId_date: {
           assetId, level: "campaign", externalId: ins.campaign_id ?? "", date: ins.date_start,
         },
       },
-      update: data,
+      update: insightData(ins, ins.campaign_name ?? ""),
       create: {
         clientId, assetId, level: "campaign",
         externalId: ins.campaign_id ?? "",
         parentId: "",
         date: ins.date_start,
-        ...data,
+        ...insightData(ins, ins.campaign_name ?? ""),
       },
     });
     stats.adInsightsFetched++;
   }
+
+  // רמות adset (קהלים) ו-ad (קריאייטיבים) — חלון קבוע של 14 יום אחורה.
+  // מספיק לדוח השבועי + השוואה לשבוע קודם, בלי להכביד על ה-API בטווחים ארוכים.
+  // כשל כאן לא שובר את סנכרון הקמפיינים (ה-try פנימי).
+  await syncSubLevels(clientId, accessToken, assetId, externalId, until, stats);
 
   await prisma.syncLog.create({
     data: {
@@ -115,6 +95,75 @@ export async function syncAdAccount(
       syncType: "ad_insights", status: "success", recordsFetched: insights.length,
     },
   });
+}
+
+/** בונה את אובייקט המדדים לשמירה מתוך שורת insight (זהה לכל הרמות) */
+function insightData(ins: MetaInsight, name: string) {
+  const m = extractMetrics(ins);
+  return {
+    name,
+    spend: parseFloat(ins.spend) || 0,
+    impressions: parseInt(ins.impressions) || 0,
+    clicks: parseInt(ins.clicks) || 0,
+    reach: parseInt(ins.reach) || 0,
+    frequency: parseFloat(ins.frequency) || 0,
+    ctr: parseFloat(ins.ctr) || 0,
+    cpc: parseFloat(ins.cpc) || 0,
+    cpm: parseFloat(ins.cpm) || 0,
+    conversions: m.conversions,
+    costPerConversion: m.costPerConversion,
+    purchaseValue: m.purchaseValue,
+    roas: m.roas,
+    linkClicks: m.linkClicks,
+    landingPageViews: m.landingPageViews,
+    videoViews: m.videoViews,
+    videoThruplay: m.videoThruplay,
+    engagement: m.engagement,
+    purchases: m.purchases,
+    leads: m.leads,
+    costPerLead: m.costPerLead,
+    actionsJson: JSON.stringify(ins),
+  };
+}
+
+/** סנכרון רמות adset + ad ל-14 הימים האחרונים — לפירוק קהלים/קריאייטיבים בדוחות */
+async function syncSubLevels(
+  clientId: string, accessToken: string, assetId: string, externalId: string,
+  until: string, stats: SyncStats,
+) {
+  const since = shiftYmd(until, -13);
+
+  for (const level of ["adset", "ad"] as const) {
+    try {
+      const chunks = splitDateRange(since, until, 7);
+      const rows: MetaInsight[] = [];
+      for (const chunk of chunks) {
+        rows.push(...await fetchAdInsights(externalId, accessToken, level, chunk.since, chunk.until, true));
+      }
+      console.log(`[Sync] ${level} insights: ${rows.length} rows (${since} → ${until})`);
+
+      // upserts במנות מקביליות — רמת ad יכולה להחזיר מאות שורות
+      const BATCH = 25;
+      for (let i = 0; i < rows.length; i += BATCH) {
+        await Promise.all(rows.slice(i, i + BATCH).map((ins) => {
+          const entityId = (level === "adset" ? ins.adset_id : ins.ad_id) ?? "";
+          if (!entityId) return Promise.resolve();
+          const parentId = (level === "adset" ? ins.campaign_id : ins.adset_id) ?? "";
+          const name = (level === "adset" ? ins.adset_name : ins.ad_name) ?? "";
+          return prisma.metaInsightDaily.upsert({
+            where: { assetId_level_externalId_date: { assetId, level, externalId: entityId, date: ins.date_start } },
+            update: insightData(ins, name),
+            create: { clientId, assetId, level, externalId: entityId, parentId, date: ins.date_start, ...insightData(ins, name) },
+          });
+        }));
+      }
+      stats.adInsightsFetched += rows.length;
+    } catch (err) {
+      const msg = `${level} insights: ${err instanceof Error ? err.message : "unknown"}`;
+      console.error(`[Sync] ${msg}`);
+      stats.errors.push(msg);
+    }
+  }
 }
 
 export async function syncPage(

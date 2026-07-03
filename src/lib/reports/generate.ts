@@ -4,7 +4,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db/prisma";
 import { buildSystemPrompt } from "@/lib/api/ai/buildSystemPrompt";
-import { getWeeklyClientData, type WeeklyClientData, type PlatformTotals } from "./weekly-data";
+import { getWeeklyClientData, getWeeklyBreakdowns, type WeeklyClientData, type PlatformTotals, type WeeklyBreakdowns } from "./weekly-data";
 import { groupCampaignsByProduct } from "./group-by-product";
 import { classifyBusinessType, buildBusinessKnowledge, type LeadFunnel, type CrmAccess } from "@/lib/agent/business-knowledge";
 import { detectClientFunnel, type CampaignFunnel } from "@/lib/agent/funnel-detect";
@@ -48,6 +48,7 @@ export function buildWeeklyDataText(
   currency: string,
   prev?: WeeklyClientData,
   campaignFunnels?: Record<string, CampaignFunnel>,
+  breakdowns?: WeeklyBreakdowns,
 ): string {
   // תיוג משפך לקמפיין — כדי שהדוח יפריד לידים מטופס מול לידים מדף נחיתה (בפילוח לפי מוצר)
   const funnelTag = (c: { platform: string; campaignName: string }): string => {
@@ -122,6 +123,24 @@ export function buildWeeklyDataText(
     }
   }
 
+  // פירוק קהלים (קבוצות מודעות) ומודעות — מטא. מופיע רק אם נשאבו נתוני תת-רמות.
+  if (breakdowns && breakdowns.audiences.length > 0) {
+    lines.push(``);
+    lines.push(`**קהלים מובילים (קבוצות מודעות, מטא — לפי הוצאה):**`);
+    for (const b of breakdowns.audiences) {
+      const cpa = b.conversions > 0 ? money(b.spend / b.conversions, currency) : "—";
+      lines.push(`- ${b.name}${b.parentName ? ` [קמפיין: ${b.parentName}]` : ""}: ${money(b.spend, currency)}, ${num(b.conversions)} המרות, עלות/המרה ${cpa}`);
+    }
+  }
+  if (breakdowns && breakdowns.ads.length > 0) {
+    lines.push(``);
+    lines.push(`**מודעות מובילות (מטא — לפי הוצאה):**`);
+    for (const b of breakdowns.ads) {
+      const cpa = b.conversions > 0 ? money(b.spend / b.conversions, currency) : "—";
+      lines.push(`- ${b.name}${b.parentName ? ` [קבוצה: ${b.parentName}]` : ""}: ${money(b.spend, currency)}, ${num(b.conversions)} המרות, עלות/המרה ${cpa}`);
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -138,6 +157,7 @@ const REPORT_INSTRUCTIONS = `אתה כותב דוח שבועי ללקוח של �
 - התבסס אך ורק על המספרים שסופקו, אל תמציא נתונים. אם אין נתונים לפלטפורמה — אל תזכיר אותה.
 - אם סופק בלוק "השוואה לשבוע הקודם" — שקף את הכיוון (↑/↓ ואחוז) של המדדים המרכזיים בטקסט, במיוחד בסיכום המנהלים. שים לב: בעלות-לליד ובעלות-להמרה ירידה היא שיפור, בהמרות/ROAS עלייה היא שיפור.
 - אם קמפיינים מתויגים "(טופס לידים)" או "(דף נחיתה)" — בסיכום הכולל אחד את כל הלידים למספר אחד, אבל בפילוח לפי מוצר/שירות הפרד בין לידים מטופס לבין לידים מדף נחיתה/אתר.
+- אם סופקו בלוקים "קהלים מובילים" / "מודעות מובילות" — הוסף סקשן קצר 🎯 עם 2-3 תובנות בלבד: הקהל החזק ביותר, קהל שמבזבז תקציב בלי תוצאות, והמודעה המנצחת. שמות קבוצות מודעות מייצגים קהלים ושמות מודעות מייצגים קריאייטיבים — נקה גם אותם משמות גולמיים (כמו קמפיינים). אל תפרט את כל הרשימה — רק את מה שדורש החלטה.
 - **מטבע:** השתמש אך ורק במטבע ובסימן שסופקו בנתונים ("מטבע החשבון"). לעולם אל תניח שקלים אם המטבע שונה.
 - **אל תשתמש בטבלאות Markdown** (הן נשברות בהעתקה לוואטסאפ). הצג מספרים כרשימות תבליטים בפורמט "מדד: ערך", עם אימוג'ים קצרים לכותרות סקשנים. שמור על שורות קצרות.
 
@@ -154,13 +174,14 @@ export async function generateWeeklyReportContent(
   weekStart: string,
   weekEnd: string,
 ): Promise<string> {
-  const [systemBase, profile, data, prevData, client, funnelDetection] = await Promise.all([
+  const [systemBase, profile, data, prevData, client, funnelDetection, breakdowns] = await Promise.all([
     buildSystemPrompt(clientId),
     prisma.clientProfile.findUnique({ where: { clientId } }),
     getWeeklyClientData(clientId, weekStart, weekEnd),
     getWeeklyClientData(clientId, shiftYmd(weekStart, -7), shiftYmd(weekEnd, -7)),
     prisma.client.findUnique({ where: { id: clientId }, select: { currency: true, clientType: true } }),
     detectClientFunnel(clientId, { until: weekEnd }),
+    getWeeklyBreakdowns(clientId, weekStart, weekEnd),
   ]);
 
   const format = profile?.weeklyReportFormat ?? "standard";
@@ -181,7 +202,7 @@ export async function generateWeeklyReportContent(
   // תיוג קמפיינים (טופס/דף נחיתה) — רלוונטי רק ללקוחות לידים
   const campaignFunnels = businessType === "leads" ? funnelDetection.metaCampaigns : undefined;
 
-  const dataText = buildWeeklyDataText(data, format, products, currency, prevData, campaignFunnels);
+  const dataText = buildWeeklyDataText(data, format, products, currency, prevData, campaignFunnels, breakdowns);
 
   const userMessage = [
     `הפק דוח שבועי לתקופה ${weekStart} עד ${weekEnd}.`,

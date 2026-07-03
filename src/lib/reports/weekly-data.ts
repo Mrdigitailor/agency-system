@@ -34,6 +34,76 @@ export interface WeeklyClientData {
 
 const emptyTotals = (): PlatformTotals => ({ spend: 0, impressions: 0, clicks: 0, conversions: 0, conversionsValue: 0 });
 
+/** שורת פירוק — קהל (קבוצת מודעות) או מודעה, עם שם ההורה להקשר */
+export interface BreakdownRow {
+  name: string;
+  parentName: string; // שם הקמפיין (לקהל) או קבוצת המודעות (למודעה)
+  spend: number;
+  conversions: number;
+}
+
+export interface WeeklyBreakdowns {
+  audiences: BreakdownRow[]; // קבוצות מודעות = קהלים (מטא)
+  ads: BreakdownRow[];       // מודעות = קריאייטיבים (מטא)
+}
+
+/**
+ * פירוק שבועי לפי קהלים (adset) ומודעות (ad) — מטא בלבד.
+ * מחזיר את המובילים לפי הוצאה; ריק אם עדיין לא נשאבו נתוני תת-רמות.
+ */
+export async function getWeeklyBreakdowns(
+  clientId: string,
+  weekStart: string,
+  weekEnd: string,
+  topN = 8,
+): Promise<WeeklyBreakdowns> {
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { metaConversionEvent: true },
+  });
+  const selectedEvent = client?.metaConversionEvent ?? "";
+  const date = { gte: weekStart, lte: weekEnd };
+
+  const [adsetRows, adRows, campaignRows] = await Promise.all([
+    prisma.metaInsightDaily.findMany({ where: { clientId, level: "adset", date } }),
+    prisma.metaInsightDaily.findMany({ where: { clientId, level: "ad", date } }),
+    prisma.metaInsightDaily.findMany({
+      where: { clientId, level: "campaign", date },
+      select: { externalId: true, name: true },
+    }),
+  ]);
+
+  // מפות שם-הורה: campaign_id→שם קמפיין, adset_id→שם קבוצה
+  const campaignNames = new Map(campaignRows.map((r) => [r.externalId, r.name]));
+  const adsetNames = new Map(adsetRows.map((r) => [r.externalId, r.name]));
+
+  const groupRows = (rows: typeof adsetRows, parentNames: Map<string, string>): BreakdownRow[] => {
+    const groups = new Map<string, typeof adsetRows>();
+    for (const r of rows) {
+      const arr = groups.get(r.externalId);
+      if (arr) arr.push(r);
+      else groups.set(r.externalId, [r]);
+    }
+    const out: BreakdownRow[] = [];
+    for (const [, rs] of groups) {
+      const spend = rs.reduce((s, i) => s + i.spend, 0);
+      if (spend === 0) continue;
+      out.push({
+        name: rs[0].name || "(ללא שם)",
+        parentName: parentNames.get(rs[0].parentId) ?? "",
+        spend,
+        conversions: countConversions(rs, selectedEvent),
+      });
+    }
+    return out.sort((a, b) => b.spend - a.spend).slice(0, topN);
+  };
+
+  return {
+    audiences: groupRows(adsetRows, campaignNames),
+    ads: groupRows(adRows, adsetNames),
+  };
+}
+
 /**
  * שולף ומסכם את נתוני הקמפיינים של לקוח לשבוע נתון (YYYY-MM-DD).
  * Meta מסונן ל-level="campaign" (כך הוא נשמר ממילא) — מונע ספירה כפולה,
