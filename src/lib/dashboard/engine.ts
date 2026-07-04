@@ -2,8 +2,9 @@
 // משמש גם את ה-preview (admin) וגם את ה-API הציבורי. מנצל לוגיקה קיימת.
 
 import { prisma } from "@/lib/db/prisma";
-import { countConversions } from "@/lib/utils/metaMetrics";
+import { countConversions, aggregateConversionActions } from "@/lib/utils/metaMetrics";
 import { countGoogleConversions } from "@/lib/utils/googleMetrics";
+import { fetchCustomConversions } from "@/lib/api/meta/conversions";
 import { fetchAnalytics, type AnalyticsData } from "@/lib/api/ga4/client";
 import { getValidGoogleToken } from "@/lib/api/google-ads/client";
 import { fetchGoogleSegment, type GoogleSegment, type SegmentRow } from "@/lib/api/google-ads/segments";
@@ -120,6 +121,67 @@ function segmentToData(w: WidgetConfig, rows: SegmentRow[]): WidgetData {
   return { type: "pie", metricId, label, slices };
 }
 
+// ---------- פילוח "לפי סוג המרה" ----------
+
+/** שמות ההמרות המותאמות של מטא (id→name) — best effort, קריאה חיה אחת לכל בקשה */
+async function resolveMetaCustomNames(clientId: string): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  try {
+    const conn = await prisma.platformConnection.findFirst({
+      where: { clientId, platform: "meta", isActive: true },
+      include: { assets: { where: { isSelected: true, assetType: "ad_account" } } },
+    });
+    const asset = conn?.assets[0];
+    if (!conn || !asset) return names;
+    const list = await fetchCustomConversions(asset.externalId, conn.accessToken);
+    for (const c of list) names.set(c.id, c.name);
+  } catch { /* אין שמות — נציג מזהה */ }
+  return names;
+}
+
+/** פירוק המרות לפי סוג אירוע — מטא (actionsJson) + גוגל (conversionsByAction) */
+function actionBreakdown(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, customNames: Map<string, string>): WidgetData {
+  const counts = new Map<string, number>();
+
+  if (w.platform === "meta" || w.platform === "all") {
+    for (const a of aggregateConversionActions(ad.meta)) {
+      const label = a.customId ? (customNames.get(a.customId) ?? a.label) : a.label;
+      counts.set(label, (counts.get(label) ?? 0) + a.count);
+    }
+  }
+  if (w.platform === "google_ads" || w.platform === "all") {
+    for (const r of ad.google) {
+      try {
+        const byAction = JSON.parse(r.conversionsByAction || "{}") as Record<string, number>;
+        for (const [name, count] of Object.entries(byAction)) {
+          if (count > 0) counts.set(name, (counts.get(name) ?? 0) + count);
+        }
+      } catch { /* שורה בלי פירוט */ }
+    }
+  }
+
+  const entries = [...counts.entries()]
+    .map(([label, count]) => ({ label, value: Math.round(count * 100) / 100 }))
+    .filter((s) => s.value > 0)
+    .sort((a, b) => b.value - a.value);
+
+  if (entries.length === 0) return { type: "empty", reason: "אין פירוט המרות בתקופה" };
+
+  if (w.displayType === "table") {
+    // עלות ממוצעת = סך ההוצאה בטווח (בהיקף הפלטפורמה של הווידג'ט) חלקי כמות ההמרות מהסוג
+    const totalSpend = rowsToComponents(w.platform, ad, ctx).spend;
+    return {
+      type: "table",
+      columns: [{ id: "name", label: "סוג המרה" }, { id: "count", label: "כמות" }, { id: "cost", label: "עלות ממוצעת" }],
+      rows: entries.map((e) => [e.label, e.value, Math.round((totalSpend / e.value) * 100) / 100]),
+    };
+  }
+  if (w.displayType === "bar") {
+    return { type: "series", display: "bar", buckets: entries.map((e) => e.label), series: [{ id: "conversions", label: "המרות", values: entries.map((e) => e.value) }] };
+  }
+  return { type: "pie", metricId: "conversions", label: "המרות", slices: entries.slice(0, 10) };
+}
+
 async function getGa4(ctx: ClientCtx, range: DateRange, cache: Ga4Cache): Promise<AnalyticsData | null> {
   if (cache.loaded) return cache.data;
   cache.loaded = true;
@@ -158,7 +220,10 @@ function rowsToComponents(platform: Platform, ad: AdRows, ctx: ClientCtx): Compo
 }
 
 // ---------- חישוב ווידג'ט פרסום ----------
-function computeAdWidget(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, prevAd?: AdRows | null): WidgetData {
+function computeAdWidget(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, prevAd?: AdRows | null, customNames?: Map<string, string>): WidgetData {
+  // פילוח לפי סוג המרה — לא תלוי בבחירת מטריקות
+  if (w.dimension === "action") return actionBreakdown(w, ctx, ad, customNames ?? new Map());
+
   const metrics = w.metrics.filter((m) => METRIC_BY_ID[m]?.platforms.includes(w.platform));
   if (metrics.length === 0) return { type: "empty", reason: "לא נבחרו מטריקות" };
 
@@ -333,12 +398,17 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
   const segCache = new Map<string, SegmentRow[]>();
   const segDims = [...new Set(widgets.filter(isSegment).map((w) => w.dimension))];
 
+  // שמות המרות מותאמות של מטא — רק אם יש ווידג'ט "לפי סוג המרה" בהיקף מטא
+  const needsActionNames = dataWidgets.some((w) => w.dimension === "action" && (w.platform === "meta" || w.platform === "all"));
+  let customNames = new Map<string, string>();
+
   const [ad, , prevAd] = await Promise.all([
     needsAd ? getAdRows(ctx, range, adCache) : Promise.resolve(emptyAd),
     needsGa4 ? getGa4(ctx, range, ga4Cache) : Promise.resolve(null),
     needsCompare && needsAd && prev ? getAdRows(ctx, prev, prevAdCache) : Promise.resolve(emptyAd),
     needsCompare && needsGa4 && prev ? getGa4(ctx, prev, prevGa4Cache) : Promise.resolve(null),
     ...segDims.map(async (d) => { segCache.set(d, await fetchGoogleSegment(ctx.clientId, range.since, range.until, d as GoogleSegment)); }),
+    ...(needsActionNames ? [resolveMetaCustomNames(ctx.clientId).then((m) => { customNames = m; })] : []),
   ]);
 
   return widgets.map((w) => {
@@ -346,7 +416,7 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
     if (isText(w)) data = { type: "text", heading: w.displayType === "heading", body: w.textBody };
     else if (isSegment(w)) data = segmentToData(w, segCache.get(w.dimension) ?? []);
     else if (w.platform === "ga4") data = computeGa4Widget(w, ga4Cache.data, prevGa4Cache.data);
-    else data = computeAdWidget(w, ctx, ad, prevAd);
+    else data = computeAdWidget(w, ctx, ad, prevAd, customNames);
     return { widgetId: w.id, data };
   });
 }

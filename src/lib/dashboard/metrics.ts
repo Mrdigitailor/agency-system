@@ -3,7 +3,7 @@ import { getCurrencySymbol } from "@/lib/utils/currency";
 
 export type Platform = "meta" | "google_ads" | "tiktok" | "ga4" | "all";
 export type DisplayType = "kpi" | "line" | "area" | "bar" | "pie" | "table" | "heading" | "text" | "platform_header";
-export type Dimension = "none" | "date" | "week" | "month" | "platform" | "campaign" | "channel" | "age" | "gender" | "device";
+export type Dimension = "none" | "date" | "week" | "month" | "platform" | "campaign" | "channel" | "action" | "age" | "gender" | "device";
 
 export interface MetricDef {
   id: string;
@@ -69,6 +69,7 @@ export const DIMENSION_LABELS: Record<Dimension, string> = {
   platform: "לפי פלטפורמה",
   campaign: "לפי קמפיין",
   channel: "לפי ערוץ",
+  action: "לפי סוג המרה",
   age: "לפי גיל (Google)",
   gender: "לפי מגדר (Google)",
   device: "לפי מכשיר (Google)",
@@ -85,6 +86,13 @@ export function validDimensions(displayType: DisplayType, platform?: Platform): 
     case "pie": dims = ["platform", "campaign"]; break;
     case "table": dims = ["campaign"]; break;
     default: dims = ["none"];
+  }
+  // פילוח לפי סוג המרה — מטא/גוגל/הכל (לא TikTok/GA4), בתצוגות pie/bar/table
+  if (
+    (platform === "meta" || platform === "google_ads" || platform === "all") &&
+    (displayType === "pie" || displayType === "bar" || displayType === "table")
+  ) {
+    dims = [...dims, "action"];
   }
   // פילוחים דמוגרפיים — רק ל-Google Ads, בתצוגות pie/bar
   if (platform === "google_ads" && (displayType === "pie" || displayType === "bar")) {

@@ -73,7 +73,11 @@ function buildRecipe(type: BusinessType, clientName: string, platforms: string[]
     });
   }
 
-  // 5) טבלת קמפיינים
+  // 5) פילוח סוגי המרות — "מה קרה בפועל" בשפת בעל העסק (טופס/שיחה/פגישה/רכישה)
+  specs.push({ platform: "all", metrics: ["conversions"], displayType: "pie", dimension: "action", size: "half", title: "סוגי המרות" });
+  specs.push({ platform: "all", metrics: ["conversions"], displayType: "table", dimension: "action", size: "half", title: "עלות לפי סוג המרה" });
+
+  // 6) טבלת קמפיינים
   specs.push({
     platform: "all",
     metrics: isEcom ? ["spend", "conversions", "purchaseValue", "roas"] : ["spend", "conversions", "cpa"],
@@ -83,12 +87,18 @@ function buildRecipe(type: BusinessType, clientName: string, platforms: string[]
     title: "פירוט קמפיינים",
   });
 
-  // 6) סקשן לכל פלטפורמה פעילה — לוגו + KPI
+  // 7) סקשן לכל פלטפורמה פעילה — לוגו + KPI (+דמוגרפיה בגוגל)
   for (const p of platforms) {
     specs.push({ platform: p, metrics: [], displayType: "platform_header", dimension: "none", size: "full", title: "" });
     // purchaseValue/roas זמינים רק במטא — בשאר הפלטפורמות נציג עלות להמרה
     const pMetrics = isEcom && p === "meta" ? ["spend", "purchaseValue", "roas"] : ["spend", "conversions", "cpa"];
     specs.push({ platform: p, metrics: pMetrics, displayType: "kpi", dimension: "none", size: "full", title: "", compare: true });
+    // גוגל — פילוחי דמוגרפיה חיים (גיל/מגדר/מכשיר) כמו שהלקוחות רגילים מהכלים הישנים
+    if (p === "google_ads") {
+      specs.push({ platform: p, metrics: ["conversions"], displayType: "pie", dimension: "age", size: "third", title: "המרות לפי גיל" });
+      specs.push({ platform: p, metrics: ["conversions"], displayType: "pie", dimension: "gender", size: "third", title: "המרות לפי מגדר" });
+      specs.push({ platform: p, metrics: ["conversions"], displayType: "pie", dimension: "device", size: "third", title: "המרות לפי מכשיר" });
+    }
   }
 
   return specs;

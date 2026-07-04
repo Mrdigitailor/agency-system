@@ -91,3 +91,51 @@ export function breakdownConversions(insights: Insight[], selectedEventRaw: stri
     return { event, count };
   });
 }
+
+// ==================== פירוק המרות לפי סוג (לווידג'ט "סוגי המרות") ====================
+// סופרים רק action types ספציפיים (ערוץ-מסוים) כדי לא לספור כפול:
+// מטא מדווח גם "lead" גנרי וגם onsite/offsite ספציפיים על אותם לידים.
+
+const ACTION_LABELS: Record<string, string> = {
+  "onsite_conversion.lead_grouped": "ליד — טופס בפלטפורמה",
+  "offsite_conversion.fb_pixel_lead": "ליד — אתר",
+  "offsite_conversion.fb_pixel_purchase": "רכישה",
+  "onsite_conversion.purchase": "רכישה בפלטפורמה",
+  "offsite_conversion.fb_pixel_complete_registration": "השלמת הרשמה",
+  "offsite_conversion.fb_pixel_schedule": "תיאום פגישה",
+  "offsite_conversion.fb_pixel_contact": "יצירת קשר",
+  "offsite_conversion.fb_pixel_subscribe": "הרשמה למנוי",
+  "offsite_conversion.fb_pixel_start_trial": "התחלת ניסיון",
+  "offsite_conversion.fb_pixel_submit_application": "הגשת בקשה",
+  "onsite_conversion.messaging_conversation_started_7d": "שיחה בהודעות",
+};
+const CUSTOM_PREFIX = "offsite_conversion.custom.";
+
+export interface ActionCount {
+  /** action_type הגולמי */
+  type: string;
+  /** תווית להצגה (עברית לאירועים סטנדרטיים; לשמות מותאמים — נפתר בנפרד) */
+  label: string;
+  /** מזהה ההמרה המותאמת, אם זו אחת כזאת */
+  customId?: string;
+  count: number;
+}
+
+/** סיכום המרות לפי סוג-אירוע מתוך actionsJson — לפירוק "סוגי המרות" בדשבורד */
+export function aggregateConversionActions(insights: Array<{ actionsJson: string }>): ActionCount[] {
+  const counts = new Map<string, number>();
+  for (const ins of insights) {
+    for (const a of extractActions(ins.actionsJson)) {
+      if (ACTION_LABELS[a.action_type] || a.action_type.startsWith(CUSTOM_PREFIX)) {
+        counts.set(a.action_type, (counts.get(a.action_type) ?? 0) + (parseFloat(a.value) || 0));
+      }
+    }
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count > 0)
+    .map(([type, count]) => {
+      const customId = type.startsWith(CUSTOM_PREFIX) ? type.slice(CUSTOM_PREFIX.length) : undefined;
+      return { type, label: ACTION_LABELS[type] ?? `המרה מותאמת ${customId}`, customId, count };
+    })
+    .sort((a, b) => b.count - a.count);
+}
