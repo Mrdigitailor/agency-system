@@ -33,7 +33,8 @@ export default function PublicDashboardView({ token }: { token: string }) {
   const [dto, setDto] = useState<Dto | null>(null);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
-  const [range, setRange] = useState("month");
+  // ברירת מחדל 28 יום — "החודש" בתחילת חודש מציג יומיים-שלושה של דאטה ונראה ריק
+  const [range, setRange] = useState("28");
   const [customSince, setCustomSince] = useState(() => rangeDates("month").since);
   const [customUntil, setCustomUntil] = useState(() => rangeDates("month").until);
 
@@ -89,7 +90,13 @@ export default function PublicDashboardView({ token }: { token: string }) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-brand-dark">{dto?.client.name ?? ""}</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-brand-dark">{dto?.client.name ?? ""}</h1>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-brand-muted">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand-success" />
+            נתונים לתקופה {new Date(since).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })} – {new Date(until).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })} · מתעדכן אוטומטית
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light p-0.5">
             {RANGES.map((r) => (
