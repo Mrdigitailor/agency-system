@@ -275,6 +275,16 @@ export default function ClientsPage() {
                 const projectedPct = client.monthlyBudget > 0 ? Math.round((projectedSpend / client.monthlyBudget) * 100) : 0;
                 const budgetOverpacing = client.monthlyBudget > 0 && projectedPct > 110;
                 const budgetNearLimit = client.monthlyBudget > 0 && !budgetOverpacing && projectedPct > 100;
+                // המלצת תקציב יומי: הקצב היומי בפועל עד היום מול הקצב הדרוש כדי לעמוד ביעד
+                const dayOfMonthNum = _now.getDate();
+                const currentDailyAvg = dayOfMonthNum > 0 ? actualSpend / dayOfMonthNum : 0;
+                const remainingBudget = client.monthlyBudget - actualSpend;
+                const recommendedDaily = remaining > 0 ? remainingBudget / remaining : 0;
+                const dailyDelta = recommendedDaily - currentDailyAvg; // שלילי = להוריד
+                const overBudget = client.monthlyBudget > 0 && remainingBudget <= 0;
+                const adjustPct = currentDailyAvg > 0 ? Math.abs(dailyDelta) / currentDailyAvg : 0;
+                const hasBudgetRec = client.monthlyBudget > 0 && currentDailyAvg > 0 && remaining > 0;
+                const showBudgetRec = hasBudgetRec && (overBudget || adjustPct > 0.1);
                 const hitGoal = targetConv > 0 && conv >= targetConv;
                 const onPace = targetConv > 0 && !hitGoal && conv >= targetConv * monthProgress * 0.9;
                 const sym = getCurrencySymbol(client.currency);
@@ -305,6 +315,21 @@ export default function ClientsPage() {
                           )}
                           <span className="text-brand-muted">{remaining} {t('daysRemaining')}</span>
                         </div>
+                        {showBudgetRec && (
+                          overBudget ? (
+                            <div className="text-[10px] font-medium text-brand-danger" title={`ההוצאה החודשית (${sym}${Math.round(actualSpend).toLocaleString()}) כבר עברה את התקציב (${sym}${client.monthlyBudget.toLocaleString()}). מומלץ לעצור או לצמצם משמעותית את התקציב היומי.`}>
+                              ⚠ חריגה מהתקציב · מומלץ לצמצם
+                            </div>
+                          ) : dailyDelta < 0 ? (
+                            <div className="text-[10px] font-medium text-brand-danger" title={`הקצב היומי בפועל כ-${sym}${Math.round(currentDailyAvg).toLocaleString()}. כדי לסיים בדיוק בתקציב, הורד ל-${sym}${Math.round(recommendedDaily).toLocaleString()} ליום למשך ${remaining} הימים הנותרים.`}>
+                              💡 הורד ל-{sym}{Math.round(recommendedDaily).toLocaleString()}/יום (−{sym}{Math.round(-dailyDelta).toLocaleString()})
+                            </div>
+                          ) : (
+                            <div className="text-[10px] font-medium text-brand-info" title={`הקצב היומי בפועל כ-${sym}${Math.round(currentDailyAvg).toLocaleString()}. יש עוד תקציב פנוי — אפשר להעלות ל-${sym}${Math.round(recommendedDaily).toLocaleString()} ליום כדי לנצל את מלוא התקציב עד סוף החודש.`}>
+                              💡 אפשר להעלות ל-{sym}{Math.round(recommendedDaily).toLocaleString()}/יום (+{sym}{Math.round(dailyDelta).toLocaleString()})
+                            </div>
+                          )
+                        )}
                       </div>
                     </td>
                     {/* עלות להמרה */}
