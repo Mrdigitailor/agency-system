@@ -107,12 +107,25 @@ export async function buildCrmDigest(): Promise<string | null> {
     }
   }
 
-  if (noAction.length === 0 && overdue.length === 0 && stale.length === 0 && legacyCount === 0) return null;
+  // לידים אבודים שהגיע מועד ההחייאה שלהם (חלון 14 יום — שלא יישארו לנצח בדיגסט)
+  const revivalWindow = shiftYmd(today, -14);
+  const revivals = await prisma.lead.findMany({
+    where: { status: "lost", nextFollowUp: { gte: revivalWindow, lte: today } },
+    select: { name: true, company: true, closeReason: true },
+    take: 8,
+  });
+  const revival = revivals.map((l) => {
+    const REASON_HE: Record<string, string> = { price: "מחיר", timing: "תזמון", competitor: "מתחרה", no_budget: "אין תקציב" };
+    return `• ${l.name}${l.company ? ` (${l.company})` : ""} — אבד בגלל ${REASON_HE[l.closeReason] ?? (l.closeReason || "?")}, הגיע הזמן לבדוק שוב`;
+  });
+
+  if (noAction.length === 0 && overdue.length === 0 && stale.length === 0 && legacyCount === 0 && revival.length === 0) return null;
 
   const parts: string[] = ["📇 CRM — דורש טיפול היום:"];
   if (overdue.length > 0) parts.push(`\n⏰ צעדים באיחור (${overdue.length}):\n${overdue.slice(0, 8).join("\n")}`);
   if (noAction.length > 0) parts.push(`\n🚨 לידים בלי צעד הבא (${noAction.length}):\n${noAction.slice(0, 8).join("\n")}`);
   if (stale.length > 0) parts.push(`\n🐌 תקועים בשלב (${stale.length}):\n${stale.slice(0, 8).join("\n")}`);
+  if (revival.length > 0) parts.push(`\n🔁 לידים להחייאה (${revival.length}):\n${revival.join("\n")}`);
   if (legacyCount > 0) parts.push(`\n🗄 בנוסף: ${legacyCount} לידים ישנים (מעל ${FRESH_DAYS} יום) פתוחים בלי טיפול — שווה לעבור עליהם ולסגור/להחיות`);
   return parts.join("\n");
 }

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, type AuthUser } from "@/lib/auth/api-guard";
 import { defaultNextActionForStatus } from "@/lib/crm/automations";
-import { todayIL } from "@/lib/utils/ildate";
+import { todayIL, shiftYmd } from "@/lib/utils/ildate";
+import { sendTelegramMessage } from "@/lib/api/telegram/client";
+import { ownerChatId } from "@/lib/performance/approval";
 
 const STATUS_HE: Record<string, string> = {
   new: "חדש", contacted: "נוצר קשר", meeting_set: "נקבעה פגישה", proposal_sent: "נשלחה הצעה",
@@ -24,12 +26,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   // אוטומציית מעבר סטטוס: עדכון stageChangedAt + הצעת צעד הבא אם אין
   if (body.status) {
-    const current = await prisma.lead.findUnique({ where: { id }, select: { status: true, nextFollowUp: true } });
+    const current = await prisma.lead.findUnique({ where: { id } });
     if (current && current.status !== body.status) {
       body.stageChangedAt = todayIL();
+      const REASON_HE: Record<string, string> = { price: "מחיר", timing: "תזמון", competitor: "מתחרה", not_relevant: "לא רלוונטי", no_budget: "אין תקציב", other: "אחר" };
       let stageText = `סטטוס: ${STATUS_HE[current.status] ?? current.status} ← ${STATUS_HE[body.status] ?? body.status}`;
-      if (body.status === "lost" && body.closeReason) stageText += ` (${body.closeReason})`;
+      if (body.status === "lost" && body.closeReason) stageText += ` (${REASON_HE[body.closeReason] ?? body.closeReason})`;
       await logActivity("stage", stageText);
+
       // אם לא נשלח צעד הבא בבקשה — נגזר ברירת מחדל לפי הסטטוס החדש
       // (למשל: נשלחה הצעה → פולו-אפ בעוד 48 שעות)
       if (!body.nextFollowUp) {
@@ -43,6 +47,52 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           body.nextFollowUp = "";
           body.nextActionType = "";
           body.nextActionNote = "";
+        }
+      }
+
+      // ═══ אבד → תזכורת החייאה: "לא עכשיו" הוא ההפסד הכי נפוץ אצל סוכנות ═══
+      if (body.status === "lost") {
+        const reason = body.closeReason ?? "";
+        const months = reason === "timing" ? 3 : ["price", "competitor", "no_budget"].includes(reason) ? 6 : 0;
+        if (months > 0) {
+          body.nextFollowUp = shiftYmd(todayIL(), months * 30);
+          body.nextActionType = "followup";
+          body.nextActionNote = `החייאת ליד אבוד (${REASON_HE[reason] ?? reason}) — לבדוק אם התזמון השתנה`;
+          await logActivity("system", `⏰ נקבעה תזכורת החייאה בעוד ${months} חודשים`);
+        }
+      }
+
+      // ═══ נסגר → יצירת לקוח אוטומטית במערכת (אפס הקלדה כפולה) ═══
+      if (body.status === "won" && !current.clientId) {
+        if (!body.closedAt && !current.closedAt) body.closedAt = todayIL();
+        try {
+          // מיפוי שירותים → פלטפורמות
+          const services = (JSON.parse(current.interestedServices || "[]") as string[]).join(" ");
+          const platforms: string[] = [];
+          if (/meta|facebook|פייסבוק|אינסטגרם|instagram/i.test(services)) platforms.push("Meta");
+          if (/google|גוגל/i.test(services)) platforms.push("Google Ads");
+          if (/tiktok|טיקטוק/i.test(services)) platforms.push("TikTok");
+
+          const client = await prisma.client.create({
+            data: {
+              name: current.company || current.name,
+              platforms: JSON.stringify(platforms),
+              customAssets: "[]",
+              contactEmail: current.email,
+              contactPhone: current.phone,
+              website: current.website,
+              status: "active",
+              notes: `נוצר אוטומטית מסגירת ליד ב-CRM (${todayIL()})${current.monthlyValue ? ` · ריטיינר חודשי: ₪${current.monthlyValue.toLocaleString()}` : ""}`,
+            },
+          });
+          body.clientId = client.id;
+          await logActivity("system", `🎉 נוצר לקוח חדש במערכת: ${client.name}`);
+          const chat = ownerChatId();
+          if (chat) {
+            sendTelegramMessage(chat, `🎉 עסקה נסגרה! ${current.name}${current.company ? ` (${current.company})` : ""}${(current.dealValue || current.value) ? ` — ₪${(current.dealValue || current.value).toLocaleString()}` : ""}\nנוצר כרטיס לקוח חדש במערכת — נשאר רק לחבר חשבונות פרסום ולשבץ מנהל.`).catch(() => {});
+          }
+        } catch (e) {
+          console.error("[Leads] auto-create client failed:", e);
         }
       }
     }

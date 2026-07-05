@@ -150,6 +150,7 @@ export interface Lead {
   qualityRating: number;
   dealValue: number;
   monthlyValue: number;
+  lifetimeValue: number;
   serviceType: string;
   proposalUrl: string;
   closedAt: string;

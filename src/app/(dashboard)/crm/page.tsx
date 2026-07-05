@@ -462,6 +462,7 @@ export default function CrmPage() {
       qualityRating: 0,
       dealValue: 0,
       monthlyValue: 0,
+      lifetimeValue: 0,
       serviceType: "",
       proposalUrl: "",
       closedAt: "",
@@ -773,6 +774,24 @@ export default function CrmPage() {
     }
     return { raw: Math.round(raw), weighted: Math.round(weighted), wonThisMonth: Math.round(wonThisMonth) };
   }, [leads, todayStr]);
+
+  // הכנסות לפי מקור ליד — איזה ערוץ באמת מביא את הכסף
+  const sourceStats = useMemo(() => {
+    const map = new Map<string, { leads: number; won: number; revenue: number }>();
+    for (const l of leads) {
+      const key = l.source || "other";
+      const e = map.get(key) ?? { leads: 0, won: 0, revenue: 0 };
+      e.leads++;
+      if (l.status === "won") {
+        e.won++;
+        e.revenue += l.lifetimeValue || l.dealValue || l.value || 0;
+      }
+      map.set(key, e);
+    }
+    return Array.from(map.entries())
+      .map(([source, v]) => ({ source, ...v, conv: v.leads > 0 ? Math.round((v.won / v.leads) * 100) : 0 }))
+      .sort((a, b) => b.revenue - a.revenue || b.won - a.won);
+  }, [leads]);
 
   /* ── Filtered data ── */
   const activeLeads = useMemo(() => {
@@ -1200,6 +1219,42 @@ export default function CrmPage() {
               <p className="mt-1 text-2xl font-semibold text-brand-dark">₪ {closingsKpi.avgDealValue.toLocaleString()}</p>
             </div>
           </div>
+
+          {/* ═══ הכנסות לפי מקור ליד — איזה ערוץ מביא את הכסף ═══ */}
+          {sourceStats.some((s) => s.won > 0) && (
+            <div className={`${cardClass} overflow-x-auto p-0`}>
+              <p className="px-4 pt-4 text-sm font-semibold text-brand-dark">💸 הכנסות לפי מקור ליד</p>
+              <table className="mt-2 w-full text-sm">
+                <thead>
+                  <tr className="border-b border-brand-border bg-brand-bg text-brand-muted">
+                    <th className="px-4 py-2.5 text-right font-medium">מקור</th>
+                    <th className="px-4 py-2.5 text-right font-medium">לידים</th>
+                    <th className="px-4 py-2.5 text-right font-medium">נסגרו</th>
+                    <th className="px-4 py-2.5 text-right font-medium">אחוז המרה</th>
+                    <th className="px-4 py-2.5 text-right font-medium">הכנסה</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sourceStats.filter((s) => s.leads > 0).map((s, i) => (
+                    <tr key={s.source} className="border-b border-brand-border last:border-0">
+                      <td className="px-4 py-2.5">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${SOURCE_COLORS[s.source] || SOURCE_COLORS.other}`}>
+                          {getSourceLabel(s.source)}
+                        </span>
+                        {i === 0 && s.revenue > 0 && <span className="mr-2 text-[10px] text-brand-gold">🏆 המוביל</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-brand-dark">{s.leads}</td>
+                      <td className="px-4 py-2.5 text-brand-dark">{s.won}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={s.conv >= 25 ? "font-medium text-brand-success" : s.conv >= 10 ? "text-brand-dark" : "text-brand-muted"}>{s.conv}%</span>
+                      </td>
+                      <td className="px-4 py-2.5 font-semibold text-brand-dark">₪{s.revenue.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Closings Filter bar */}
           <button onClick={() => setClosingsFiltersOpen(!closingsFiltersOpen)} className="flex items-center gap-2 rounded-lg border border-brand-border bg-brand-light px-4 py-2 text-sm font-medium text-brand-muted hover:bg-brand-bg"><Filter className="h-4 w-4" />{t('filter')}{closingsFilterCount > 0 && <span className="rounded-full bg-brand-gold px-2 py-0.5 text-xs font-bold text-brand-dark">{closingsFilterCount}</span>}</button>
