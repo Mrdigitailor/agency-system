@@ -1078,7 +1078,7 @@ export default function CrmPage() {
                     <th className="px-4 py-3 text-right font-medium">{t('name')}</th>
                     <th className="px-4 py-3 text-right font-medium">{t('company')}</th>
                     <th className="px-4 py-3 text-right font-medium">{t('source')}</th>
-                    <th className="px-4 py-3 text-right font-medium">{t('value')}</th>
+                    <th className="px-4 py-3 text-right font-medium">שווי עסקה מינימלי</th>
                     <th className="px-4 py-3 text-right font-medium">{t('quality')}</th>
                     <th className="px-4 py-3 text-right font-medium">{t('status')}</th>
                     <th className="px-4 py-3 text-right font-medium">{t('dueDate')}</th>
@@ -1103,8 +1103,8 @@ export default function CrmPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 font-medium text-brand-dark">
-                          {lead.dealType === "retainer" && lead.monthlyValue > 0
-                            ? `₪${lead.monthlyValue.toLocaleString()}/ח׳${lead.minMonths > 0 ? ` · מינ׳ ₪${(lead.monthlyValue * lead.minMonths).toLocaleString()}` : ""}`
+                          {lead.dealType === "retainer" && lead.monthlyValue > 0 && lead.minMonths > 0
+                            ? `₪ ${(lead.monthlyValue * lead.minMonths).toLocaleString()}`
                             : (lead.dealValue || lead.value) > 0 ? `₪ ${(lead.dealValue || lead.value).toLocaleString()}` : "\u2014"}
                         </td>
                         <td className="px-4 py-3">
@@ -1863,24 +1863,18 @@ export default function CrmPage() {
               </div>
             )}
 
-            {/* Status change */}
+            {/* Status change — dropdown */}
             <div>
               <p className="mb-2 text-xs font-medium text-brand-muted">שנה סטטוס</p>
-              <div className="flex flex-wrap gap-2">
+              <select
+                value={selectedLead.status}
+                onChange={(e) => handleStatusChange(e.target.value as Lead["status"])}
+                className={`${inputClass} max-w-[220px]`}
+              >
                 {LEAD_STATUSES.map((s) => (
-                  <button
-                    key={s.value}
-                    onClick={() => handleStatusChange(s.value)}
-                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors duration-200 ${
-                      selectedLead.status === s.value
-                        ? `${s.color} text-brand-light`
-                        : "bg-brand-bg text-brand-muted hover:bg-brand-border"
-                    }`}
-                  >
-                    {s.label}
-                  </button>
+                  <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
-              </div>
+              </select>
             </div>
 
             {/* Proposal */}
