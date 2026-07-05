@@ -270,6 +270,11 @@ export default function ClientsPage() {
                 const convPct = targetConv > 0 ? Math.round((conv / targetConv) * 100) : 0;
                 const _now = new Date();
                 const monthProgress = Math.min(_now.getDate() / new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate(), 1);
+                // תקציב — קצב חודשי: מקרינים את ההוצאה עד היום לסוף החודש
+                const projectedSpend = monthProgress > 0 ? actualSpend / monthProgress : 0;
+                const projectedPct = client.monthlyBudget > 0 ? Math.round((projectedSpend / client.monthlyBudget) * 100) : 0;
+                const budgetOverpacing = client.monthlyBudget > 0 && projectedPct > 110;
+                const budgetNearLimit = client.monthlyBudget > 0 && !budgetOverpacing && projectedPct > 100;
                 const hitGoal = targetConv > 0 && conv >= targetConv;
                 const onPace = targetConv > 0 && !hitGoal && conv >= targetConv * monthProgress * 0.9;
                 const sym = getCurrencySymbol(client.currency);
@@ -278,17 +283,27 @@ export default function ClientsPage() {
                     <td className="px-4 py-4 font-medium text-brand-dark">{client.name}</td>
                     <td className="px-4 py-4 text-brand-muted">{getCampaignManagerForClient(client.id, employees) || "—"}</td>
                     <td className="px-4 py-4 text-brand-muted">{getAccountManagerForClient(client.id, employees) || "—"}</td>
-                    {/* תקציב */}
-                    <td className="px-4 py-4">
+                    {/* תקציב — צבע לפי צפי סוף-חודש (קצב הוצאה), לא לפי כמה נוצל */}
+                    <td className={`px-4 py-4 ${budgetOverpacing ? "bg-brand-danger/5" : ""}`}>
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs">
                           <span className="text-brand-dark font-medium">{sym}{Math.round(actualSpend).toLocaleString()}</span>
                           <span className="text-brand-muted">/ {sym}{client.monthlyBudget.toLocaleString()}</span>
                         </div>
-                        <ProgressBar current={actualSpend} target={client.monthlyBudget} inverted />
-                        <div className="flex justify-between text-[10px] text-brand-muted">
-                          <span>{budgetPct}% {t('used')}</span>
-                          <span>{remaining} {t('daysRemaining')}</span>
+                        <ProgressBar current={actualSpend} target={client.monthlyBudget} budgetPace={monthProgress} />
+                        <div className="flex justify-between text-[10px]">
+                          {client.monthlyBudget > 0 ? (
+                            budgetOverpacing ? (
+                              <span className="font-bold text-brand-danger" title={`בקצב הנוכחי צפויה הוצאה של ${sym}${Math.round(projectedSpend).toLocaleString()} עד סוף החודש — ${projectedPct}% מהתקציב`}>⚠ קצב מואץ · צפי {sym}{Math.round(projectedSpend).toLocaleString()}</span>
+                            ) : budgetNearLimit ? (
+                              <span className="font-medium text-brand-warning" title={`צפי הוצאה עד סוף החודש: ${sym}${Math.round(projectedSpend).toLocaleString()}`}>צפי {sym}{Math.round(projectedSpend).toLocaleString()} · {projectedPct}%</span>
+                            ) : (
+                              <span className="font-medium text-brand-success" title={`צפי הוצאה עד סוף החודש: ${sym}${Math.round(projectedSpend).toLocaleString()} (${projectedPct}% מהתקציב)`}>בקצב תקין · {budgetPct}% נוצל</span>
+                            )
+                          ) : (
+                            <span className="text-brand-muted">{budgetPct}% {t('used')}</span>
+                          )}
+                          <span className="text-brand-muted">{remaining} {t('daysRemaining')}</span>
                         </div>
                       </div>
                     </td>
