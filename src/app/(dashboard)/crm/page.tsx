@@ -33,6 +33,11 @@ import { useDroppable, useDraggable } from "@dnd-kit/core";
 
 /* ── עזר ── */
 
+// הצעות המחיר שמורות ב-Blob פרטי — צפייה/הורדה עוברות דרך route מאובטח
+function proposalFileUrl(blobUrl: string, download = false) {
+  return `/api/blob/proposal?url=${encodeURIComponent(blobUrl)}${download ? "&download=1" : ""}`;
+}
+
 function getStatusInfo(status: string) {
   return LEAD_STATUSES.find((s) => s.value === status) ?? LEAD_STATUSES[0];
 }
@@ -503,7 +508,8 @@ export default function CrmPage() {
         `proposals/${selectedLead.id}_${Date.now()}_${file.name}`,
         file,
         {
-          access: "public",
+          // ה-store מוגדר private — access:"public" נדחה ע"י האחסון (זה מה שתקע העלאות)
+          access: "private",
           handleUploadUrl: "/api/upload",
           contentType: file.type,
           multipart: true,
@@ -1578,7 +1584,7 @@ export default function CrmPage() {
                           <Eye className="h-4 w-4" />
                         </button>
                         <a
-                          href={selectedLead.proposalUrl}
+                          href={proposalFileUrl(selectedLead.proposalUrl, true)}
                           download
                           className="rounded-lg p-2 text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
                           title="הורד"
@@ -2005,14 +2011,14 @@ export default function CrmPage() {
           <div className="space-y-3">
             <div className="h-[70vh] w-full overflow-hidden rounded-lg border border-brand-border">
               <iframe
-                src={selectedLead.proposalUrl}
+                src={proposalFileUrl(selectedLead.proposalUrl)}
                 className="h-full w-full"
                 title="PDF Viewer"
               />
             </div>
             <div className="flex justify-end gap-3">
               <a
-                href={selectedLead.proposalUrl}
+                href={proposalFileUrl(selectedLead.proposalUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-muted hover:bg-brand-bg"
@@ -2020,7 +2026,7 @@ export default function CrmPage() {
                 פתח בטאב חדש
               </a>
               <a
-                href={selectedLead.proposalUrl}
+                href={proposalFileUrl(selectedLead.proposalUrl, true)}
                 download={selectedLead.proposalFileName}
                 className={btnPrimary}
               >
