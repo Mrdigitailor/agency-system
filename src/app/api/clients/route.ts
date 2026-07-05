@@ -56,7 +56,8 @@ export async function GET(req: Request) {
   // שליפת insights מכל הפלטפורמות
   const [metaInsights, gadsInsights, ttInsights] = clientIds.length > 0 ? await Promise.all([
     prisma.metaInsightDaily.findMany({
-      where: { clientId: { in: clientIds }, date: { gte: since, lte: until } },
+      // level="campaign" בלבד — אחרת מסכמים גם adset+ad = ספירה משולשת
+      where: { clientId: { in: clientIds }, level: "campaign", date: { gte: since, lte: until } },
       select: { clientId: true, spend: true, conversions: true, purchases: true, leads: true, actionsJson: true },
     }),
     prisma.googleAdsInsightDaily.findMany({

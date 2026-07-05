@@ -23,8 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ clientI
 
   // === 1. DB data ===
   const [metaRows, gadsRows, ttRows] = await Promise.all([
-    prisma.metaInsightDaily.findMany({
-      where: { clientId, date: { gte: monthStart, lte: today } },
+    prisma.metaInsightDaily.findMany({ where: { clientId, level: "campaign", date: { gte: monthStart, lte: today } },
       select: { date: true, spend: true },
     }),
     prisma.googleAdsInsightDaily.findMany({

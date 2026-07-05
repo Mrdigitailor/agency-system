@@ -18,7 +18,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ clientId
 
   const [insights, pagePosts, igMedia] = await Promise.all([
     prisma.metaInsightDaily.findMany({
-      where: { clientId, date: { gte: since, lte: until } },
+      where: { clientId, level: "campaign", date: { gte: since, lte: until } },
       orderBy: { date: "desc" },
     }),
     prisma.metaPagePost.findMany({

@@ -17,7 +17,7 @@ export async function buildSystemPrompt(clientId: string): Promise<string> {
   const now = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const insights = await prisma.metaInsightDaily.findMany({
-    where: { clientId, date: { gte: monthStart } },
+    where: { clientId, level: "campaign", date: { gte: monthStart } },
   });
   const totalSpend = insights.reduce((s, i) => s + i.spend, 0);
   const totalConversions = insights.reduce((s, i) => s + i.conversions, 0);

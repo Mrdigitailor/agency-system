@@ -28,9 +28,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const selectedEventRaw = client?.metaConversionEvent ?? "";
   const googleSelectedRaw = client?.googleConversionAction ?? "";
 
-  // Meta Insights
+  // Meta Insights — level="campaign" בלבד (אחרת adset+ad מסכמים פי 3)
   const insights = await prisma.metaInsightDaily.findMany({
-    where: { clientId, date: { gte: since, lte: until } },
+    where: { clientId, level: "campaign", date: { gte: since, lte: until } },
   });
 
   const metaSpend = insights.reduce((s, i) => s + i.spend, 0);

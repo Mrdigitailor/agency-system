@@ -66,8 +66,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ clientI
 
   const selectedEvents = parseConversionEvents(client.metaConversionEvent ?? "");
 
-  const insights = await prisma.metaInsightDaily.findMany({
-    where: { clientId, date: { gte: since, lte: until } },
+  const insights = await prisma.metaInsightDaily.findMany({ where: { clientId, level: "campaign", date: { gte: since, lte: until } },
     orderBy: { date: "asc" },
   });
 
