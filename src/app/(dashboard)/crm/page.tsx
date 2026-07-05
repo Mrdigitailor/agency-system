@@ -484,6 +484,7 @@ export default function CrmPage() {
 
   const [proposalViewOpen, setProposalViewOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   async function handleUploadProposal(file: File) {
     if (!selectedLead) return;
@@ -493,13 +494,21 @@ export default function CrmPage() {
     }
     console.log(`[Proposal] Uploading: ${file.name} (${(file.size / 1024).toFixed(0)}KB)`);
     setUploading(true);
+    setUploadProgress(0);
     try {
       // העלאה ישירה מהדפדפן ל-Vercel Blob — עוקפת את תקרת גוף-הבקשה (4.5MB)
       // שגרמה ל-"Request Entity Too Large". רק החלפת token עוברת דרך /api/upload.
+      // multipart=true: מעלה במקטעים במקביל — הרבה יותר מהיר ואמין לקבצים גדולים.
       const blob = await upload(
         `proposals/${selectedLead.id}_${Date.now()}_${file.name}`,
         file,
-        { access: "public", handleUploadUrl: "/api/upload", contentType: file.type },
+        {
+          access: "public",
+          handleUploadUrl: "/api/upload",
+          contentType: file.type,
+          multipart: true,
+          onUploadProgress: (e) => setUploadProgress(Math.round(e.percentage)),
+        },
       );
 
       // שמירת ה-URL ללקוח (Node.js route עם Prisma)
@@ -1599,7 +1608,10 @@ export default function CrmPage() {
                     {uploading ? (
                       <>
                         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-gold border-t-transparent" />
-                        <span className="text-sm font-medium text-brand-dark">מעלה...</span>
+                        <span className="text-sm font-medium text-brand-dark">מעלה... {uploadProgress}%</span>
+                        <div className="h-1.5 w-40 overflow-hidden rounded-full bg-brand-border">
+                          <div className="h-full rounded-full bg-brand-gold transition-all duration-200" style={{ width: `${uploadProgress}%` }} />
+                        </div>
                       </>
                     ) : (
                       <>
