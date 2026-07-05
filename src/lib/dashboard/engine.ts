@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { countConversions, aggregateConversionActions } from "@/lib/utils/metaMetrics";
 import { countGoogleConversions } from "@/lib/utils/googleMetrics";
 import { fetchCustomConversions } from "@/lib/api/meta/conversions";
+import { normalizeName } from "@/lib/reports/group-by-product";
 import { fetchAnalytics, type AnalyticsData } from "@/lib/api/ga4/client";
 import { getValidGoogleToken } from "@/lib/api/google-ads/client";
 import { fetchGoogleSegment, type GoogleSegment, type SegmentRow } from "@/lib/api/google-ads/segments";
@@ -21,6 +22,8 @@ export interface WidgetConfig {
   title: string;
   textBody: string;
   compare: boolean;
+  /** סינון לפי שם קמפיין (מכיל, מנורמל) — מאפשר ווידג'טים פר-מוצר */
+  campaignFilter?: string;
 }
 export interface ClientCtx {
   clientId: string;
@@ -219,8 +222,25 @@ function rowsToComponents(platform: Platform, ad: AdRows, ctx: ClientCtx): Compo
   return c;
 }
 
+/** סינון שורות פרסום לפי שם קמפיין (מכיל, מנורמל) — לווידג'טים פר-מוצר */
+function filterAdRows(ad: AdRows, filter: string): AdRows {
+  const f = normalizeName(filter);
+  if (!f) return ad;
+  return {
+    meta: ad.meta.filter((r) => normalizeName(r.name).includes(f)),
+    google: ad.google.filter((r) => normalizeName(r.campaignName).includes(f)),
+    tiktok: ad.tiktok.filter((r) => normalizeName(r.campaignName).includes(f)),
+  };
+}
+
 // ---------- חישוב ווידג'ט פרסום ----------
 function computeAdWidget(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, prevAd?: AdRows | null, customNames?: Map<string, string>): WidgetData {
+  // סינון פר-מוצר/קמפיין — לפני כל חישוב (כולל ההשוואה לתקופה קודמת)
+  if (w.campaignFilter) {
+    ad = filterAdRows(ad, w.campaignFilter);
+    if (prevAd) prevAd = filterAdRows(prevAd, w.campaignFilter);
+  }
+
   // פילוח לפי סוג המרה — לא תלוי בבחירת מטריקות
   if (w.dimension === "action") return actionBreakdown(w, ctx, ad, customNames ?? new Map());
 

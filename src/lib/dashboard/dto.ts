@@ -67,11 +67,20 @@ export function sanitizeRange(sinceRaw: string | null, untilRaw: string | null):
 }
 
 interface RawWidget {
-  id: string; platform: string; metrics: string; dimension: string; displayType: string; size: string; title: string; textBody: string; compare: boolean;
+  id: string; platform: string; metrics: string; dimension: string; displayType: string; size: string; title: string; textBody: string; compare: boolean; filters: string;
 }
 function toConfig(w: RawWidget): WidgetConfig {
   let metrics: string[] = [];
   try { const p = JSON.parse(w.metrics || "[]"); if (Array.isArray(p)) metrics = p.filter((x) => typeof x === "string"); } catch {}
+  // filters: [{ field: "campaign", operator: "contains", value: "..." }] → סינון פר-מוצר
+  let campaignFilter = "";
+  try {
+    const f = JSON.parse(w.filters || "[]");
+    if (Array.isArray(f)) {
+      const c = f.find((x) => x && typeof x === "object" && x.field === "campaign" && typeof x.value === "string");
+      if (c) campaignFilter = c.value;
+    }
+  } catch {}
   return {
     id: w.id,
     platform: w.platform as Platform,
@@ -82,6 +91,7 @@ function toConfig(w: RawWidget): WidgetConfig {
     title: w.title,
     textBody: w.textBody ?? "",
     compare: Boolean(w.compare),
+    campaignFilter: campaignFilter || undefined,
   };
 }
 

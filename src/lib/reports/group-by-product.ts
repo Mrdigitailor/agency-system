@@ -3,7 +3,7 @@
 
 import type { CampaignRow } from "./weekly-data";
 
-function normalizeName(s: string): string {
+export function normalizeName(s: string): string {
   return s
     .toLowerCase()
     .replace(/["'`׳״’]/g, "")

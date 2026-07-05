@@ -8,6 +8,7 @@ import { Plus, Pencil, Trash2, GripVertical, Loader2, Link2, Copy, ExternalLink,
 import { WidgetRenderer, type WidgetDTO } from "@/components/dashboard/DashboardWidgets";
 import { getMetricsForPlatform, PLATFORM_LABELS, DISPLAY_LABELS, DIMENSION_LABELS, validDimensions, type Platform, type DisplayType, type Dimension } from "@/lib/dashboard/metrics";
 
+interface WidgetFilter { field: string; operator: string; value: string }
 interface Widget {
   id: string;
   platform: Platform;
@@ -18,13 +19,22 @@ interface Widget {
   title: string;
   textBody: string;
   compare: boolean;
+  /** סינון לפי שם קמפיין (מכיל) — ריק = כל הקמפיינים */
+  campaignFilter: string;
+}
+
+/** חילוץ סינון הקמפיין ממערך ה-filters שמגיע מה-API */
+function extractCampaignFilter(filters: unknown): string {
+  if (!Array.isArray(filters)) return "";
+  const c = (filters as WidgetFilter[]).find((f) => f && f.field === "campaign" && typeof f.value === "string");
+  return c?.value ?? "";
 }
 
 const PLATFORMS: Platform[] = ["meta", "google_ads", "tiktok", "all", "ga4"];
 const DISPLAYS: DisplayType[] = ["kpi", "line", "area", "bar", "pie", "table", "platform_header", "heading", "text"];
 const isTextType = (d: DisplayType) => d === "heading" || d === "text";
 const isNoMetrics = (d: DisplayType) => isTextType(d) || d === "platform_header";
-const emptyForm = (): Widget => ({ id: "", platform: "meta", metrics: [], displayType: "kpi", dimension: "none", size: "full", title: "", textBody: "", compare: false });
+const emptyForm = (): Widget => ({ id: "", platform: "meta", metrics: [], displayType: "kpi", dimension: "none", size: "full", title: "", textBody: "", compare: false, campaignFilter: "" });
 const SIZES = [
   { v: "full", label: "מלא" },
   { v: "half", label: "חצי" },
@@ -87,7 +97,10 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
 
   const loadWidgets = useCallback(async () => {
     const res = await fetch(`/api/clients/${clientId}/widgets?reportId=${reportId}`);
-    if (res.ok) setWidgets(await res.json());
+    if (res.ok) {
+      const rows = (await res.json()) as Array<Widget & { filters?: unknown }>;
+      setWidgets(rows.map((w) => ({ ...w, campaignFilter: extractCampaignFilter(w.filters) })));
+    }
   }, [clientId, reportId]);
 
   const loadShare = useCallback(async () => {
@@ -144,7 +157,11 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
     if (isText && !form.title.trim() && !form.textBody.trim()) return;
     setSaving(true);
     try {
-      const payload = { ...form };
+      // ממירים את סינון הקמפיין לפורמט ה-filters שנשמר ב-DB
+      const filters = form.campaignFilter.trim()
+        ? [{ field: "campaign", operator: "contains", value: form.campaignFilter.trim() }]
+        : [];
+      const payload = { ...form, filters };
       if (selectedId && selectedId !== "new") {
         await fetch(`/api/clients/${clientId}/widgets`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, id: selectedId }) });
       } else {
@@ -241,7 +258,7 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
               {selectedId === null ? (
                 <div className="py-8 text-center text-sm text-brand-muted">
                   <FileText className="mx-auto mb-2 h-7 w-7 opacity-50" />
-                  בחר ווידג'ט מהקנבס לעריכה,<br />או הוסף חדש.
+                  בחר ווידג&apos;ט מהקנבס לעריכה,<br />או הוסף חדש.
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -291,6 +308,17 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
                           {validDimensions(form.displayType, form.platform).map((d) => <option key={d} value={d}>{DIMENSION_LABELS[d]}</option>)}
                         </select>
                       </div>
+                      {form.platform !== "ga4" && (
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-brand-muted">סינון קמפיינים (מכיל)</label>
+                          <input
+                            value={form.campaignFilter}
+                            onChange={(e) => setForm((f) => ({ ...f, campaignFilter: e.target.value }))}
+                            className={inputClass}
+                            placeholder="לדוגמה: שם מוצר — יוצגו רק קמפיינים תואמים"
+                          />
+                        </div>
+                      )}
                       <div>
                         <label className="mb-1 block text-xs font-medium text-brand-muted">מדדים</label>
                         <div className="flex flex-wrap gap-1.5">
@@ -323,8 +351,8 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
           {(preview?.widgets.length ?? 0) === 0 ? (
             <div className="flex h-64 flex-col items-center justify-center rounded-lg border-2 border-dashed border-brand-border text-brand-muted">
               <FileText className="mb-2 h-8 w-8 opacity-50" />
-              <p className="text-sm">אין ווידג'טים בדוח.</p>
-              <button onClick={selectNew} className="mt-3 flex items-center gap-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80"><Plus className="h-4 w-4" />הוסף ווידג'ט ראשון</button>
+              <p className="text-sm">אין ווידג&apos;טים בדוח.</p>
+              <button onClick={selectNew} className="mt-3 flex items-center gap-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-gold/80"><Plus className="h-4 w-4" />הוסף ווידג&apos;ט ראשון</button>
             </div>
           ) : (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
@@ -457,7 +485,7 @@ export default function ClientDashboardTab({ clientId }: { clientId: string }) {
             <thead className="border-b border-brand-border bg-brand-bg text-xs text-brand-muted">
               <tr>
                 <th className="px-4 py-3 text-right font-medium">שם הדוח</th>
-                <th className="px-4 py-3 text-right font-medium">ווידג'טים</th>
+                <th className="px-4 py-3 text-right font-medium">ווידג&apos;טים</th>
                 <th className="px-4 py-3 text-right font-medium">שיתוף</th>
                 <th className="px-4 py-3 text-right font-medium">נוצר</th>
                 <th className="px-4 py-3"></th>

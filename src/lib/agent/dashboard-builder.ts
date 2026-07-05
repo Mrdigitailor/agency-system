@@ -5,6 +5,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { classifyBusinessType, type BusinessType } from "./business-knowledge";
+import { normalizeName } from "@/lib/reports/group-by-product";
 import { shiftYmd, todayIL } from "@/lib/utils/ildate";
 
 /** הגדרת ווידג'ט לבנייה (שדות DashboardWidget הרלוונטיים) */
@@ -17,6 +18,8 @@ interface WidgetSpec {
   title: string;
   textBody?: string;
   compare?: boolean;
+  /** סינון לפי שם קמפיין — לסקשנים פר-מוצר */
+  campaignFilter?: string;
 }
 
 /** אילו פלטפורמות פעילות ללקוח (יש דאטה ב-30 הימים האחרונים) */
@@ -34,8 +37,37 @@ async function getActivePlatforms(clientId: string): Promise<Array<"meta" | "goo
   return active;
 }
 
-/** מתכון הווידג'טים לפי סוג העסק והפלטפורמות הפעילות */
-function buildRecipe(type: BusinessType, clientName: string, platforms: string[]): WidgetSpec[] {
+/**
+ * מוצרים מהפרופיל שיש להם קמפיין תואם ב-30 הימים האחרונים (התאמת שם-מכיל,
+ * כמו בדוח השבועי). רק להם נבנה סקשן — בלי סקשנים ריקים.
+ */
+async function getActiveProducts(clientId: string): Promise<string[]> {
+  const profile = await prisma.clientProfile.findUnique({ where: { clientId }, select: { products: true } });
+  let products: Array<{ name?: string }> = [];
+  try { products = JSON.parse(profile?.products || "[]"); } catch { /* פרופיל בלי מוצרים */ }
+  const names = products.map((p) => (p.name ?? "").trim()).filter(Boolean);
+  if (names.length === 0) return [];
+
+  const since = shiftYmd(todayIL(), -30);
+  const [meta, google, tiktok] = await Promise.all([
+    prisma.metaInsightDaily.findMany({ where: { clientId, level: "campaign", date: { gte: since } }, select: { name: true }, distinct: ["name"] }),
+    prisma.googleAdsInsightDaily.findMany({ where: { clientId, date: { gte: since } }, select: { campaignName: true }, distinct: ["campaignName"] }),
+    prisma.tikTokInsightDaily.findMany({ where: { clientId, date: { gte: since } }, select: { campaignName: true }, distinct: ["campaignName"] }),
+  ]);
+  const campaignNames = [
+    ...meta.map((r) => r.name),
+    ...google.map((r) => r.campaignName),
+    ...tiktok.map((r) => r.campaignName),
+  ].map(normalizeName);
+
+  return names.filter((p) => {
+    const np = normalizeName(p);
+    return campaignNames.some((c) => c.includes(np));
+  }).slice(0, 10); // רף שפיות — עד 10 סקשני מוצר
+}
+
+/** מתכון הווידג'טים לפי סוג העסק, הפלטפורמות הפעילות והמוצרים */
+function buildRecipe(type: BusinessType, clientName: string, platforms: string[], products: string[]): WidgetSpec[] {
   const specs: WidgetSpec[] = [];
   const isEcom = type === "ecommerce";
 
@@ -87,7 +119,24 @@ function buildRecipe(type: BusinessType, clientName: string, platforms: string[]
     title: "פירוט קמפיינים",
   });
 
-  // 7) סקשן לכל פלטפורמה פעילה — לוגו + KPI (+דמוגרפיה בגוגל)
+  // 7) סקשן לכל מוצר — כמו בכלי הישן של הסוכנות: כותרת מוצר + KPI מסונן לקמפיינים
+  //    של המוצר + טבלת הקמפיינים שלו + פילוח סוגי ההמרות שלו
+  for (const product of products) {
+    specs.push({ platform: "all", metrics: [], displayType: "heading", dimension: "none", size: "full", title: product });
+    specs.push({ platform: "all", metrics: kpiMetrics, displayType: "kpi", dimension: "none", size: "full", title: "", compare: true, campaignFilter: product });
+    specs.push({
+      platform: "all",
+      metrics: isEcom ? ["spend", "conversions", "roas"] : ["spend", "conversions", "cpa"],
+      displayType: "table",
+      dimension: "campaign",
+      size: "half",
+      title: "קמפיינים",
+      campaignFilter: product,
+    });
+    specs.push({ platform: "all", metrics: ["conversions"], displayType: "pie", dimension: "action", size: "half", title: "סוגי המרות", campaignFilter: product });
+  }
+
+  // 8) סקשן לכל פלטפורמה פעילה — לוגו + KPI (+דמוגרפיה בגוגל)
   for (const p of platforms) {
     specs.push({ platform: p, metrics: [], displayType: "platform_header", dimension: "none", size: "full", title: "" });
     // purchaseValue/roas זמינים רק במטא — בשאר הפלטפורמות נציג עלות להמרה
@@ -109,14 +158,15 @@ function buildRecipe(type: BusinessType, clientName: string, platforms: string[]
  * מחזיר את הדוח שנוצר.
  */
 export async function buildSmartDashboard(clientId: string) {
-  const [client, platforms] = await Promise.all([
+  const [client, platforms, products] = await Promise.all([
     prisma.client.findUnique({ where: { id: clientId }, select: { name: true, clientType: true } }),
     getActivePlatforms(clientId),
+    getActiveProducts(clientId),
   ]);
   if (!client) throw new Error("לקוח לא נמצא");
 
   const type = classifyBusinessType(client.clientType);
-  const specs = buildRecipe(type, client.name, platforms);
+  const specs = buildRecipe(type, client.name, platforms, products);
 
   const count = await prisma.clientReport.count({ where: { clientId } });
   const report = await prisma.clientReport.create({
@@ -132,7 +182,7 @@ export async function buildSmartDashboard(clientId: string) {
       dataLevel: "campaign",
       metrics: JSON.stringify(s.metrics),
       dimension: s.dimension,
-      filters: "[]",
+      filters: s.campaignFilter ? JSON.stringify([{ field: "campaign", operator: "contains", value: s.campaignFilter }]) : "[]",
       displayType: s.displayType,
       size: s.size,
       title: s.title,
