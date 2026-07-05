@@ -264,7 +264,14 @@ export default function ClientsPage() {
                 // spend אמיתי מ-Meta (אם יש), אחרת הערך הידני
                 const actualSpend = client.currentMonthSpend ?? p.budgetUsed ?? 0;
                 const budgetPct = client.monthlyBudget > 0 ? Math.round((actualSpend / client.monthlyBudget) * 100) : 0;
-                const convPct = p.targetConversions > 0 ? Math.round((p.conversionsThisMonth / p.targetConversions) * 100) : 0;
+                // המרות — קצב חודשי: משווים לכמה שהיינו אמורים לצבור עד היום (לפי הימים שעברו)
+                const conv = client.currentMonthConversions ?? 0;
+                const targetConv = p.targetConversions;
+                const convPct = targetConv > 0 ? Math.round((conv / targetConv) * 100) : 0;
+                const _now = new Date();
+                const monthProgress = Math.min(_now.getDate() / new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate(), 1);
+                const hitGoal = targetConv > 0 && conv >= targetConv;
+                const onPace = targetConv > 0 && !hitGoal && conv >= targetConv * monthProgress * 0.9;
                 const sym = getCurrencySymbol(client.currency);
                 return (
                   <tr key={client.id} onClick={() => router.push(`/clients/${client.id}`)} className="cursor-pointer border-b border-brand-border transition-colors duration-200 hover:bg-brand-bg/30">
@@ -301,17 +308,25 @@ export default function ClientsPage() {
                         <span className="text-sm text-brand-muted">—</span>
                       )}
                     </td>
-                    {/* המרות */}
-                    <td className="px-4 py-4">
-                      {(client.currentMonthConversions ?? 0) > 0 || p.targetConversions > 0 ? (
+                    {/* המרות — צבע לפי קצב חודשי; עקיפת יעד = בולט */}
+                    <td className={`px-4 py-4 ${hitGoal ? "bg-brand-success/10" : ""}`}>
+                      {conv > 0 || targetConv > 0 ? (
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
-                            <span className="text-brand-dark font-medium">{(client.currentMonthConversions ?? 0).toLocaleString()}</span>
-                            <span className="text-brand-muted">{`${t('target')}:`} {p.targetConversions.toLocaleString()}</span>
+                            <span className={`font-semibold ${hitGoal ? "text-brand-success" : "text-brand-dark"}`}>{conv.toLocaleString()}</span>
+                            <span className="text-brand-muted">{`${t('target')}:`} {targetConv.toLocaleString()}</span>
                           </div>
-                          <ProgressBar current={client.currentMonthConversions ?? 0} target={p.targetConversions} />
-                          <div className="text-[10px] text-brand-muted">
-                            {p.targetConversions > 0 ? Math.round(((client.currentMonthConversions ?? 0) / p.targetConversions) * 100) : 0}%
+                          <ProgressBar current={conv} target={targetConv} pace={monthProgress} />
+                          <div className="text-[10px]">
+                            {hitGoal ? (
+                              <span className="font-bold text-brand-success">🎯 {convPct}% — עקף את היעד!</span>
+                            ) : onPace ? (
+                              <span className="font-medium text-brand-success">{convPct}% · בקצב ליעד</span>
+                            ) : targetConv > 0 ? (
+                              <span className="text-brand-danger">{convPct}% · מתחת לקצב</span>
+                            ) : (
+                              <span className="text-brand-muted">{convPct}%</span>
+                            )}
                           </div>
                         </div>
                       ) : (
