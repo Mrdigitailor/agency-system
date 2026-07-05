@@ -138,6 +138,11 @@ export interface Lead {
   nextActionType: string;
   nextActionNote: string;
   stageChangedAt: string;
+  expectedCloseDate: string;
+  closeReason: string;
+  closeReasonDetails: string;
+  proposalStatus: string;
+  proposalAmount: number;
   hasProposal: boolean;
   proposalDate: string;
   proposalFileName: string;

@@ -292,14 +292,34 @@ model Lead {
   churnReason        String   @default("") // price | no_results | service | competition | personal | other
   churnDetails       String   @default("")
   proposalDetails    String   @default("") // פרטים על השיחה והצעה
+  expectedCloseDate  String   @default("") // תאריך סגירה צפוי (YYYY-MM-DD) — לתחזית צבר
+  closeReason        String   @default("") // סיבת הפסד: price | timing | competitor | not_relevant | no_budget | other
+  closeReasonDetails String   @default("")
+  proposalStatus     String   @default("") // sent | approved | rejected
+  proposalAmount     Float    @default(0)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id])
   calls    LeadCall[]
+  activities LeadActivity[]
 
   @@map("leads")
+}
+
+// ציר פעילות של ליד — הערות, מעברי סטטוס, אירועי הצעה — הכול בפיד אחד כרונולוגי
+model LeadActivity {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type      String   @default("note") // note | stage | proposal | system
+  text      String
+  author    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
 }
 
 model LeadCall {

@@ -16,6 +16,11 @@ import {
   Filter,
   Trash2,
   Eye,
+  ChevronDown,
+  MessageCircle,
+  StickyNote,
+  ArrowLeftRight,
+  FileCheck,
 } from "lucide-react";
 import { upload } from "@vercel/blob/client";
 import Modal from "@/components/ui/Modal";
@@ -141,6 +146,8 @@ function KanbanColumn({
   onCardClick: (lead: Lead) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
+  // סה"כ ₪ בעמודה — מספר שסורקים בו את הבורד
+  const totalValue = leads.reduce((s, l) => s + (l.dealValue || l.value || 0), 0);
 
   return (
     <div
@@ -150,7 +157,10 @@ function KanbanColumn({
       }`}
     >
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-brand-dark">{label}</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-brand-dark">{label}</h3>
+          {totalValue > 0 && <p className="text-[11px] font-semibold text-brand-muted">₪{totalValue.toLocaleString()}</p>}
+        </div>
         <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-border px-1.5 text-xs font-medium text-brand-dark">
           {leads.length}
         </span>
@@ -216,32 +226,36 @@ function KanbanCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
         isDragging ? "opacity-50 shadow-lg" : ""
       } ${isRotting ? "border-brand-danger/60" : "border-brand-border"}`}
     >
-      <p className="mb-1 text-[11px] text-brand-muted">{formatDate(lead.createdAt)}</p>
-      <p className="text-sm font-semibold text-brand-dark">{lead.name}</p>
-      {lead.qualityRating > 0 && (
-        <StarRating value={lead.qualityRating} readonly />
-      )}
-      <div className="mt-1">
-        <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${SOURCE_COLORS[lead.source] || SOURCE_COLORS.other}`}>
-          {getSourceLabel(lead.source)}
-        </span>
-      </div>
-      <div className="mt-2 flex items-center gap-2">
-        {lead.phone && <Phone className="h-3 w-3 text-brand-muted" />}
-        {lead.email && <Mail className="h-3 w-3 text-brand-muted" />}
-      </div>
+      {/* שורה 1: שם + עסק */}
+      <p className="text-sm font-semibold leading-tight text-brand-dark">{lead.name}</p>
+      {lead.company && <p className="mt-0.5 truncate text-[11px] text-brand-muted">{lead.company}</p>}
+
+      {/* שורה 2: שווי עסקה — המספר שסורקים */}
       {(lead.dealValue > 0 || lead.value > 0) && (
-        <p className="mt-1 text-xs font-medium text-brand-success">
-          ₪ {(lead.dealValue || lead.value).toLocaleString()}
+        <p className="mt-1.5 text-base font-semibold text-brand-dark">
+          ₪{(lead.dealValue || lead.value).toLocaleString()}
         </p>
       )}
-      {/* צ'יפ הצעד הבא — ירוק מתוזמן / כתום היום / אדום באיחור או חסר */}
+
+      {/* שורה 3: הצעד הבא — ירוק מתוזמן / כתום היום / אדום באיחור או חסר */}
       {chip && (
-        <div className="mt-2 flex items-center justify-between gap-1">
-          <span className={`rounded-full px-2 py-0.5 text-[10px] ${chip.cls}`} title={lead.nextActionNote || ""}>{chip.text}</span>
-          {isRotting && <span className="text-[10px] font-medium text-brand-danger" title={`הליד תקוע בשלב הזה ${inStage} ימים`}>🐌 {inStage} ימ׳</span>}
+        <div className="mt-2">
+          <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] ${chip.cls}`} title={lead.nextActionNote || ""}>{chip.text}</span>
         </div>
       )}
+
+      {/* שורה 4: מקור + גיל-בשלב */}
+      <div className="mt-2 flex items-center justify-between gap-1">
+        <span className={`truncate rounded-full px-2 py-0.5 text-[10px] font-medium ${SOURCE_COLORS[lead.source] || SOURCE_COLORS.other}`}>
+          {getSourceLabel(lead.source)}
+        </span>
+        <span
+          className={`shrink-0 text-[10px] font-medium ${isRotting ? "text-brand-danger" : "text-brand-muted"}`}
+          title={isRotting ? `הליד תקוע בשלב הזה ${inStage} ימים — מעבר לסף (${rotThreshold})` : `${inStage} ימים בשלב הנוכחי`}
+        >
+          {isRotting ? "🐌 " : ""}{inStage} ימ׳
+        </span>
+      </div>
     </div>
   );
 }
@@ -319,6 +333,16 @@ export default function CrmPage() {
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const selectedLeadId = selectedLead?.id ?? null;
+
+  // טעינת ציר הפעילות כשנפתח כרטיס ליד
+  useEffect(() => {
+    if (!selectedLeadId) { setActivities([]); return; }
+    fetch(`/api/leads/${selectedLeadId}/activities`)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setActivities(d); })
+      .catch(() => {});
+  }, [selectedLeadId]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isChurnModalOpen, setIsChurnModalOpen] = useState(false);
   const [churnTarget, setChurnTarget] = useState<Lead | null>(null);
@@ -426,6 +450,11 @@ export default function CrmPage() {
       nextActionType: "",
       nextActionNote: "",
       stageChangedAt: "",
+      expectedCloseDate: "",
+      closeReason: "",
+      closeReasonDetails: "",
+      proposalStatus: "",
+      proposalAmount: 0,
       hasProposal: false,
       proposalDate: "",
       proposalFileName: "",
@@ -606,12 +635,40 @@ export default function CrmPage() {
       setIsChurnModalOpen(true);
       return;
     }
+    if (newStatus === "lost") {
+      // סיבת הפסד חובה — הנתון שממנו לומדים למה עסקאות נופלות
+      setLostTarget(selectedLead);
+      setLostForm({ closeReason: "", closeReasonDetails: "" });
+      return;
+    }
     const extra: Partial<Lead> = {};
     if (newStatus === "won" && !selectedLead.closedAt) {
       extra.closedAt = new Date().toISOString().split("T")[0];
     }
     updateLead(selectedLead.id, { status: newStatus, ...extra });
     setSelectedLead((p) => (p ? { ...p, status: newStatus, ...extra } : null));
+  };
+
+  /* ── מודל סיבת הפסד ── */
+  const [lostTarget, setLostTarget] = useState<Lead | null>(null);
+  const [lostForm, setLostForm] = useState({ closeReason: "", closeReasonDetails: "" });
+  const LOST_REASONS = [
+    { value: "price", label: "מחיר" },
+    { value: "timing", label: "תזמון — לא עכשיו" },
+    { value: "competitor", label: "בחר מתחרה" },
+    { value: "not_relevant", label: "לא רלוונטי" },
+    { value: "no_budget", label: "אין תקציב" },
+    { value: "other", label: "אחר" },
+  ];
+  const handleLostSubmit = () => {
+    if (!lostTarget || !lostForm.closeReason) return;
+    updateLead(lostTarget.id, {
+      status: "lost",
+      closeReason: lostForm.closeReason,
+      closeReasonDetails: lostForm.closeReasonDetails,
+    } as Partial<Lead>);
+    setSelectedLead((p) => (p && p.id === lostTarget.id ? { ...p, status: "lost", closeReason: lostForm.closeReason, closeReasonDetails: lostForm.closeReasonDetails } : p));
+    setLostTarget(null);
   };
 
   const handleChurnSubmit = () => {
@@ -661,6 +718,61 @@ export default function CrmPage() {
   const activeFilterCount = [searchQuery, filterSource !== "all" ? filterSource : "", filterStatus !== "all" ? filterStatus : "", filterQuality !== "all" ? filterQuality : "", filterDateFrom, filterDateTo, filterValueMin, filterValueMax].filter(Boolean).length;
   const closingsFilterCount = [closingsSearch, closingsSource !== "all" ? closingsSource : "", closingsStatus !== "all" ? closingsStatus : "", closingsDateFrom, closingsDateTo, closingsValueMin, closingsValueMax].filter(Boolean).length;
   const churnedFilterCount = [churnedSearch, churnedReasonFilter !== "all" ? churnedReasonFilter : "", churnedSource !== "all" ? churnedSource : "", churnedDateFrom, churnedDateTo].filter(Boolean).length;
+
+  /* ── ציר פעילות של הליד הפתוח ── */
+  type ActivityItem = { id: string; type: string; text: string; author: string; createdAt: string };
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [activityText, setActivityText] = useState("");
+  const [activitySaving, setActivitySaving] = useState(false);
+
+  const handleAddActivity = async (leadId: string) => {
+    const text = activityText.trim();
+    if (!text) return;
+    setActivitySaving(true);
+    try {
+      const res = await fetch(`/api/leads/${leadId}/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (res.ok) {
+        const a = await res.json();
+        setActivities((p) => [a, ...p]);
+        setActivityText("");
+      }
+    } finally {
+      setActivitySaving(false);
+    }
+  };
+
+  /* ── היום שלי + צבר משוקלל ── */
+  const [myDayOpen, setMyDayOpen] = useState(true);
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jerusalem" });
+
+  // לידים פתוחים שהצעד שלהם היום או באיחור — ממוינים: באיחור קודם, ואז לפי תאריך
+  const myDayLeads = useMemo(() =>
+    leads
+      .filter((l) => OPEN_STATUSES.includes(l.status) && l.nextFollowUp && l.nextFollowUp <= todayStr)
+      .sort((a, b) => a.nextFollowUp.localeCompare(b.nextFollowUp)),
+    [leads, todayStr]);
+  const myDayOverdueCount = useMemo(() => myDayLeads.filter((l) => l.nextFollowUp < todayStr).length, [myDayLeads, todayStr]);
+
+  // צבר: שווי גולמי, משוקלל לפי סיכוי-שלב, ונסגר החודש
+  const pipelineTotals = useMemo(() => {
+    const STAGE_PROBABILITY: Record<string, number> = { new: 0.1, contacted: 0.2, meeting_set: 0.4, proposal_sent: 0.6, negotiation: 0.8 };
+    let raw = 0, weighted = 0, wonThisMonth = 0;
+    const monthPrefix = todayStr.slice(0, 7);
+    for (const l of leads) {
+      const v = l.dealValue || l.value || 0;
+      if (OPEN_STATUSES.includes(l.status)) {
+        raw += v;
+        weighted += v * (STAGE_PROBABILITY[l.status] ?? 0.1);
+      } else if (l.status === "won" && (l.closedAt || "").startsWith(monthPrefix)) {
+        wonThisMonth += v;
+      }
+    }
+    return { raw: Math.round(raw), weighted: Math.round(weighted), wonThisMonth: Math.round(wonThisMonth) };
+  }, [leads, todayStr]);
 
   /* ── Filtered data ── */
   const activeLeads = useMemo(() => {
@@ -917,6 +1029,46 @@ export default function CrmPage() {
             </div>
           </div>
           )}
+
+          {/* ═══ היום שלי — הצעדים של היום + באיחור, מכל הלידים ═══ */}
+          {myDayLeads.length > 0 && (
+            <div className="rounded-lg border border-brand-gold/40 bg-brand-gold/5 p-4">
+              <button onClick={() => setMyDayOpen(!myDayOpen)} className="flex w-full items-center justify-between">
+                <p className="text-sm font-semibold text-brand-dark">
+                  ☀️ היום שלי — {myDayLeads.length} צעדים ממתינים
+                  {myDayOverdueCount > 0 && <span className="mr-2 text-brand-danger">({myDayOverdueCount} באיחור)</span>}
+                </p>
+                <ChevronDown className={`h-4 w-4 text-brand-muted transition-transform ${myDayOpen ? "rotate-180" : ""}`} />
+              </button>
+              {myDayOpen && (
+                <div className="mt-3 space-y-1.5">
+                  {myDayLeads.map((l) => {
+                    const c = nextActionChip(l);
+                    return (
+                      <button
+                        key={l.id}
+                        onClick={() => openDetailModal(l)}
+                        className="flex w-full items-center justify-between rounded-lg border border-brand-border bg-brand-light px-3 py-2 text-right transition-colors hover:border-brand-gold"
+                      >
+                        <span className="text-sm font-medium text-brand-dark">
+                          {l.name}{l.company ? ` · ${l.company}` : ""}
+                          {l.nextActionNote && <span className="mr-2 text-xs font-normal text-brand-muted">— {l.nextActionNote}</span>}
+                        </span>
+                        {c && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${c.cls}`}>{c.text}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══ פס צבר משוקלל — כמה כסף יש בצינור, מוכפל בסיכוי לפי שלב ═══ */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-brand-border bg-brand-light px-4 py-2.5 text-xs shadow-sm">
+            <span className="text-brand-muted">סה״כ בצינור: <strong className="text-sm font-semibold text-brand-dark">₪{pipelineTotals.raw.toLocaleString()}</strong></span>
+            <span className="text-brand-muted" title="שווי כל עסקה מוכפל בסיכוי סגירה משוער לפי השלב שלה (חדש 10% → משא ומתן 80%)">צבר משוקלל: <strong className="text-sm font-semibold text-brand-gold">₪{pipelineTotals.weighted.toLocaleString()}</strong></span>
+            <span className="text-brand-muted">נסגר החודש: <strong className="text-sm font-semibold text-brand-success">₪{pipelineTotals.wonThisMonth.toLocaleString()}</strong></span>
+          </div>
 
           {/* Table view */}
           {viewMode === "table" && (
@@ -1522,6 +1674,40 @@ export default function CrmPage() {
               </div>
             )}
 
+            {/* פרטי עסקה — שווי + תאריך סגירה צפוי (הבסיס לתחזית) */}
+            {OPEN_STATUSES.includes(selectedLead.status) && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-brand-muted">💰 שווי עסקה (₪)</label>
+                  <input
+                    type="number"
+                    defaultValue={selectedLead.dealValue || selectedLead.value || ""}
+                    onBlur={async (e) => {
+                      const v = Number(e.target.value) || 0;
+                      if (v === (selectedLead.dealValue || selectedLead.value || 0)) return;
+                      setSelectedLead((p) => p ? { ...p, dealValue: v } : null);
+                      await updateLead(selectedLead.id, { dealValue: v } as Partial<Lead>);
+                    }}
+                    className={inputClass}
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-brand-muted">📅 תאריך סגירה צפוי</label>
+                  <input
+                    type="date"
+                    value={selectedLead.expectedCloseDate || ""}
+                    onChange={async (e) => {
+                      const v = e.target.value;
+                      setSelectedLead((p) => p ? { ...p, expectedCloseDate: v } : null);
+                      await updateLead(selectedLead.id, { expectedCloseDate: v } as Partial<Lead>);
+                    }}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Info grid */}
             <div className="grid grid-cols-2 gap-4">
               {selectedLead.company && (
@@ -1534,6 +1720,17 @@ export default function CrmPage() {
                 <div className="flex items-center gap-2">
                   <Phone className="h-4 w-4 text-brand-muted" />
                   <a href={`tel:${selectedLead.phone}`} className="text-sm text-brand-info hover:underline">{selectedLead.phone}</a>
+                  <a
+                    href={`https://wa.me/${selectedLead.phone.replace(/\D/g, "").replace(/^0/, "972")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 rounded-full bg-brand-success/10 px-2 py-0.5 text-[11px] font-medium text-brand-success hover:bg-brand-success/20"
+                    title="פתח שיחת ווטסאפ"
+                  >
+                    <MessageCircle className="h-3 w-3" />
+                    ווטסאפ
+                  </a>
                 </div>
               )}
               {selectedLead.email && (
@@ -1641,6 +1838,42 @@ export default function CrmPage() {
                 </button>
               </div>
               {selectedLead.hasProposal && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-brand-muted">מצב ההצעה:</span>
+                  {([
+                    { value: "sent", label: "נשלחה", cls: "bg-brand-info/15 text-brand-info" },
+                    { value: "approved", label: "אושרה 🎉", cls: "bg-brand-success/15 text-brand-success" },
+                    { value: "rejected", label: "נדחתה", cls: "bg-brand-danger/15 text-brand-danger" },
+                  ] as const).map((s) => (
+                    <button
+                      key={s.value}
+                      onClick={async () => {
+                        setSelectedLead((p) => p ? { ...p, proposalStatus: s.value } : null);
+                        await updateLead(selectedLead.id, { proposalStatus: s.value, proposalAmount: selectedLead.proposalAmount } as Partial<Lead>);
+                      }}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors duration-200 ${
+                        selectedLead.proposalStatus === s.value ? s.cls + " ring-1 ring-current" : "bg-brand-bg text-brand-muted hover:bg-brand-border"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                  <input
+                    type="number"
+                    defaultValue={selectedLead.proposalAmount || ""}
+                    onBlur={async (e) => {
+                      const v = Number(e.target.value) || 0;
+                      if (v === (selectedLead.proposalAmount || 0)) return;
+                      setSelectedLead((p) => p ? { ...p, proposalAmount: v } : null);
+                      await updateLead(selectedLead.id, { proposalAmount: v } as Partial<Lead>);
+                    }}
+                    className={`${inputClass} w-32`}
+                    placeholder="סכום ההצעה ₪"
+                    title="סכום ההצעה בשקלים"
+                  />
+                </div>
+              )}
+              {selectedLead.hasProposal && (
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-1 block text-xs text-brand-muted">תאריך שליחה</label>
@@ -1736,25 +1969,60 @@ export default function CrmPage() {
               </button>
             </div>
 
-            {/* Calls history */}
+            {/* ═══ ציר פעילות — הכול במקום אחד: הערות, שיחות, מעברי סטטוס, הצעות ═══ */}
             <div>
-              <p className="mb-2 text-sm font-medium text-brand-dark">
-                <PhoneCall className="ml-1 inline h-4 w-4" />
-                היסטוריית שיחות ({selectedLead.calls?.length || 0})
-              </p>
-              {selectedLead.calls?.length > 0 && (
-                <div className="mb-3 max-h-40 space-y-2 overflow-y-auto">
-                  {[...selectedLead.calls].reverse().map((call) => (
-                    <div key={call.id} className="rounded-lg bg-brand-bg p-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-brand-dark">{call.caller || "לא ידוע"}</span>
-                        <span className="text-xs text-brand-muted">{formatDate(call.date)}</span>
+              <p className="mb-2 text-sm font-semibold text-brand-dark">🕐 ציר פעילות</p>
+
+              {/* Composer */}
+              <div className="mb-3 flex gap-2">
+                <input
+                  type="text"
+                  value={activityText}
+                  onChange={(e) => setActivityText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !activitySaving) handleAddActivity(selectedLead.id); }}
+                  className={inputClass}
+                  placeholder="מה קרה? כתוב הערה ולחץ Enter..."
+                />
+                <button
+                  onClick={() => handleAddActivity(selectedLead.id)}
+                  disabled={activitySaving || !activityText.trim()}
+                  className={`${btnPrimary} shrink-0 disabled:opacity-50`}
+                >
+                  הוסף
+                </button>
+              </div>
+
+              {/* Feed — פעילויות + שיחות ממוזגות, מהחדש לישן */}
+              {(() => {
+                const items: Array<{ id: string; kind: string; text: string; who: string; when: string }> = [
+                  ...activities.map((a) => ({ id: `a-${a.id}`, kind: a.type, text: a.text, who: a.author, when: a.createdAt })),
+                  ...(selectedLead.calls ?? []).map((c) => ({ id: `c-${c.id}`, kind: "call", text: c.summary, who: c.caller || "", when: c.date })),
+                ].sort((x, y) => (y.when || "").localeCompare(x.when || ""));
+                if (selectedLead.notes) items.push({ id: "legacy-notes", kind: "note", text: selectedLead.notes, who: "", when: "" });
+                if (selectedLead.internalNotes) items.push({ id: "legacy-internal", kind: "note", text: `(הערות פנימיות) ${selectedLead.internalNotes}`, who: "", when: "" });
+                const ICONS: Record<string, React.ReactNode> = {
+                  note: <StickyNote className="h-3.5 w-3.5 text-brand-gold" />,
+                  stage: <ArrowLeftRight className="h-3.5 w-3.5 text-brand-info" />,
+                  proposal: <FileCheck className="h-3.5 w-3.5 text-brand-success" />,
+                  call: <PhoneCall className="h-3.5 w-3.5 text-purple-500" />,
+                };
+                if (items.length === 0) return <p className="mb-3 text-xs text-brand-muted">עדיין אין פעילות — התחל בהערה או שיחה</p>;
+                return (
+                  <div className="mb-3 max-h-64 space-y-1.5 overflow-y-auto">
+                    {items.map((it) => (
+                      <div key={it.id} className="flex items-start gap-2 rounded-lg bg-brand-bg p-2.5">
+                        <span className="mt-0.5 shrink-0">{ICONS[it.kind] ?? ICONS.note}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-brand-dark">{it.text}</p>
+                          <p className="mt-0.5 text-[10px] text-brand-muted">
+                            {it.who}{it.who && it.when ? " · " : ""}{it.when ? formatDate(it.when.slice(0, 10)) : ""}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-1 text-sm text-brand-dark">{call.summary}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* Add call */}
               <div className="rounded-lg border border-brand-border p-3">
@@ -2090,6 +2358,45 @@ export default function CrmPage() {
               className={`${btnPrimary} disabled:opacity-50 disabled:cursor-not-allowed bg-brand-danger hover:bg-brand-danger/80`}
             >
               אשר נטישה
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* מודל סיבת הפסד — חובה כשמסמנים ליד כאבוד */}
+      <Modal isOpen={!!lostTarget} onClose={() => setLostTarget(null)} title="למה הליד אבד?" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-brand-muted">
+            סימון <strong className="text-brand-dark">{lostTarget?.name}</strong> כאבוד. הסיבה חשובה — ממנה לומדים למה עסקאות נופלות.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {LOST_REASONS.map((r) => (
+              <button
+                key={r.value}
+                onClick={() => setLostForm((p) => ({ ...p, closeReason: r.value }))}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-200 ${
+                  lostForm.closeReason === r.value ? "bg-brand-danger text-white" : "bg-brand-bg text-brand-muted hover:bg-brand-border"
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={lostForm.closeReasonDetails}
+            onChange={(e) => setLostForm((p) => ({ ...p, closeReasonDetails: e.target.value }))}
+            rows={2}
+            className={inputClass}
+            placeholder="פרטים (אופציונלי) — למשל: אמר שיחזור אלינו ברבעון הבא"
+          />
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setLostTarget(null)} className={btnSecondary}>ביטול</button>
+            <button
+              onClick={handleLostSubmit}
+              disabled={!lostForm.closeReason}
+              className={`${btnPrimary} bg-brand-danger text-white hover:bg-brand-danger/80 disabled:cursor-not-allowed disabled:opacity-50`}
+            >
+              סמן כאבוד
             </button>
           </div>
         </div>
