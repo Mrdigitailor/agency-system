@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { detectAllClients } from "@/lib/performance/detect";
 import { diagnoseClient, type Diagnosis } from "@/lib/performance/diagnose";
 import { sendDiagnosesForApproval } from "@/lib/performance/approval";
+import { sendCrmDigest } from "@/lib/crm/automations";
 import type { ClientDetection } from "@/lib/performance/detect";
 
 export const maxDuration = 60;
@@ -35,7 +36,10 @@ async function run(req: Request) {
 
   const actionsSent = await sendDiagnosesForApproval(items);
 
-  console.log(`[Cron detect] flagged=${flagged.length} diagnosed=${items.length} actionsSent=${actionsSent}`);
+  // דיגסט CRM — לידים בלי צעד הבא / באיחור / תקועים בשלב (לא מפיל את הריצה אם נכשל)
+  const crmSent = await sendCrmDigest().catch((e) => { console.error("[Cron detect] CRM digest failed:", e); return false; });
+
+  console.log(`[Cron detect] flagged=${flagged.length} diagnosed=${items.length} actionsSent=${actionsSent} crmDigest=${crmSent}`);
   return NextResponse.json({
     ok: true,
     flagged: flagged.length,

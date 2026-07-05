@@ -264,7 +264,10 @@ model Lead {
   stage              String   @default("") // Monday group: לידים נכנסים, פולואפ, נסגרו...
   value              Float    @default(0)
   notes              String   @default("")
-  nextFollowUp       String   @default("")
+  nextFollowUp       String   @default("") // תאריך היעד של הצעד הבא (YYYY-MM-DD)
+  nextActionType     String   @default("") // call | meeting | followup | proposal | other
+  nextActionNote     String   @default("")
+  stageChangedAt     String   @default("") // מתי הליד נכנס לסטטוס הנוכחי — לזיהוי לידים תקועים
   hasProposal        Boolean  @default(false)
   proposalDate       String   @default("")
   proposalFileName   String   @default("")

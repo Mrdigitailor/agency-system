@@ -135,6 +135,9 @@ export interface Lead {
   value: number;
   notes: string;
   nextFollowUp: string;
+  nextActionType: string;
+  nextActionNote: string;
+  stageChangedAt: string;
   hasProposal: boolean;
   proposalDate: string;
   proposalFileName: string;

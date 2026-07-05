@@ -166,6 +166,32 @@ function KanbanColumn({
 
 /* ── Kanban Draggable Card ── */
 
+// תוויות + לוגיקת צ'יפ "הצעד הבא" — הלב של שיטת המכירה מבוססת-הפעולות
+const NEXT_ACTION_LABELS: Record<string, string> = { call: "שיחה", meeting: "פגישה", followup: "פולו-אפ", proposal: "הצעה", other: "צעד" };
+const OPEN_STATUSES = ["new", "contacted", "meeting_set", "proposal_sent", "negotiation"];
+const STAGE_ROT_DAYS: Record<string, number> = { new: 1, contacted: 5, meeting_set: 7, proposal_sent: 7, negotiation: 10 };
+
+function nextActionChip(lead: Lead): { text: string; cls: string } | null {
+  if (!OPEN_STATUSES.includes(lead.status)) return null;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jerusalem" });
+  if (!lead.nextFollowUp) return { text: "⚠ אין צעד הבא", cls: "bg-brand-danger/10 text-brand-danger font-semibold" };
+  const label = NEXT_ACTION_LABELS[lead.nextActionType] || "צעד";
+  if (lead.nextFollowUp < today) {
+    const days = Math.round((new Date(today).getTime() - new Date(lead.nextFollowUp).getTime()) / 86400000);
+    return { text: `${label} · באיחור ${days} ימ׳`, cls: "bg-brand-danger/10 text-brand-danger font-semibold" };
+  }
+  if (lead.nextFollowUp === today) return { text: `${label} · היום`, cls: "bg-brand-warning/15 text-brand-warning font-semibold" };
+  const due = new Date(lead.nextFollowUp).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" });
+  return { text: `${label} · ${due}`, cls: "bg-brand-success/10 text-brand-success" };
+}
+
+/** ימים בסטטוס הנוכחי — לזיהוי לידים "רקובים" */
+function daysInStage(lead: Lead): number {
+  const since = lead.stageChangedAt || (lead.createdAt ? String(lead.createdAt).slice(0, 10) : "");
+  if (!since) return 0;
+  return Math.max(0, Math.round((Date.now() - new Date(since).getTime()) / 86400000));
+}
+
 function KanbanCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: lead.id });
@@ -174,6 +200,11 @@ function KanbanCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
 
+  const chip = nextActionChip(lead);
+  const inStage = daysInStage(lead);
+  const rotThreshold = STAGE_ROT_DAYS[lead.status];
+  const isRotting = OPEN_STATUSES.includes(lead.status) && rotThreshold !== undefined && inStage > rotThreshold;
+
   return (
     <div
       ref={setNodeRef}
@@ -181,9 +212,9 @@ function KanbanCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
       {...listeners}
       {...attributes}
       onClick={onClick}
-      className={`cursor-grab rounded-lg border border-brand-border bg-brand-light p-3 shadow-sm transition-shadow duration-200 hover:shadow-md ${
+      className={`cursor-grab rounded-lg border bg-brand-light p-3 shadow-sm transition-shadow duration-200 hover:shadow-md ${
         isDragging ? "opacity-50 shadow-lg" : ""
-      }`}
+      } ${isRotting ? "border-brand-danger/60" : "border-brand-border"}`}
     >
       <p className="mb-1 text-[11px] text-brand-muted">{formatDate(lead.createdAt)}</p>
       <p className="text-sm font-semibold text-brand-dark">{lead.name}</p>
@@ -203,6 +234,13 @@ function KanbanCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
         <p className="mt-1 text-xs font-medium text-brand-success">
           ₪ {(lead.dealValue || lead.value).toLocaleString()}
         </p>
+      )}
+      {/* צ'יפ הצעד הבא — ירוק מתוזמן / כתום היום / אדום באיחור או חסר */}
+      {chip && (
+        <div className="mt-2 flex items-center justify-between gap-1">
+          <span className={`rounded-full px-2 py-0.5 text-[10px] ${chip.cls}`} title={lead.nextActionNote || ""}>{chip.text}</span>
+          {isRotting && <span className="text-[10px] font-medium text-brand-danger" title={`הליד תקוע בשלב הזה ${inStage} ימים`}>🐌 {inStage} ימ׳</span>}
+        </div>
       )}
     </div>
   );
@@ -385,6 +423,9 @@ export default function CrmPage() {
     addLead({
       ...form,
       value: Number(form.value) || 0,
+      nextActionType: "",
+      nextActionNote: "",
+      stageChangedAt: "",
       hasProposal: false,
       proposalDate: "",
       proposalFileName: "",
@@ -1431,6 +1472,55 @@ export default function CrmPage() {
                 </button>
               </div>
             </div>
+
+            {/* === הצעד הבא — האלמנט הכי חשוב בכרטיס === */}
+            {OPEN_STATUSES.includes(selectedLead.status) && (
+              <div className={`rounded-lg border p-4 ${!selectedLead.nextFollowUp ? "border-brand-danger bg-brand-danger/5" : "border-brand-gold/50 bg-brand-gold/5"}`}>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-brand-dark">🎯 הצעד הבא</p>
+                  {(() => { const c = nextActionChip(selectedLead); return c ? <span className={`rounded-full px-2 py-0.5 text-[10px] ${c.cls}`}>{c.text}</span> : null; })()}
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <select
+                    value={selectedLead.nextActionType || ""}
+                    onChange={async (e) => {
+                      const v = e.target.value;
+                      setSelectedLead((p) => p ? { ...p, nextActionType: v } : null);
+                      await updateLead(selectedLead.id, { nextActionType: v } as Partial<Lead>);
+                    }}
+                    className={inputClass}
+                  >
+                    <option value="">סוג צעד...</option>
+                    <option value="call">📞 שיחה</option>
+                    <option value="meeting">🤝 פגישה</option>
+                    <option value="followup">🔄 פולו-אפ</option>
+                    <option value="proposal">📄 הצעת מחיר</option>
+                    <option value="other">✏️ אחר</option>
+                  </select>
+                  <input
+                    type="date"
+                    value={selectedLead.nextFollowUp || ""}
+                    onChange={async (e) => {
+                      const v = e.target.value;
+                      setSelectedLead((p) => p ? { ...p, nextFollowUp: v } : null);
+                      await updateLead(selectedLead.id, { nextFollowUp: v } as Partial<Lead>);
+                    }}
+                    className={inputClass}
+                  />
+                  <input
+                    type="text"
+                    value={selectedLead.nextActionNote || ""}
+                    onChange={(e) => setSelectedLead((p) => p ? { ...p, nextActionNote: e.target.value } : null)}
+                    onBlur={async (e) => { await updateLead(selectedLead.id, { nextActionNote: e.target.value } as Partial<Lead>); }}
+                    className={inputClass}
+                    placeholder="מה בדיוק? (למשל: לוודא שקיבל את ההצעה)"
+                  />
+                </div>
+                {!selectedLead.nextFollowUp && (
+                  <p className="mt-2 text-xs font-medium text-brand-danger">⚠ ליד פתוח בלי צעד הבא מתוזמן — קבע עכשיו כדי שלא יפול בין הכיסאות</p>
+                )}
+              </div>
+            )}
 
             {/* Info grid */}
             <div className="grid grid-cols-2 gap-4">
