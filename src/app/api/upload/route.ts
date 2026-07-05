@@ -1,36 +1,40 @@
-import { put } from "@vercel/blob";
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth/api-guard";
 
-// Edge runtime — no 4.5MB body limit
-export const runtime = "edge";
+/**
+ * העלאת קבצים (הצעות מחיר וכו') ישירות מהדפדפן ל-Vercel Blob.
+ * הדפדפן מעלה ישירות ל-Blob — הבקשה לכאן היא רק החלפת token קטנה,
+ * כך שאין תקרת גוף-בקשה של 4.5MB (שגרמה ל-"Request Entity Too Large").
+ */
+export async function POST(req: Request): Promise<NextResponse> {
+  const body = (await req.json()) as HandleUploadBody;
 
-export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    const leadId = formData.get("leadId") as string | null;
-
-    if (!file || !leadId) {
-      return NextResponse.json({ error: "Missing file or leadId" }, { status: 400 });
-    }
-
-    if (file.size > 25 * 1024 * 1024) {
-      return NextResponse.json({ error: "File too large (max 25MB)" }, { status: 400 });
-    }
-
-    const blob = await put(
-      `proposals/${leadId}_${Date.now()}_${file.name}`,
-      file,
-      { access: "public" }
-    );
-
-    return NextResponse.json({
-      success: true,
-      url: blob.url,
-      fileName: file.name,
+    const jsonResponse = await handleUpload({
+      body,
+      request: req,
+      onBeforeGenerateToken: async () => {
+        // רק משתמש מחובר יכול להעלות
+        const auth = await requireAuth();
+        if (auth instanceof NextResponse) throw new Error("Unauthorized");
+        return {
+          allowedContentTypes: [
+            "application/pdf",
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+          ],
+          maximumSizeInBytes: 25 * 1024 * 1024, // 25MB
+        };
+      },
+      // שמירת ה-URL ללקוח נעשית בצד-הלקוח (PATCH ל-/api/leads), אין צורך בקולבק
+      onUploadCompleted: async () => {},
     });
+
+    return NextResponse.json(jsonResponse);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Upload failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

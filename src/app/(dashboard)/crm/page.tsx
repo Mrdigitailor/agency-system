@@ -17,6 +17,7 @@ import {
   Trash2,
   Eye,
 } from "lucide-react";
+import { upload } from "@vercel/blob/client";
 import Modal from "@/components/ui/Modal";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { useApp } from "@/lib/data/context";
@@ -493,31 +494,26 @@ export default function CrmPage() {
     console.log(`[Proposal] Uploading: ${file.name} (${(file.size / 1024).toFixed(0)}KB)`);
     setUploading(true);
     try {
-      // Upload to Vercel Blob via edge API route (no 4.5MB limit)
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("leadId", selectedLead.id);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
-      console.log(`[Proposal] Upload response:`, res.status, data);
+      // העלאה ישירה מהדפדפן ל-Vercel Blob — עוקפת את תקרת גוף-הבקשה (4.5MB)
+      // שגרמה ל-"Request Entity Too Large". רק החלפת token עוברת דרך /api/upload.
+      const blob = await upload(
+        `proposals/${selectedLead.id}_${Date.now()}_${file.name}`,
+        file,
+        { access: "public", handleUploadUrl: "/api/upload", contentType: file.type },
+      );
 
-      if (!res.ok || !data.success) {
-        alert(data.error ?? "שגיאה בהעלאה");
-        return;
-      }
-
-      // Save URL to lead via PATCH (Node.js route with Prisma)
+      // שמירת ה-URL ללקוח (Node.js route עם Prisma)
       await fetch(`/api/leads/${selectedLead.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          proposalUrl: data.url,
-          proposalFileName: data.fileName,
+          proposalUrl: blob.url,
+          proposalFileName: file.name,
           proposalUploadedAt: new Date().toISOString(),
         }),
       });
 
-      setSelectedLead((p) => p ? { ...p, proposalUrl: data.url, proposalFileName: data.fileName } : null);
+      setSelectedLead((p) => p ? { ...p, proposalUrl: blob.url, proposalFileName: file.name } : null);
     } catch (err) {
       console.error("[Proposal] Upload error:", err);
       alert(err instanceof Error ? err.message : "שגיאה בהעלאה");
