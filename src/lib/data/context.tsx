@@ -173,6 +173,8 @@ function mapLead(l: Record<string, unknown>): Lead {
     dealValue: (l.dealValue as number) ?? 0,
     monthlyValue: (l.monthlyValue as number) ?? 0,
     lifetimeValue: (l.lifetimeValue as number) ?? 0,
+    dealType: (l.dealType as string) ?? "",
+    minMonths: (l.minMonths as number) ?? 0,
     serviceType: (l.serviceType as string) ?? "",
     proposalUrl: (l.proposalUrl as string) ?? "",
     closedAt: (l.closedAt as string) ?? "",

@@ -151,6 +151,8 @@ export interface Lead {
   dealValue: number;
   monthlyValue: number;
   lifetimeValue: number;
+  dealType: string; // one_time | retainer
+  minMonths: number; // חודשי התחייבות (לריטיינר)
   serviceType: string;
   proposalUrl: string;
   closedAt: string;

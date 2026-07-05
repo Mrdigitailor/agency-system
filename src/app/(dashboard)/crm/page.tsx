@@ -230,12 +230,16 @@ function KanbanCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
       <p className="text-sm font-semibold leading-tight text-brand-dark">{lead.name}</p>
       {lead.company && <p className="mt-0.5 truncate text-[11px] text-brand-muted">{lead.company}</p>}
 
-      {/* שורה 2: שווי עסקה — המספר שסורקים */}
-      {(lead.dealValue > 0 || lead.value > 0) && (
+      {/* שורה 2: שווי עסקה — המספר שסורקים; ריטיינר מוצג פר-חודש */}
+      {lead.dealType === "retainer" && lead.monthlyValue > 0 ? (
+        <p className="mt-1.5 text-base font-semibold text-brand-dark">
+          ₪{lead.monthlyValue.toLocaleString()}<span className="text-[10px] font-normal text-brand-muted">/חודש</span>
+        </p>
+      ) : (lead.dealValue > 0 || lead.value > 0) ? (
         <p className="mt-1.5 text-base font-semibold text-brand-dark">
           ₪{(lead.dealValue || lead.value).toLocaleString()}
         </p>
-      )}
+      ) : null}
 
       {/* שורה 3: הצעד הבא — ירוק מתוזמן / כתום היום / אדום באיחור או חסר */}
       {chip && (
@@ -463,6 +467,8 @@ export default function CrmPage() {
       dealValue: 0,
       monthlyValue: 0,
       lifetimeValue: 0,
+      dealType: "",
+      minMonths: 0,
       serviceType: "",
       proposalUrl: "",
       closedAt: "",
@@ -1097,7 +1103,9 @@ export default function CrmPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 font-medium text-brand-dark">
-                          {(lead.dealValue || lead.value) > 0 ? `₪ ${(lead.dealValue || lead.value).toLocaleString()}` : "\u2014"}
+                          {lead.dealType === "retainer" && lead.monthlyValue > 0
+                            ? `₪${lead.monthlyValue.toLocaleString()}/ח׳${lead.minMonths > 0 ? ` · מינ׳ ₪${(lead.monthlyValue * lead.minMonths).toLocaleString()}` : ""}`
+                            : (lead.dealValue || lead.value) > 0 ? `₪ ${(lead.dealValue || lead.value).toLocaleString()}` : "\u2014"}
                         </td>
                         <td className="px-4 py-3">
                           <StarRating
@@ -1485,10 +1493,6 @@ export default function CrmPage() {
               <input value={form.website} onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))} className={inputClass} placeholder="https://..." />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">נכסים דיגיטליים</label>
-              <input value={form.digitalAssets} onChange={(e) => setForm((p) => ({ ...p, digitalAssets: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">{t('source')}</label>
               {newSourceMode ? (
                 <div className="flex gap-2">
@@ -1686,6 +1690,91 @@ export default function CrmPage() {
                 </div>
                 {!selectedLead.nextFollowUp && (
                   <p className="mt-2 text-xs font-medium text-brand-danger">⚠ ליד פתוח בלי צעד הבא מתוזמן — קבע עכשיו כדי שלא יפול בין הכיסאות</p>
+                )}
+              </div>
+            )}
+
+            {/* סוג עסקה — תיוג פשוט: חד-פעמי או ריטיינר; לריטיינר מחשבים שווי מינימלי מההתחייבות */}
+            {OPEN_STATUSES.includes(selectedLead.status) && (
+              <div className="rounded-lg border border-brand-border p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-brand-dark">💼 סוג עסקה:</p>
+                  {([
+                    { value: "retainer", label: "ריטיינר" },
+                    { value: "one_time", label: "חד־פעמי" },
+                  ] as const).map((dt) => (
+                    <button
+                      key={dt.value}
+                      onClick={async () => {
+                        const v = selectedLead.dealType === dt.value ? "" : dt.value;
+                        setSelectedLead((p) => p ? { ...p, dealType: v } : null);
+                        await updateLead(selectedLead.id, { dealType: v } as Partial<Lead>);
+                      }}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors duration-200 ${
+                        selectedLead.dealType === dt.value ? "bg-brand-gold text-brand-dark" : "bg-brand-bg text-brand-muted hover:bg-brand-border"
+                      }`}
+                    >
+                      {dt.label}
+                    </button>
+                  ))}
+                </div>
+                {selectedLead.dealType === "retainer" && (
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs text-brand-muted">ריטיינר חודשי (₪)</label>
+                      <input
+                        type="number"
+                        defaultValue={selectedLead.monthlyValue || ""}
+                        onBlur={async (e) => {
+                          const v = Number(e.target.value) || 0;
+                          if (v === (selectedLead.monthlyValue || 0)) return;
+                          const minValue = v * (selectedLead.minMonths || 0);
+                          setSelectedLead((p) => p ? { ...p, monthlyValue: v, dealValue: minValue } : null);
+                          await updateLead(selectedLead.id, { monthlyValue: v, dealValue: minValue } as Partial<Lead>);
+                        }}
+                        className={inputClass}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-brand-muted">התחייבות (חודשים)</label>
+                      <input
+                        type="number"
+                        defaultValue={selectedLead.minMonths || ""}
+                        onBlur={async (e) => {
+                          const v = Number(e.target.value) || 0;
+                          if (v === (selectedLead.minMonths || 0)) return;
+                          const minValue = (selectedLead.monthlyValue || 0) * v;
+                          setSelectedLead((p) => p ? { ...p, minMonths: v, dealValue: minValue } : null);
+                          await updateLead(selectedLead.id, { minMonths: v, dealValue: minValue } as Partial<Lead>);
+                        }}
+                        className={inputClass}
+                        placeholder="0"
+                      />
+                    </div>
+                    {selectedLead.monthlyValue > 0 && selectedLead.minMonths > 0 && (
+                      <p className="col-span-2 text-xs text-brand-muted">
+                        שווי עסקה מינימלי: <strong className="text-brand-dark">₪{(selectedLead.monthlyValue * selectedLead.minMonths).toLocaleString()}</strong> ({selectedLead.minMonths} חודשי התחייבות) — ואחר כך שירות מתחדש
+                      </p>
+                    )}
+                  </div>
+                )}
+                {selectedLead.dealType === "one_time" && (
+                  <div className="mt-3 max-w-[220px]">
+                    <label className="mb-1 block text-xs text-brand-muted">שווי העסקה (₪)</label>
+                    <input
+                      type="number"
+                      defaultValue={selectedLead.dealValue || ""}
+                      onBlur={async (e) => {
+                        const v = Number(e.target.value) || 0;
+                        if (v === (selectedLead.dealValue || 0)) return;
+                        setSelectedLead((p) => p ? { ...p, dealValue: v } : null);
+                        await updateLead(selectedLead.id, { dealValue: v } as Partial<Lead>);
+                      }}
+                      className={inputClass}
+                      placeholder="0"
+                    />
+                  </div>
                 )}
               </div>
             )}
@@ -2010,10 +2099,6 @@ export default function CrmPage() {
             <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">{t('website')}</label>
               <input value={editForm.website || ""} onChange={(e) => setEditForm((p) => ({ ...p, website: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">נכסים דיגיטליים</label>
-              <input value={editForm.digitalAssets || ""} onChange={(e) => setEditForm((p) => ({ ...p, digitalAssets: e.target.value }))} className={inputClass} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">{t('source')}</label>
