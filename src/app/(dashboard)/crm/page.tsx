@@ -265,7 +265,7 @@ function KanbanCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
    ══════════════════════════════════════════ */
 
 export default function CrmPage() {
-  const { leads, addLead, updateLead, deleteLead, addLeadCall, employees, settings } =
+  const { leads, addLead, updateLead, deleteLead, employees, settings } =
     useApp();
   const { t, lang } = useLanguage();
 
@@ -514,25 +514,6 @@ export default function CrmPage() {
     }));
   };
 
-  /* ── שיחה חדשה ── */
-  const [callForm, setCallForm] = useState({ date: "", summary: "", caller: "" });
-
-  const handleAddCall = () => {
-    if (!selectedLead || !callForm.date || !callForm.summary.trim()) return;
-    addLeadCall(selectedLead.id, {
-      date: callForm.date,
-      summary: callForm.summary,
-      caller: callForm.caller,
-    });
-    setCallForm({ date: "", summary: "", caller: "" });
-    const updated = leads.find((l) => l.id === selectedLead.id);
-    if (updated)
-      setSelectedLead({
-        ...updated,
-        calls: [...updated.calls, { id: `temp-${Date.now()}`, ...callForm }],
-      });
-  };
-
   /* ── הצעה ופנימי ── */
   const handleProposalToggle = () => {
     if (!selectedLead) return;
@@ -614,18 +595,8 @@ export default function CrmPage() {
     setSelectedLead((p) => p ? { ...p, proposalUrl: "", proposalFileName: "" } : null);
   }
 
-  const [internalNotesLocal, setInternalNotesLocal] = useState("");
-
   const openDetailModal = (lead: Lead) => {
     setSelectedLead(lead);
-    setInternalNotesLocal(lead.internalNotes);
-    setCallForm({ date: "", summary: "", caller: "" });
-  };
-
-  const handleSaveInternalNotes = () => {
-    if (!selectedLead) return;
-    updateLead(selectedLead.id, { internalNotes: internalNotesLocal });
-    setSelectedLead((p) => (p ? { ...p, internalNotes: internalNotesLocal } : null));
   };
 
   const handleStatusChange = (newStatus: Lead["status"]) => {
@@ -1083,11 +1054,13 @@ export default function CrmPage() {
           )}
 
           {/* ═══ פס צבר משוקלל — כמה כסף יש בצינור, מוכפל בסיכוי לפי שלב ═══ */}
+          {(pipelineTotals.raw > 0 || pipelineTotals.wonThisMonth > 0) && (
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-brand-border bg-brand-light px-4 py-2.5 text-xs shadow-sm">
             <span className="text-brand-muted">סה״כ בצינור: <strong className="text-sm font-semibold text-brand-dark">₪{pipelineTotals.raw.toLocaleString()}</strong></span>
             <span className="text-brand-muted" title="שווי כל עסקה מוכפל בסיכוי סגירה משוער לפי השלב שלה (חדש 10% → משא ומתן 80%)">צבר משוקלל: <strong className="text-sm font-semibold text-brand-gold">₪{pipelineTotals.weighted.toLocaleString()}</strong></span>
             <span className="text-brand-muted">נסגר החודש: <strong className="text-sm font-semibold text-brand-success">₪{pipelineTotals.wonThisMonth.toLocaleString()}</strong></span>
           </div>
+          )}
 
           {/* Table view */}
           {viewMode === "table" && (
@@ -1563,14 +1536,6 @@ export default function CrmPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('value')}</label>
-              <input type="number" value={form.value} onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))} className={inputClass} placeholder="0" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">תקציב משוער</label>
-              <input value={form.estimatedBudget} onChange={(e) => setForm((p) => ({ ...p, estimatedBudget: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">איש מכירות</label>
               <select value={form.salesPerson} onChange={(e) => setForm((p) => ({ ...p, salesPerson: e.target.value }))} className={inputClass}>
                 <option value="">בחר...</option>
@@ -1578,10 +1543,6 @@ export default function CrmPage() {
                   <option key={emp.id} value={emp.name}>{emp.name}</option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('dueDate')}</label>
-              <input type="date" value={form.nextFollowUp} onChange={(e) => setForm((p) => ({ ...p, nextFollowUp: e.target.value }))} className={inputClass} />
             </div>
           </div>
 
@@ -1729,39 +1690,6 @@ export default function CrmPage() {
               </div>
             )}
 
-            {/* פרטי עסקה — שווי + תאריך סגירה צפוי (הבסיס לתחזית) */}
-            {OPEN_STATUSES.includes(selectedLead.status) && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-brand-muted">💰 שווי עסקה (₪)</label>
-                  <input
-                    type="number"
-                    defaultValue={selectedLead.dealValue || selectedLead.value || ""}
-                    onBlur={async (e) => {
-                      const v = Number(e.target.value) || 0;
-                      if (v === (selectedLead.dealValue || selectedLead.value || 0)) return;
-                      setSelectedLead((p) => p ? { ...p, dealValue: v } : null);
-                      await updateLead(selectedLead.id, { dealValue: v } as Partial<Lead>);
-                    }}
-                    className={inputClass}
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-brand-muted">📅 תאריך סגירה צפוי</label>
-                  <input
-                    type="date"
-                    value={selectedLead.expectedCloseDate || ""}
-                    onChange={async (e) => {
-                      const v = e.target.value;
-                      setSelectedLead((p) => p ? { ...p, expectedCloseDate: v } : null);
-                      await updateLead(selectedLead.id, { expectedCloseDate: v } as Partial<Lead>);
-                    }}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-            )}
 
             {/* Info grid */}
             <div className="grid grid-cols-2 gap-4">
@@ -1810,24 +1738,6 @@ export default function CrmPage() {
                   {getSourceLabel(selectedLead.source)}
                 </span>
               </div>
-              {(selectedLead.dealValue > 0 || selectedLead.value > 0) && (
-                <div>
-                  <span className="text-xs text-brand-muted">שווי עסקה: </span>
-                  <span className="text-sm font-medium text-brand-success">₪ {(selectedLead.dealValue || selectedLead.value).toLocaleString()}</span>
-                </div>
-              )}
-              {selectedLead.monthlyValue > 0 && (
-                <div>
-                  <span className="text-xs text-brand-muted">שירות חודשי: </span>
-                  <span className="text-sm font-medium text-brand-dark">₪ {selectedLead.monthlyValue.toLocaleString()}</span>
-                </div>
-              )}
-              {selectedLead.estimatedBudget && (
-                <div>
-                  <span className="text-xs text-brand-muted">תקציב משוער: </span>
-                  <span className="text-sm text-brand-dark">{selectedLead.estimatedBudget}</span>
-                </div>
-              )}
               {selectedLead.salesPerson && (
                 <div>
                   <span className="text-xs text-brand-muted">איש מכירות: </span>
@@ -2010,20 +1920,6 @@ export default function CrmPage() {
               </div>
             </div>
 
-            {/* Internal notes */}
-            <div>
-              <p className="mb-2 text-xs font-medium text-brand-muted">הערות פנימיות</p>
-              <textarea
-                value={internalNotesLocal}
-                onChange={(e) => setInternalNotesLocal(e.target.value)}
-                className={`${inputClass} h-20`}
-                placeholder="הערות פנימיות..."
-              />
-              <button onClick={handleSaveInternalNotes} className={`${btnPrimary} mt-2`}>
-                {t('save')}
-              </button>
-            </div>
-
             {/* ═══ ציר פעילות — הכול במקום אחד: הערות, שיחות, מעברי סטטוס, הצעות ═══ */}
             <div>
               <p className="mb-2 text-sm font-semibold text-brand-dark">🕐 ציר פעילות</p>
@@ -2070,7 +1966,7 @@ export default function CrmPage() {
                         <div className="min-w-0 flex-1">
                           <p className="text-sm text-brand-dark">{it.text}</p>
                           <p className="mt-0.5 text-[10px] text-brand-muted">
-                            {it.who}{it.who && it.when ? " · " : ""}{it.when ? formatDate(it.when.slice(0, 10)) : ""}
+                            {it.who}{it.who && it.when ? " · " : ""}{it.when ? (it.when.includes("T") ? new Date(it.when).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : formatDate(it.when)) : ""}
                           </p>
                         </div>
                       </div>
@@ -2079,31 +1975,6 @@ export default function CrmPage() {
                 );
               })()}
 
-              {/* Add call */}
-              <div className="rounded-lg border border-brand-border p-3">
-                <p className="mb-2 text-xs font-medium text-brand-muted">הוסף שיחה</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <input type="date" value={callForm.date} onChange={(e) => setCallForm((p) => ({ ...p, date: e.target.value }))} className={inputClass} />
-                  <select value={callForm.caller} onChange={(e) => setCallForm((p) => ({ ...p, caller: e.target.value }))} className={inputClass}>
-                    <option value="">מתקשר...</option>
-                    {employees.map((emp) => (
-                      <option key={emp.id} value={emp.name}>{emp.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <textarea
-                  value={callForm.summary}
-                  onChange={(e) => setCallForm((p) => ({ ...p, summary: e.target.value }))}
-                  className={`${inputClass} mt-2 h-16`}
-                  placeholder="תקציר השיחה..."
-                />
-                <button onClick={handleAddCall} className={`${btnPrimary} mt-2`}>
-                  <span className="flex items-center gap-1">
-                    <Plus className="h-3 w-3" />
-                    הוסף שיחה
-                  </span>
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -2192,26 +2063,6 @@ export default function CrmPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('value')}</label>
-              <input type="number" value={editForm.value || 0} onChange={(e) => setEditForm((p) => ({ ...p, value: Number(e.target.value) }))} className={inputClass} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">שווי דיל</label>
-              <input type="number" value={editForm.dealValue || 0} onChange={(e) => setEditForm((p) => ({ ...p, dealValue: Number(e.target.value) }))} className={inputClass} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('monthlyService')}</label>
-              <input type="number" value={editForm.monthlyValue || 0} onChange={(e) => setEditForm((p) => ({ ...p, monthlyValue: Number(e.target.value) }))} className={inputClass} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">סוג שירות</label>
-              <input value={editForm.serviceType || ""} onChange={(e) => setEditForm((p) => ({ ...p, serviceType: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">תקציב משוער</label>
-              <input value={editForm.estimatedBudget || ""} onChange={(e) => setEditForm((p) => ({ ...p, estimatedBudget: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">איש מכירות</label>
               <select value={editForm.salesPerson || ""} onChange={(e) => setEditForm((p) => ({ ...p, salesPerson: e.target.value }))} className={inputClass}>
                 <option value="">בחר...</option>
@@ -2221,24 +2072,8 @@ export default function CrmPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('dueDate')}</label>
-              <input type="date" value={editForm.nextFollowUp || ""} onChange={(e) => setEditForm((p) => ({ ...p, nextFollowUp: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">דירוג איכות</label>
               <StarRating value={editForm.qualityRating || 0} onChange={(v) => setEditForm((p) => ({ ...p, qualityRating: v }))} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('closingDate')}</label>
-              <input type="date" value={editForm.closedAt || ""} onChange={(e) => setEditForm((p) => ({ ...p, closedAt: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">{t('endDate')}</label>
-              <input type="date" value={editForm.endDate || ""} onChange={(e) => setEditForm((p) => ({ ...p, endDate: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-muted">URL הצעה</label>
-              <input value={editForm.proposalUrl || ""} onChange={(e) => setEditForm((p) => ({ ...p, proposalUrl: e.target.value }))} className={inputClass} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-brand-muted">תאריך הצעה</label>
@@ -2297,16 +2132,33 @@ export default function CrmPage() {
             <label className="mb-1 block text-xs font-medium text-brand-muted">הערות</label>
             <textarea value={editForm.notes || ""} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} className={`${inputClass} h-20`} />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-brand-muted">הערות פנימיות</label>
-            <textarea value={editForm.internalNotes || ""} onChange={(e) => setEditForm((p) => ({ ...p, internalNotes: e.target.value }))} className={`${inputClass} h-20`} />
-          </div>
-
           {/* Proposal details */}
           <div>
             <label className="mb-1 block text-xs font-medium text-brand-muted">{t('proposalDetails')}</label>
             <textarea value={editForm.proposalDetails || ""} onChange={(e) => setEditForm((p) => ({ ...p, proposalDetails: e.target.value }))} className={`${inputClass} h-20`} placeholder="פרטים על השיחה וההצעה שהוגשה..." />
           </div>
+
+          {/* פרטי סגירה — רק לליד שנסגר (מזינים את טאב הסגירות וההכנסות-לפי-מקור) */}
+          {editForm.status === "won" && (
+            <div className="grid grid-cols-2 gap-4 rounded-lg border border-brand-success/30 bg-brand-success/5 p-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brand-dark">שווי דיל כולל (₪)</label>
+                <input type="number" value={editForm.dealValue || 0} onChange={(e) => setEditForm((p) => ({ ...p, dealValue: Number(e.target.value) }))} className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brand-dark">ריטיינר חודשי (₪)</label>
+                <input type="number" value={editForm.monthlyValue || 0} onChange={(e) => setEditForm((p) => ({ ...p, monthlyValue: Number(e.target.value) }))} className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brand-dark">{t('closingDate')}</label>
+                <input type="date" value={editForm.closedAt || ""} onChange={(e) => setEditForm((p) => ({ ...p, closedAt: e.target.value }))} className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brand-dark">{t('endDate')}</label>
+                <input type="date" value={editForm.endDate || ""} onChange={(e) => setEditForm((p) => ({ ...p, endDate: e.target.value }))} className={inputClass} />
+              </div>
+            </div>
+          )}
 
           {/* Churn fields (if churned) */}
           {editForm.status === "churned" && (

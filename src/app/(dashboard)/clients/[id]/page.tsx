@@ -21,6 +21,7 @@ import {
   FileText,
   Pencil,
   Trash2,
+  Rocket,
 } from "lucide-react";
 import {
   LineChart,
@@ -169,7 +170,7 @@ export default function ClientDetailPage() {
   const userRole = (session?.user as { role?: string })?.role ?? "";
   const isAdmin = userRole === "admin";
   const { t, lang } = useLanguage();
-  const { getClient, tasks, addTask, updateTask, employees, updateClient } = useApp();
+  const { getClient, tasks, addTask, updateTask, employees, updateClient, refreshTasks } = useApp();
   const client = getClient(params.id as string);
 
   // נתוני ביצועים מ-Meta (החודש הנוכחי)
@@ -189,6 +190,14 @@ export default function ClientDetailPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>(seedCampaigns);
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [newCampaign, setNewCampaign] = useState({ name: "", platform: "Meta", dailyBudget: "" });
+
+  /* אונבורדינג — הפעלה ותוצאות */
+  const [onboardingRunning, setOnboardingRunning] = useState(false);
+  const [onboardingResult, setOnboardingResult] = useState<{
+    created: Array<{ title: string; assignee: string; dueDate: string }>;
+    skipped: string[];
+    scan: { ok: boolean; url: string; hasMetaPixel: boolean; hasGA4: boolean; hasGTM: boolean; hasTikTokPixel: boolean; error?: string } | null;
+  } | null>(null);
 
   /* משימות — מודל */
   const [showCompletedTasks, setShowCompletedTasks] = useState(false);
@@ -372,6 +381,22 @@ export default function ClientDetailPage() {
       platform: "",
     });
     setShowTaskModal(false);
+  }
+
+  async function handleRunOnboarding() {
+    if (!client || onboardingRunning) return;
+    setOnboardingRunning(true);
+    try {
+      const res = await fetch(`/api/clients/${client.id}/onboarding`, { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setOnboardingResult(data);
+      await refreshTasks();
+    } catch {
+      alert("הפעלת האונבורדינג נכשלה — נסה שוב");
+    } finally {
+      setOnboardingRunning(false);
+    }
   }
 
   async function handleUpdateClient() {
@@ -809,6 +834,16 @@ export default function ClientDetailPage() {
                   {showCompletedTasks ? "הסתר" : "הצג"} משימות שהושלמו ({completedTasks.length})
                 </button>
               )}
+              {isAdmin && (
+                <button
+                  onClick={handleRunOnboarding}
+                  disabled={onboardingRunning}
+                  className="inline-flex items-center gap-2 rounded-lg border border-brand-gold/40 bg-brand-gold/10 px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/20 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <Rocket className="h-4 w-4" />
+                  {onboardingRunning ? "סורק ויוצר משימות..." : "הפעל אונבורדינג"}
+                </button>
+              )}
               <button onClick={() => setShowTaskModal(true)} className={`inline-flex items-center gap-2 ${btnPrimary}`}>
                 <Plus className="h-4 w-4" />
                 הוסף משימה
@@ -880,6 +915,61 @@ export default function ClientDetailPage() {
               </div>
             )}
           </div>
+
+          {/* מודל תוצאות אונבורדינג */}
+          <Modal isOpen={!!onboardingResult} onClose={() => setOnboardingResult(null)} title="אונבורדינג הופעל 🚀" size="lg">
+            {onboardingResult && (
+              <div className="space-y-5">
+                {/* ממצאי סריקת האתר */}
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-brand-dark">סריקת קודי מעקב באתר</h3>
+                  {!onboardingResult.scan ? (
+                    <p className="text-sm text-brand-muted">אין כתובת אתר בכרטיס הלקוח — הסריקה דולגה ונפתחה משימת בדיקה ידנית.</p>
+                  ) : !onboardingResult.scan.ok ? (
+                    <p className="text-sm text-brand-warning">⚠ הסריקה של {onboardingResult.scan.url} נכשלה: {onboardingResult.scan.error}</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {[
+                        { label: "פיקסל מטא", found: onboardingResult.scan.hasMetaPixel },
+                        { label: "GA4", found: onboardingResult.scan.hasGA4 },
+                        { label: "Google Tag Manager", found: onboardingResult.scan.hasGTM },
+                        { label: "פיקסל טיקטוק", found: onboardingResult.scan.hasTikTokPixel },
+                      ].map((item) => (
+                        <div key={item.label} className="flex items-center gap-2 rounded-lg border border-brand-border bg-brand-bg px-3 py-2">
+                          <span className={item.found ? "text-brand-success" : "text-brand-danger"}>{item.found ? "✓" : "✗"}</span>
+                          <span className="text-brand-dark">{item.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* משימות שנוצרו */}
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-brand-dark">נוצרו {onboardingResult.created.length} משימות</h3>
+                  {onboardingResult.created.length === 0 ? (
+                    <p className="text-sm text-brand-muted">כל משימות האונבורדינג כבר קיימות ללקוח הזה — לא נוצר כפול.</p>
+                  ) : (
+                    <ul className="max-h-64 space-y-1.5 overflow-y-auto text-sm">
+                      {onboardingResult.created.map((t) => (
+                        <li key={t.title} className="flex items-center justify-between gap-3 rounded-lg border border-brand-border/50 bg-brand-light px-3 py-2">
+                          <span className="text-brand-dark">{t.title.replace("אונבורדינג: ", "")}</span>
+                          <span className="whitespace-nowrap text-xs text-brand-muted">{t.assignee} · עד {formatDate(t.dueDate)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {onboardingResult.skipped.length > 0 && (
+                    <p className="mt-2 text-xs text-brand-muted">{onboardingResult.skipped.length} משימות דולגו כי כבר קיימות.</p>
+                  )}
+                </div>
+
+                <div className="flex justify-end">
+                  <button onClick={() => setOnboardingResult(null)} className={btnPrimary}>סגור</button>
+                </div>
+              </div>
+            )}
+          </Modal>
 
           {/* מודל הוספת משימה */}
           <Modal isOpen={showTaskModal} onClose={() => setShowTaskModal(false)} title="הוסף משימה" size="lg">
