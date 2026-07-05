@@ -122,14 +122,17 @@ export default function ReportsPage() {
   const getClientCM = (clientId: string) => getCampaignManagerForClient(clientId, employees);
 
   const roleFilteredTrackers = useMemo(() => {
+    // לקוחות לא-פעילים לא צריכים מעקב דוחות — מסתירים מכולם (כולל KPI/התראות)
+    const activeClientIds = new Set(clients.filter((c) => c.status !== "inactive").map((c) => c.id));
+    let base = trackers.filter((t) => activeClientIds.has(t.clientId));
     if (role === "campaignManager") {
       const myClientIds = new Set(
         employees.filter((e) => e.name === userName && e.role === "campaignManager").flatMap((e) => e.assignedClientIds)
       );
-      return trackers.filter((t) => myClientIds.has(t.clientId));
+      base = base.filter((t) => myClientIds.has(t.clientId));
     }
-    return trackers;
-  }, [trackers, employees, role, userName]);
+    return base;
+  }, [trackers, clients, employees, role, userName]);
 
   // תמיד מחושב — סוף השבוע שחלף (שבת)
   // דוח "נשלח" = weeklyLastSent > end (סומן אחרי שהשבוע הסתיים)
