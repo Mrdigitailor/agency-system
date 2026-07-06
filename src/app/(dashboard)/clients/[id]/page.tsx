@@ -197,7 +197,9 @@ export default function ClientDetailPage() {
     created: Array<{ title: string; assignee: string; dueDate: string }>;
     skipped: string[];
     scan: { ok: boolean; url: string; hasMetaPixel: boolean; hasGA4: boolean; hasGTM: boolean; hasTikTokPixel: boolean; error?: string } | null;
+    questionnaire?: { link: string; status: string; emailSent: boolean; emailNote: string | null };
   } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   /* משימות — מודל */
   const [showCompletedTasks, setShowCompletedTasks] = useState(false);
@@ -920,6 +922,41 @@ export default function ClientDetailPage() {
           <Modal isOpen={!!onboardingResult} onClose={() => setOnboardingResult(null)} title="אונבורדינג הופעל 🚀" size="lg">
             {onboardingResult && (
               <div className="space-y-5">
+                {/* שאלון ללקוח */}
+                {onboardingResult.questionnaire && (
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-brand-dark">שאלון היכרות ללקוח</h3>
+                    {onboardingResult.questionnaire.status === "completed" ? (
+                      <p className="text-sm text-brand-success">✓ הלקוח כבר מילא את השאלון — התשובות בתעודת הזהות</p>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-sm text-brand-dark">
+                          {onboardingResult.questionnaire.emailSent
+                            ? "📧 המייל עם הקישור נשלח ללקוח"
+                            : `⚠ המייל לא נשלח${onboardingResult.questionnaire.emailNote ? ` — ${onboardingResult.questionnaire.emailNote}` : ""}`}
+                        </p>
+                        {onboardingResult.questionnaire.emailSent && onboardingResult.questionnaire.emailNote && (
+                          <p className="text-xs text-brand-warning">{onboardingResult.questionnaire.emailNote}</p>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <input readOnly dir="ltr" value={onboardingResult.questionnaire.link} className="w-full rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-xs text-brand-muted" />
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(onboardingResult.questionnaire!.link);
+                              setLinkCopied(true);
+                              setTimeout(() => setLinkCopied(false), 2000);
+                            }}
+                            className="shrink-0 rounded-lg border border-brand-border px-3 py-2 text-xs font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-bg"
+                          >
+                            {linkCopied ? "✓ הועתק" : "העתק קישור"}
+                          </button>
+                        </div>
+                        <p className="text-xs text-brand-muted">אפשר לשלוח את הקישור גם בוואטסאפ — הוא אישי ללקוח ולא דורש סיסמה.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* ממצאי סריקת האתר */}
                 <div>
                   <h3 className="mb-2 text-sm font-semibold text-brand-dark">סריקת קודי מעקב באתר</h3>

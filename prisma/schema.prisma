@@ -106,8 +106,28 @@ model Client {
   platformConnections PlatformConnection[]
   profile       ClientProfile?
   competitors   Competitor[]
+  questionnaire ClientQuestionnaire?
 
   @@map("clients")
+}
+
+// ==================== שאלון אונבורדינג ללקוח ====================
+// נשלח במייל עם קישור ציבורי (token). התשובות הגולמיות נשמרות כאן,
+// ובעת שליחה סופית ממופות לשדות ריקים ב-ClientProfile (בלי לדרוס מידע קיים).
+
+model ClientQuestionnaire {
+  id          String    @id @default(cuid())
+  clientId    String    @unique
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  token       String    @unique @default(cuid())
+  status      String    @default("pending") // pending | completed
+  answers     String    @default("{}") // JSON — תשובות הלקוח כפי שנשלחו
+  sentAt      DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("client_questionnaires")
 }
 
 // ==================== תעודת זהות לקוח ====================
@@ -639,6 +659,22 @@ model MetaInstagramMedia {
   @@unique([assetId, externalId])
   @@index([clientId, timestamp])
   @@map("meta_instagram_media")
+}
+
+// ==================== בקשות מחיקת נתונים (Meta Data Deletion Callback) ====================
+// פייסבוק קורא ל-/api/meta/data-deletion בכל בקשת מחיקה של משתמש. מוחקים את
+// רשומות ה-cache התואמות ומתעדים כאן לצורך דף מעקב הסטטוס שפייסבוק דורש.
+
+model DataDeletionRequest {
+  id               String   @id @default(cuid())
+  confirmationCode String   @unique
+  metaUserId       String
+  status           String   @default("completed") // completed
+  deletedCount     Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([metaUserId])
+  @@map("data_deletion_requests")
 }
 
 // ==================== הודעות ותגובות (cache מקומי) ====================

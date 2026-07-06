@@ -144,7 +144,7 @@ export function buildWeeklyDataText(
   return lines.join("\n");
 }
 
-const REPORT_INSTRUCTIONS = `אתה כותב דוח שבועי ללקוח של סוכנות DigiTailors על תוצאות הקמפיינים שלו.
+const REPORT_INSTRUCTIONS = `אתה כותב דוח שבועי ללקוח של סוכנות Mr.digitailor על תוצאות הקמפיינים שלו.
 כתוב ב-Markdown בעברית, בטון מקצועי וברור ללקוח (לא ז'רגון פנימי).
 מבנה הדוח:
 1. **כותרת + תקופת הדיווח**

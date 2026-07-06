@@ -129,7 +129,7 @@ export async function POST(req: Request) {
   if (text === "/start") {
     await sendTelegramMessage(
       chatId,
-      "שלום! 👋 אני העוזר של DigiTailors.\n\n" +
+      "שלום! 👋 אני העוזר של Mr.digitailor.\n\n" +
         "אפשר:\n" +
         "• לפתוח משימה — למשל: “פתח משימה ללקוח X: לבדוק חריגת תקציב, עדיפות גבוהה”\n" +
         "• לשאול על ביצועים — למשל: “מה הביצועים של X בשבוע האחרון?”",

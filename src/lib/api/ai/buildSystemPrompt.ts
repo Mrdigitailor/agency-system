@@ -39,7 +39,7 @@ export async function buildSystemPrompt(clientId: string): Promise<string> {
   const competitors = profile ? JSON.parse(profile.competitors ?? "[]") : [];
   const languages = profile ? JSON.parse(profile.marketingLanguages ?? "[]") : [];
 
-  let prompt = `אתה יועץ שיווק דיגיטלי מומחה שעובד בסוכנות DigiTailors. אתה מכיר לעומק את הלקוח הבא:
+  let prompt = `אתה יועץ שיווק דיגיטלי מומחה שעובד בסוכנות Mr.digitailor. אתה מכיר לעומק את הלקוח הבא:
 
 **פרטי העסק:**
 - שם: ${client.name}

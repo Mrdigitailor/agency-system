@@ -70,7 +70,7 @@ export default function LoginPage() {
         <div className="mb-8 flex justify-center">
           <Image
             src="/images/logo-mrdigitailors.svg"
-            alt="DigiTailors"
+            alt="Mr.digitailor"
             width={200}
             height={50}
             priority

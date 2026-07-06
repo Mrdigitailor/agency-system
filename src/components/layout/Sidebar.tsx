@@ -89,7 +89,7 @@ export default function Sidebar() {
       <div className="flex h-20 items-center justify-center px-6">
         <Image
           src="/images/logo-mrdigitailors.svg"
-          alt="DigiTailors"
+          alt="Mr.digitailor"
           width={160}
           height={40}
           priority

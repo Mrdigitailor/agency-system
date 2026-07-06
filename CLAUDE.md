@@ -1,4 +1,4 @@
-# Agency Management System — DigiTailors
+# Agency Management System — Mr.digitailor
 
 ## סקירה כללית
 מערכת ניהול פנימית לסוכנות שיווק ופרסום דיגיטלי.

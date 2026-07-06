@@ -20,7 +20,7 @@ function reportEmailTemplate(contentHtml: string, period: string, clientName: st
     <tr><td align="center">
       <table width="640" cellpadding="0" cellspacing="0" style="max-width:640px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background-color:#000000;padding:24px 32px;text-align:center;">
-          <img src="https://agency.mr-digitailor.co.il/images/logo-mrdigitailors.svg" height="32" alt="DigiTailors" style="display:inline-block;" />
+          <img src="https://agency.mr-digitailor.co.il/images/logo-mrdigitailors.svg" height="32" alt="Mr.digitailor" style="display:inline-block;" />
         </td></tr>
         <tr><td style="background-color:#eed89b;height:4px;font-size:0;line-height:0;">&nbsp;</td></tr>
         <tr><td style="padding:28px 32px 12px;">
@@ -33,7 +33,7 @@ function reportEmailTemplate(contentHtml: string, period: string, clientName: st
           </div>
         </td></tr>
         <tr><td style="background-color:#000000;padding:18px 32px;text-align:center;">
-          <p style="color:#eed89b;font-size:12px;margin:0 0 4px;font-weight:600;">DigiTailors</p>
+          <p style="color:#eed89b;font-size:12px;margin:0 0 4px;font-weight:600;">Mr.digitailor</p>
           <p style="color:#666;font-size:11px;margin:0;">סוכנות שיווק ופרסום דיגיטלי</p>
         </td></tr>
       </table>
@@ -81,7 +81,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const resend = new Resend(apiKey);
   const result = await resend.emails.send({
-    from: "DigiTailors <reports@mr-digitailor.co.il>",
+    from: "Mr.digitailor <reports@mr-digitailor.co.il>",
     to: client.contactEmail,
     replyTo: user.email,
     subject: `סיכום שבועי | ${period}`,

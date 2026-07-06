@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/auth/api-guard";
 import { resolveManagerId } from "@/lib/utils/syncManagers";
 import { scanWebsite, type SiteScanResult } from "@/lib/onboarding/site-scan";
 import { buildOnboardingTasks } from "@/lib/onboarding/checklist";
+import { sendQuestionnaireEmail } from "@/lib/onboarding/questionnaire-email";
 import { todayIL, shiftYmd } from "@/lib/utils/ildate";
 
 export const maxDuration = 60;
@@ -20,7 +21,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     select: {
       id: true, name: true, clientType: true, platforms: true, website: true,
       metaAdAccount: true, googleAdAccount: true, tiktokAdAccount: true,
-      campaignManagerId: true, campaignManager: true,
+      campaignManagerId: true, campaignManager: true, contactEmail: true,
     },
   });
   if (!client || !clientId) return NextResponse.json({ error: "לקוח לא נמצא" }, { status: 404 });
@@ -81,7 +82,25 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     created.push({ title: tpl.title, assignee: assignee?.name ?? "—", dueDate });
   }
 
-  console.log(`[Onboarding] client=${client.name} created=${created.length} skipped=${skipped.length} scan=${scan ? (scan.ok ? "ok" : `failed:${scan.error}`) : "no-website"}`);
+  // שאלון אונבורדינג: יצירת קישור אישי + שליחה במייל ללקוח (אם עוד לא מולא)
+  const q = await prisma.clientQuestionnaire.upsert({ where: { clientId }, update: {}, create: { clientId } });
+  const origin = process.env.APP_BASE_URL ?? new URL(_req.url).origin;
+  const questionnaireLink = `${origin}/questionnaire/${q.token}`;
+  let emailSent = false;
+  let emailNote: string | null = null;
+  if (q.status === "completed") {
+    emailNote = "השאלון כבר מולא על ידי הלקוח";
+  } else {
+    const emailResult = await sendQuestionnaireEmail({ clientName: client.name, contactEmail: client.contactEmail, link: questionnaireLink });
+    emailSent = emailResult.sent;
+    emailNote = emailResult.reason ?? null;
+    if (emailResult.sent) await prisma.clientQuestionnaire.update({ where: { id: q.id }, data: { sentAt: new Date() } });
+  }
 
-  return NextResponse.json({ created, skipped, scan });
+  console.log(`[Onboarding] client=${client.name} created=${created.length} skipped=${skipped.length} scan=${scan ? (scan.ok ? "ok" : `failed:${scan.error}`) : "no-website"} questionnaireEmail=${emailSent}`);
+
+  return NextResponse.json({
+    created, skipped, scan,
+    questionnaire: { link: questionnaireLink, status: q.status, emailSent, emailNote },
+  });
 }

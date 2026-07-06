@@ -213,7 +213,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<Settings>({
-    agencyName: "DigiTailors",
+    agencyName: "Mr.digitailor",
     userName: "סער",
     userEmail: "saar@digitailors.co.il",
     userRole: "admin",

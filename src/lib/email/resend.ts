@@ -16,13 +16,13 @@ export async function sendWelcomeEmail({ to, name, email, password, loginUrl }: 
   console.log("[Resend] API key:", apiKey ? `${apiKey.substring(0, 10)}...` : "MISSING!");
   console.log("[Resend] From: Mr.digitailor <noreply@mr-digitailor.co.il>");
   console.log("[Resend] To:", to);
-  console.log("[Resend] Subject: ברוכים הבאים למערכת DigiTailors");
+  console.log("[Resend] Subject: ברוכים הבאים למערכת Mr.digitailor");
 
   try {
     const result = await resend.emails.send({
       from: "Mr.digitailor <noreply@mr-digitailor.co.il>",
       to,
-      subject: "ברוכים הבאים למערכת DigiTailors",
+      subject: "ברוכים הבאים למערכת Mr.digitailor",
       html: welcomeTemplate({ name, email, password, loginUrl }),
     });
 
@@ -55,7 +55,7 @@ export async function sendPasswordResetEmail({ to, name, newPassword, loginUrl }
     const { data, error } = await resend.emails.send({
       from: "Mr.digitailor <noreply@mr-digitailor.co.il>",
       to,
-      subject: "הסיסמה שלך עודכנה — DigiTailors",
+      subject: "הסיסמה שלך עודכנה — Mr.digitailor",
       html: passwordResetTemplate({ name, newPassword, loginUrl }),
     });
 
@@ -83,13 +83,13 @@ function welcomeTemplate({ name, email, password, loginUrl }: { name: string; em
       <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;">
         <!-- Header -->
         <tr><td style="background-color:#000000;padding:30px;text-align:center;">
-          <h1 style="color:#eed89b;margin:0;font-size:24px;">DigiTailors</h1>
+          <h1 style="color:#eed89b;margin:0;font-size:24px;">Mr.digitailor</h1>
         </td></tr>
         <!-- Body -->
         <tr><td style="padding:40px 30px;">
           <h2 style="color:#000000;margin:0 0 20px;">שלום ${name},</h2>
           <p style="color:#666666;font-size:16px;line-height:1.6;margin:0 0 20px;">
-            ברוכים הבאים למערכת הניהול של DigiTailors!<br>
+            ברוכים הבאים למערכת הניהול של Mr.digitailor!<br>
             נוצר עבורך חשבון חדש במערכת.
           </p>
           <div style="background-color:#f5f5f5;border-radius:8px;padding:20px;margin:20px 0;">
@@ -109,7 +109,7 @@ function welcomeTemplate({ name, email, password, loginUrl }: { name: string; em
         <!-- Footer -->
         <tr><td style="background-color:#f5f5f5;padding:20px 30px;text-align:center;">
           <p style="color:#999999;font-size:12px;margin:0;">
-            © DigiTailors — מערכת ניהול סוכנות
+            © Mr.digitailor — מערכת ניהול סוכנות
           </p>
         </td></tr>
       </table>
@@ -129,7 +129,7 @@ function passwordResetTemplate({ name, newPassword, loginUrl }: { name: string; 
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;">
         <tr><td style="background-color:#000000;padding:30px;text-align:center;">
-          <h1 style="color:#eed89b;margin:0;font-size:24px;">DigiTailors</h1>
+          <h1 style="color:#eed89b;margin:0;font-size:24px;">Mr.digitailor</h1>
         </td></tr>
         <tr><td style="padding:40px 30px;">
           <h2 style="color:#000000;margin:0 0 20px;">שלום ${name},</h2>
@@ -150,7 +150,7 @@ function passwordResetTemplate({ name, newPassword, loginUrl }: { name: string; 
           </div>
         </td></tr>
         <tr><td style="background-color:#f5f5f5;padding:20px 30px;text-align:center;">
-          <p style="color:#999999;font-size:12px;margin:0;">© DigiTailors — מערכת ניהול סוכנות</p>
+          <p style="color:#999999;font-size:12px;margin:0;">© Mr.digitailor — מערכת ניהול סוכנות</p>
         </td></tr>
       </table>
     </td></tr>

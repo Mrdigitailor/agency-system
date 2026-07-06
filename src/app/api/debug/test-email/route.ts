@@ -33,7 +33,7 @@ export async function GET() {
     const result = await resend.emails.send({
       from: "Mr.digitailor <noreply@mr-digitailor.co.il>",
       to: "saar@digitailors.co.il",
-      subject: "בדיקת מייל מהמערכת — DigiTailors",
+      subject: "בדיקת מייל מהמערכת — Mr.digitailor",
       html: `
         <div dir="rtl" style="font-family:Arial,sans-serif;padding:20px;">
           <h2 style="color:#000;">בדיקת מייל</h2>

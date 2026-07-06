@@ -102,7 +102,7 @@ export default function ClientPortalPage() {
       ) : dto && dto.widgets.length > 0 ? (
         <div className={loading ? "opacity-60 transition-opacity" : ""}><WidgetGrid widgets={dto.widgets} currency={dto.client.currency} /></div>
       ) : (
-        <div className={cardClass}><p className="py-8 text-center text-sm text-brand-muted">הדשבורד בהכנה. צוות DigiTailors מסדר את הנתונים שלך.</p></div>
+        <div className={cardClass}><p className="py-8 text-center text-sm text-brand-muted">הדשבורד בהכנה. צוות Mr.digitailor מסדר את הנתונים שלך.</p></div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -124,7 +124,7 @@ export default function ClientPortalPage() {
 
         {/* צ'אט עם הצוות */}
         <div className={cardClass}>
-          <div className="flex items-center gap-2"><MessageSquare className="h-4 w-4 text-brand-gold" /><h3 className="text-sm font-semibold text-brand-dark">צ'אט עם צוות DigiTailors</h3></div>
+          <div className="flex items-center gap-2"><MessageSquare className="h-4 w-4 text-brand-gold" /><h3 className="text-sm font-semibold text-brand-dark">צ'אט עם צוות Mr.digitailor</h3></div>
           <div className="mt-3 max-h-72 min-h-[8rem] space-y-2 overflow-y-auto">
             {msgs.length === 0 ? <p className="py-6 text-center text-xs text-brand-muted">אין הודעות עדיין. כתבו לנו מה תרצו לדעת.</p> : msgs.map((m) => {
               const mine = m.authorId === myId;

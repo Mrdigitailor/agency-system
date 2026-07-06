@@ -300,7 +300,7 @@ async function getCampaignData(input: { client_name: string; days?: number }) {
   };
 }
 
-const SYSTEM_PROMPT = `אתה עוזר טלגרם של סוכנות שיווק דיגיטלי (DigiTailors).
+const SYSTEM_PROMPT = `אתה עוזר טלגרם של סוכנות שיווק דיגיטלי (Mr.digitailor).
 אתה מתקשר בעברית, בסגנון קצר וברור. מטבע: ₪ (שקלים). תאריך היום: {TODAY}.
 
 יש לך שני כלים:
