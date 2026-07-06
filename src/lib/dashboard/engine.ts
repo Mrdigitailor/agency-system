@@ -24,6 +24,8 @@ export interface WidgetConfig {
   compare: boolean;
   /** סינון לפי שם קמפיין (מכיל, מנורמל) — מאפשר ווידג'טים פר-מוצר */
   campaignFilter?: string;
+  /** בפילוח "לפי סוג המרה": תוויות סוגים להסתרה (למשל שלבי-ביניים של משפך) */
+  excludeActions?: string[];
 }
 export interface ClientCtx {
   clientId: string;
@@ -142,17 +144,16 @@ async function resolveMetaCustomNames(clientId: string): Promise<Map<string, str
   return names;
 }
 
-/** פירוק המרות לפי סוג אירוע — מטא (actionsJson) + גוגל (conversionsByAction) */
-function actionBreakdown(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, customNames: Map<string, string>): WidgetData {
+/** סופר את כל סוגי ההמרות בהיקף פלטפורמה נתון — משותף לווידג'ט ולרשימת הבחירה ב-UI */
+function countActionTypes(platform: Platform, ad: AdRows, customNames: Map<string, string>): Map<string, number> {
   const counts = new Map<string, number>();
-
-  if (w.platform === "meta" || w.platform === "all") {
+  if (platform === "meta" || platform === "all") {
     for (const a of aggregateConversionActions(ad.meta)) {
       const label = a.customId ? (customNames.get(a.customId) ?? a.label) : a.label;
       counts.set(label, (counts.get(label) ?? 0) + a.count);
     }
   }
-  if (w.platform === "google_ads" || w.platform === "all") {
+  if (platform === "google_ads" || platform === "all") {
     for (const r of ad.google) {
       try {
         const byAction = JSON.parse(r.conversionsByAction || "{}") as Record<string, number>;
@@ -162,10 +163,17 @@ function actionBreakdown(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, customName
       } catch { /* שורה בלי פירוט */ }
     }
   }
+  return counts;
+}
+
+/** פירוק המרות לפי סוג אירוע — מטא (actionsJson) + גוגל (conversionsByAction) */
+function actionBreakdown(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, customNames: Map<string, string>): WidgetData {
+  const counts = countActionTypes(w.platform, ad, customNames);
+  const exclude = new Set(w.excludeActions ?? []);
 
   const entries = [...counts.entries()]
     .map(([label, count]) => ({ label, value: Math.round(count * 100) / 100 }))
-    .filter((s) => s.value > 0)
+    .filter((s) => s.value > 0 && !exclude.has(s.label))
     .sort((a, b) => b.value - a.value);
 
   if (entries.length === 0) return { type: "empty", reason: "אין פירוט המרות בתקופה" };
@@ -364,6 +372,24 @@ function computeGa4Widget(w: WidgetConfig, data: AnalyticsData | null, prevData?
   const series = [{ id: "primary", label: data.mode === "ecom" ? "הכנסות" : "לידים", values: data.timeseries.map((t) => Math.round(t.primary * 100) / 100) }];
   if (wantsSessions) series.push({ id: "ga4_sessions", label: "סשנים", values: data.timeseries.map((t) => t.sessions) });
   return { type: "series", display, buckets: data.timeseries.map((t) => t.date), series };
+}
+
+// ---------- רשימת סוגי המרות זמינים (לבורר ה-UI של "לפי סוג המרה") ----------
+export async function listConversionActions(
+  ctx: ClientCtx,
+  range: DateRange,
+  opts?: { platform?: Platform; campaignFilter?: string },
+): Promise<{ label: string; count: number }[]> {
+  const adCache: AdCache = {};
+  let ad = await getAdRows(ctx, range, adCache);
+  if (opts?.campaignFilter) ad = filterAdRows(ad, opts.campaignFilter);
+  const platform = opts?.platform ?? "all";
+  const needsNames = platform === "meta" || platform === "all";
+  const customNames = needsNames ? await resolveMetaCustomNames(ctx.clientId) : new Map<string, string>();
+  return [...countActionTypes(platform, ad, customNames).entries()]
+    .map(([label, count]) => ({ label, count: Math.round(count * 100) / 100 }))
+    .filter((e) => e.count > 0)
+    .sort((a, b) => b.count - a.count);
 }
 
 // ---------- ציבורי ----------

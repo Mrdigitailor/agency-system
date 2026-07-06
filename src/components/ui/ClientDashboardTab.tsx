@@ -21,6 +21,8 @@ interface Widget {
   compare: boolean;
   /** סינון לפי שם קמפיין (מכיל) — ריק = כל הקמפיינים */
   campaignFilter: string;
+  /** בפילוח "לפי סוג המרה" — תוויות סוגים שהוסתרו */
+  excludeActions: string[];
 }
 
 /** חילוץ סינון הקמפיין ממערך ה-filters שמגיע מה-API */
@@ -30,11 +32,17 @@ function extractCampaignFilter(filters: unknown): string {
   return c?.value ?? "";
 }
 
+/** חילוץ סוגי ההמרות המוחרגים ממערך ה-filters */
+function extractExcludeActions(filters: unknown): string[] {
+  if (!Array.isArray(filters)) return [];
+  return (filters as WidgetFilter[]).filter((f) => f && f.field === "excludeAction" && typeof f.value === "string").map((f) => f.value);
+}
+
 const PLATFORMS: Platform[] = ["meta", "google_ads", "tiktok", "all", "ga4"];
 const DISPLAYS: DisplayType[] = ["kpi", "line", "area", "bar", "pie", "table", "platform_header", "heading", "text"];
 const isTextType = (d: DisplayType) => d === "heading" || d === "text";
 const isNoMetrics = (d: DisplayType) => isTextType(d) || d === "platform_header";
-const emptyForm = (): Widget => ({ id: "", platform: "meta", metrics: [], displayType: "kpi", dimension: "none", size: "full", title: "", textBody: "", compare: false, campaignFilter: "" });
+const emptyForm = (): Widget => ({ id: "", platform: "meta", metrics: [], displayType: "kpi", dimension: "none", size: "full", title: "", textBody: "", compare: false, campaignFilter: "", excludeActions: [] });
 const SIZES = [
   { v: "full", label: "מלא" },
   { v: "half", label: "חצי" },
@@ -86,6 +94,12 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
   const [selectedId, setSelectedId] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<Widget>(emptyForm());
   const [saving, setSaving] = useState(false);
+  // סוגי המרות זמינים — לבורר "לפי סוג המרה"
+  const [actionTypes, setActionTypes] = useState<{ label: string; count: number }[]>([]);
+  // מחולל ווידג'טים מטקסט חופשי
+  const [prompt, setPrompt] = useState("");
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptResult, setPromptResult] = useState<{ created: number; unsupported: string[] } | null>(null);
 
   // טווח תאריכים לתצוגה המקדימה (הלקוח יכול לבחור גם בעמוד הציבורי)
   const [range, setRange] = useState("month");
@@ -99,7 +113,7 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
     const res = await fetch(`/api/clients/${clientId}/widgets?reportId=${reportId}`);
     if (res.ok) {
       const rows = (await res.json()) as Array<Widget & { filters?: unknown }>;
-      setWidgets(rows.map((w) => ({ ...w, campaignFilter: extractCampaignFilter(w.filters) })));
+      setWidgets(rows.map((w) => ({ ...w, campaignFilter: extractCampaignFilter(w.filters), excludeActions: extractExcludeActions(w.filters) })));
     }
   }, [clientId, reportId]);
 
@@ -120,6 +134,13 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
 
   useEffect(() => { loadWidgets(); loadShare(); }, [loadWidgets, loadShare]);
   useEffect(() => { loadPreview(since, until); }, [loadPreview, since, until]);
+
+  // טוען את סוגי ההמרות הזמינים כשעורכים ווידג'ט "לפי סוג המרה"
+  useEffect(() => {
+    if (form.dimension !== "action" || selectedId === null) { setActionTypes([]); return; }
+    const qs = new URLSearchParams({ since, until, platform: form.platform, ...(form.campaignFilter ? { campaignFilter: form.campaignFilter } : {}) });
+    fetch(`/api/clients/${clientId}/action-types?${qs}`).then((r) => (r.ok ? r.json() : [])).then(setActionTypes).catch(() => setActionTypes([]));
+  }, [clientId, form.dimension, form.platform, form.campaignFilter, selectedId, since, until]);
 
   function selectNew() {
     setSelectedId("new");
@@ -157,10 +178,10 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
     if (isText && !form.title.trim() && !form.textBody.trim()) return;
     setSaving(true);
     try {
-      // ממירים את סינון הקמפיין לפורמט ה-filters שנשמר ב-DB
-      const filters = form.campaignFilter.trim()
-        ? [{ field: "campaign", operator: "contains", value: form.campaignFilter.trim() }]
-        : [];
+      // ממירים סינון קמפיין + סוגי המרות מוחרגים לפורמט ה-filters שנשמר ב-DB
+      const filters: WidgetFilter[] = [];
+      if (form.campaignFilter.trim()) filters.push({ field: "campaign", operator: "contains", value: form.campaignFilter.trim() });
+      if (form.dimension === "action") for (const a of form.excludeActions) filters.push({ field: "excludeAction", operator: "ne", value: a });
       const payload = { ...form, filters };
       if (selectedId && selectedId !== "new") {
         await fetch(`/api/clients/${clientId}/widgets`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, id: selectedId }) });
@@ -195,6 +216,31 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
     setWidgets((prev) => order.map((id) => prev.find((w) => w.id === id)).filter(Boolean) as Widget[]);
     await fetch(`/api/clients/${clientId}/widgets`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order }) });
     await loadPreview(since, until);
+  }
+
+  async function generateFromPrompt() {
+    const text = prompt.trim();
+    if (!text || promptLoading) return;
+    setPromptLoading(true);
+    setPromptResult(null);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/widgets/from-prompt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text, reportId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPromptResult({ created: data.created ?? 0, unsupported: data.unsupported ?? [] });
+        if (data.created > 0) { setPrompt(""); await loadWidgets(); await loadPreview(since, until); }
+      } else {
+        setPromptResult({ created: 0, unsupported: [data.error ?? "שגיאה"] });
+      }
+    } catch {
+      setPromptResult({ created: 0, unsupported: ["שגיאה בחיבור. נסה שוב."] });
+    } finally {
+      setPromptLoading(false);
+    }
   }
 
   async function toggleShare(enable: boolean) {
@@ -248,8 +294,48 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
       {/* שני פאנלים — מאפייני נתונים (שמאל) + קנבס (ימין) */}
       <div className="flex flex-col gap-4 lg:flex-row">
         {/* פאנל מאפייני נתונים */}
-        <aside className="lg:w-80 lg:shrink-0">
-          <div className="sticky top-4 rounded-lg border border-brand-border bg-brand-light shadow-sm">
+        <aside className="space-y-4 lg:w-80 lg:shrink-0">
+          {/* מחולל ווידג'טים מטקסט חופשי */}
+          <div className="rounded-lg border border-brand-gold/40 bg-brand-gold/5 p-4 shadow-sm">
+            <div className="mb-2 flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-brand-gold" />
+              <h3 className="text-sm font-semibold text-brand-dark">צור ווידג&apos;ט מתיאור</h3>
+            </div>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              rows={3}
+              dir="rtl"
+              disabled={promptLoading}
+              className={inputClass}
+              placeholder="לדוגמה: טבלה של קליקים, המרות ועלות להמרה לפי קמפיין — רק לקמפיינים של single family"
+            />
+            <button
+              onClick={generateFromPrompt}
+              disabled={promptLoading || !prompt.trim()}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-dark px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark/90 disabled:opacity-50"
+            >
+              {promptLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {promptLoading ? "בונה..." : "צור"}
+            </button>
+            {promptResult && (
+              <div className="mt-3 space-y-2 text-xs">
+                {promptResult.created > 0 && (
+                  <p className="rounded-lg bg-brand-success/10 px-2.5 py-1.5 font-medium text-brand-success">נוצרו {promptResult.created} ווידג&apos;טים ✓</p>
+                )}
+                {promptResult.unsupported.length > 0 && (
+                  <div className="rounded-lg border border-brand-warning/30 bg-brand-warning/5 px-2.5 py-2">
+                    <p className="mb-1 font-medium text-brand-dark">לא הצלחתי לבנות את זה — כדאי לפנות לפיתוח:</p>
+                    <ul className="list-disc space-y-0.5 pr-4 text-brand-muted">
+                      {promptResult.unsupported.map((u, i) => <li key={i}>{u}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-brand-border bg-brand-light shadow-sm">
             <div className="flex items-center justify-between border-b border-brand-border px-4 py-3">
               <h3 className="text-sm font-semibold text-brand-dark">מאפייני נתונים</h3>
               <button onClick={selectNew} className="flex items-center gap-1 rounded-lg bg-brand-gold px-2.5 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80"><Plus className="h-3.5 w-3.5" />חדש</button>
@@ -317,6 +403,32 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
                             className={inputClass}
                             placeholder="לדוגמה: שם מוצר — יוצגו רק קמפיינים תואמים"
                           />
+                        </div>
+                      )}
+                      {form.dimension === "action" && (
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-brand-muted">סוגי המרות להצגה</label>
+                          {actionTypes.length === 0 ? (
+                            <p className="text-xs text-brand-muted">אין סוגי המרות בטווח שנבחר.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {actionTypes.map((a) => {
+                                const on = !form.excludeActions.includes(a.label);
+                                return (
+                                  <button
+                                    key={a.label}
+                                    type="button"
+                                    onClick={() => setForm((f) => ({ ...f, excludeActions: on ? [...f.excludeActions, a.label] : f.excludeActions.filter((x) => x !== a.label) }))}
+                                    className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${on ? "border-brand-gold bg-brand-gold/15 text-brand-dark" : "border-brand-border bg-brand-bg text-brand-muted line-through hover:bg-brand-light"}`}
+                                    title={on ? "מוצג — לחץ להסתרה" : "מוסתר — לחץ להצגה"}
+                                  >
+                                    {a.label} · {a.count}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <p className="mt-1 text-[11px] text-brand-muted">לחיצה מסירה סוג המרה מהתצוגה (למשל שלבי-ביניים).</p>
                         </div>
                       )}
                       <div>

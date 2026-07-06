@@ -73,12 +73,17 @@ function toConfig(w: RawWidget): WidgetConfig {
   let metrics: string[] = [];
   try { const p = JSON.parse(w.metrics || "[]"); if (Array.isArray(p)) metrics = p.filter((x) => typeof x === "string"); } catch {}
   // filters: [{ field: "campaign", operator: "contains", value: "..." }] → סינון פר-מוצר
+  // + [{ field: "excludeAction", operator: "ne", value: "<תווית>" }] → הסתרת סוגי המרות
   let campaignFilter = "";
+  const excludeActions: string[] = [];
   try {
     const f = JSON.parse(w.filters || "[]");
     if (Array.isArray(f)) {
-      const c = f.find((x) => x && typeof x === "object" && x.field === "campaign" && typeof x.value === "string");
-      if (c) campaignFilter = c.value;
+      for (const x of f) {
+        if (!x || typeof x !== "object" || typeof x.value !== "string") continue;
+        if (x.field === "campaign") campaignFilter = x.value;
+        else if (x.field === "excludeAction") excludeActions.push(x.value);
+      }
     }
   } catch {}
   return {
@@ -92,6 +97,7 @@ function toConfig(w: RawWidget): WidgetConfig {
     textBody: w.textBody ?? "",
     compare: Boolean(w.compare),
     campaignFilter: campaignFilter || undefined,
+    excludeActions: excludeActions.length ? excludeActions : undefined,
   };
 }
 
