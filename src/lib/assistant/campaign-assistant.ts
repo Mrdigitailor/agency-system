@@ -46,6 +46,38 @@ const tools: Anthropic.Tool[] = [
       required: ["client_name"],
     },
   },
+  {
+    name: "find_tasks",
+    description:
+      "מחפש משימות קיימות במערכת כדי לאתר משימה שהמשתמש מתייחס אליה (לפני עדכון/סגירה). " +
+      "השתמש כשהמשתמש מבקש לסמן/לסגור/לעדכן משימה, או שואל 'אילו משימות פתוחות'. " +
+      "אפשר לסנן לפי טקסט חופשי מהכותרת, שם לקוח, וסטטוס. מחזיר רשימה עם מזהי משימות.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "טקסט חופשי לחיפוש בכותרת/תיאור המשימה" },
+        client_name: { type: "string", description: "סינון לפי שם לקוח, אם הוזכר" },
+        status: { type: "string", enum: ["pending", "in_progress", "done", "any"], description: "סינון סטטוס. ברירת מחדל: פתוחות בלבד (pending+in_progress)" },
+      },
+    },
+  },
+  {
+    name: "update_task",
+    description:
+      "מעדכן משימה קיימת לפי מזהה — סימון כהושלם, שינוי סטטוס/עדיפות/תאריך יעד/כותרת. " +
+      "חובה לקרוא קודם ל-find_tasks כדי לקבל את מזהה המשימה הנכון. אל תנחש task_id.",
+    input_schema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "מזהה המשימה (מ-find_tasks)" },
+        status: { type: "string", enum: ["pending", "in_progress", "done"], description: "סטטוס חדש. 'done' = הושלם/בוצע" },
+        priority: { type: "string", enum: ["low", "medium", "high", "urgent"], description: "עדיפות חדשה" },
+        due_date: { type: "string", description: "תאריך יעד חדש YYYY-MM-DD" },
+        title: { type: "string", description: "כותרת חדשה (רק אם המשתמש ביקש לשנות ניסוח)" },
+      },
+      required: ["task_id"],
+    },
+  },
 ];
 
 function ymd(d: Date): string {
@@ -239,6 +271,89 @@ async function createTask(input: {
   };
 }
 
+const TASK_STATUS_HE: Record<string, string> = { pending: "ממתין", in_progress: "בתהליך", done: "הושלם" };
+
+/** מחפש משימות לאיתור לפני עדכון/סגירה */
+async function findTasks(input: { query?: string; client_name?: string; status?: string }) {
+  const where: Record<string, unknown> = { deletedAt: null };
+
+  // סינון לקוח (fuzzy)
+  let clientLabel: string | null = null;
+  if (input.client_name) {
+    const m = await matchClient(input.client_name);
+    if (m.best) { where.clientId = m.best.id; clientLabel = m.best.name; }
+    else {
+      return {
+        ok: false,
+        client_not_found: true,
+        searched: input.client_name,
+        suggestions: m.suggestions,
+        message: `לא נמצא לקוח שמתאים ל-"${input.client_name}". קרובים: ${m.suggestions.join(", ") || "אין"}.`,
+      };
+    }
+  }
+
+  // סטטוס — ברירת מחדל: פתוחות בלבד
+  if (input.status && input.status !== "any") where.status = input.status;
+  else if (!input.status) where.status = { not: "done" };
+
+  const tasks = await prisma.task.findMany({
+    where,
+    include: { client: { select: { name: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+  });
+
+  // דירוג לפי טקסט חופשי אם ניתן
+  let ranked = tasks.map((t) => ({ t, score: input.query ? scoreClient(input.query, `${t.title} ${t.description}`) : 1 }));
+  if (input.query) ranked = ranked.filter((x) => x.score > 0.2).sort((a, b) => b.score - a.score);
+
+  const list = ranked.slice(0, 8).map(({ t }) => ({
+    task_id: t.id,
+    title: t.title,
+    client: t.client?.name ?? null,
+    status: TASK_STATUS_HE[t.status] ?? t.status,
+    priority: t.priority,
+    assignee: t.assignee || null,
+    due_date: t.dueDate || null,
+  }));
+
+  return {
+    ok: true,
+    count: list.length,
+    filtered_by: { query: input.query ?? null, client: clientLabel, status: input.status ?? "open" },
+    tasks: list,
+    message: list.length === 0 ? "לא נמצאו משימות שתואמות את החיפוש." : undefined,
+  };
+}
+
+/** מעדכן משימה קיימת (סטטוס/עדיפות/תאריך/כותרת) */
+async function updateTask(input: { task_id: string; status?: string; priority?: string; due_date?: string; title?: string }) {
+  const existing = await prisma.task.findFirst({ where: { id: input.task_id, deletedAt: null }, include: { client: { select: { name: true } } } });
+  if (!existing) return { ok: false, message: `לא נמצאה משימה עם המזהה ${input.task_id}. הרץ find_tasks כדי לאתר את המשימה הנכונה.` };
+
+  const data: Record<string, unknown> = {};
+  if (input.status && ["pending", "in_progress", "done"].includes(input.status)) data.status = input.status;
+  if (input.priority && ["low", "medium", "high", "urgent"].includes(input.priority)) data.priority = input.priority;
+  if (input.due_date !== undefined) data.dueDate = input.due_date;
+  if (input.title) data.title = input.title;
+
+  if (Object.keys(data).length === 0) return { ok: false, message: "לא צוין שום שינוי לביצוע." };
+
+  const updated = await prisma.task.update({ where: { id: input.task_id }, data, include: { client: { select: { name: true } } } });
+
+  return {
+    ok: true,
+    task_id: updated.id,
+    title: updated.title,
+    client: updated.client?.name ?? null,
+    new_status: TASK_STATUS_HE[updated.status] ?? updated.status,
+    priority: updated.priority,
+    due_date: updated.dueDate || null,
+    marked_done: updated.status === "done",
+  };
+}
+
 async function getCampaignData(input: { client_name: string; days?: number }) {
   const match = await matchClient(input.client_name);
   if (!match.best) {
@@ -303,15 +418,21 @@ async function getCampaignData(input: { client_name: string; days?: number }) {
 const SYSTEM_PROMPT = `אתה עוזר טלגרם של סוכנות שיווק דיגיטלי (Mr.digitailor).
 אתה מתקשר בעברית, בסגנון קצר וברור. מטבע: ₪ (שקלים). תאריך היום: {TODAY}.
 
-יש לך שני כלים:
+יש לך ארבעה כלים:
 1. create_task — לפתיחת משימה. שייך אותה ללקוח אם הוזכר. אם לא ברור מה העדיפות, אל תשאל — קבע medium.
 2. get_campaign_data — לשליפת ביצועי קמפיינים של לקוח כשנשאלת על נתונים/הוצאה/המרות.
+3. find_tasks — לאיתור משימות קיימות (לפי טקסט/לקוח/סטטוס).
+4. update_task — לעדכון משימה קיימת: סימון כהושלם ('done'), שינוי עדיפות/תאריך/כותרת.
 
 כללים:
 - כשפותחים משימה — אשר בקצרה למי היא שויכה ולאיזה לקוח.
 - כשמציגים נתוני קמפיין — סכם את העיקר (הוצאה, המרות, עלות להמרה) בנקודות קצרות, בלי טבלאות ענקיות.
 - אם כלי החזיר client_not_found — אל תפתח את המשימה ואל תנחש לקוח. אמור למשתמש שלא נמצא לקוח מתאים, הצג את השמות הקרובים (suggestions) ובקש שיכתוב את השם המדויק מהרשימה. אם המשתמש מאשר במפורש שאין לקוח — אפשר לפתוח את המשימה בלי שם לקוח (בלי הפרמטר client_name).
-- אל תמציא נתונים או שמות לקוחות. השתמש רק במה שהכלים מחזירים.`;
+- **סימון/עדכון משימה:** קרא תמיד קודם ל-find_tasks כדי לאתר את המשימה, ואז ל-update_task עם ה-task_id שהוחזר. לעולם אל תנחש task_id.
+  • אם find_tasks החזיר בדיוק משימה אחת תואמת — בצע את העדכון וסכם מה נעשה ("✅ סימנתי כהושלם: <כותרת>").
+  • אם החזיר כמה משימות — הצג אותן ממוספרות (כותרת + לקוח) ובקש מהמשתמש לבחור לפני העדכון.
+  • אם לא נמצאה אף משימה — אמור זאת ואל תמציא.
+- אל תמציא נתונים, שמות לקוחות או מזהי משימות. השתמש רק במה שהכלים מחזירים.`;
 
 /**
  * מריץ את ה-assistant על הודעה נכנסת ומחזיר טקסט תשובה.
@@ -347,6 +468,10 @@ export async function runCampaignAssistant(text: string): Promise<string> {
           result = await createTask(block.input as Parameters<typeof createTask>[0]);
         } else if (block.name === "get_campaign_data") {
           result = await getCampaignData(block.input as Parameters<typeof getCampaignData>[0]);
+        } else if (block.name === "find_tasks") {
+          result = await findTasks(block.input as Parameters<typeof findTasks>[0]);
+        } else if (block.name === "update_task") {
+          result = await updateTask(block.input as Parameters<typeof updateTask>[0]);
         } else {
           result = { error: `כלי לא מוכר: ${block.name}` };
         }
