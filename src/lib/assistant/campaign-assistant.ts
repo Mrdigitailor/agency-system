@@ -165,6 +165,8 @@ async function matchClient(query: string): Promise<{ best: ClientLite | null; su
 
   const CONFIDENT = 0.6; // סף ביטחון לשיוך אוטומטי
   const best = scored[0];
+  // תיעוד להבנת כשלי התאמה (נראה ב-Vercel logs) — מה נשלח, מי הכי קרוב, ובאיזה ניקוד
+  console.log(`[matchClient] query="${query}" → best="${best?.client.name ?? "—"}" score=${(best?.score ?? 0).toFixed(2)} confident=${Boolean(best && best.score >= CONFIDENT)}`);
   return {
     best: best && best.score >= CONFIDENT ? best.client : null,
     suggestions: scored.filter((s) => s.score > 0.25).slice(0, 3).map((s) => s.client.name),

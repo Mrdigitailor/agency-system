@@ -115,6 +115,41 @@ const wantsCompare = (w: WidgetConfig) => w.compare && (w.displayType === "kpi" 
 
 const SEGMENT_DIMS = new Set(["age", "gender", "device"]);
 const isSegment = (w: WidgetConfig) => w.platform === "google_ads" && SEGMENT_DIMS.has(w.dimension);
+const isSearchTerm = (w: WidgetConfig) => (w.platform === "google_ads" || w.platform === "all") && w.dimension === "searchTerm";
+
+// ---------- מונחי חיפוש (Google Ads) ----------
+interface SearchTermAgg { searchTerm: string; impressions: number; clicks: number; spend: number; conversions: number; conversionsValue: number }
+
+async function fetchSearchTerms(ctx: ClientCtx, range: DateRange, campaignFilter?: string): Promise<SearchTermAgg[]> {
+  let rows: Array<{ searchTerm: string; campaignName: string; impressions: number; clicks: number; spend: number; conversions: number; conversionsValue: number }>;
+  try {
+    rows = await prisma.googleSearchTermDaily.findMany({
+      where: { clientId: ctx.clientId, date: { gte: range.since, lte: range.until } },
+      select: { searchTerm: true, campaignName: true, impressions: true, clicks: true, spend: true, conversions: true, conversionsValue: true },
+    });
+  } catch { return []; } // הטבלה עדיין לא קיימת ב-DB — לא לשבור
+  const f = campaignFilter ? normalizeName(campaignFilter) : "";
+  const agg = new Map<string, SearchTermAgg>();
+  for (const r of rows) {
+    if (f && !normalizeName(r.campaignName).includes(f)) continue;
+    const e = agg.get(r.searchTerm) ?? { searchTerm: r.searchTerm, impressions: 0, clicks: 0, spend: 0, conversions: 0, conversionsValue: 0 };
+    e.impressions += r.impressions; e.clicks += r.clicks; e.spend += r.spend; e.conversions += r.conversions; e.conversionsValue += r.conversionsValue;
+    agg.set(r.searchTerm, e);
+  }
+  return [...agg.values()].sort((a, b) => b.conversions - a.conversions || b.clicks - a.clicks).slice(0, 50);
+}
+
+function searchTermToData(w: WidgetConfig, rows: SearchTermAgg[]): WidgetData {
+  if (rows.length === 0) return { type: "empty", reason: "אין נתוני מונחי חיפוש בתקופה (זמין ל-Google Ads בלבד)" };
+  const chosen = w.metrics.filter((m) => METRIC_BY_ID[m]?.platforms.some((p) => p === "google_ads" || p === "all"));
+  const cols = chosen.length ? chosen : ["clicks", "conversions", "cpa"];
+  const comp = (r: SearchTermAgg): Components => ({ spend: r.spend, impressions: r.impressions, clicks: r.clicks, conversions: r.conversions, purchaseValue: r.conversionsValue });
+  return {
+    type: "table",
+    columns: [{ id: "term", label: "מונח חיפוש" }, ...cols.map((id) => ({ id, label: METRIC_BY_ID[id].label }))],
+    rows: rows.map((r) => [r.searchTerm, ...cols.map((id) => Math.round(metricValue(id, comp(r)) * 100) / 100)]),
+  };
+}
 
 function segmentToData(w: WidgetConfig, rows: SegmentRow[]): WidgetData {
   const metricId = w.metrics.find((m) => ["spend", "clicks", "conversions"].includes(m)) ?? "conversions";
@@ -433,7 +468,7 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
   const prevAdCache: AdCache = {};
   const prevGa4Cache: Ga4Cache = { loaded: false, data: null };
 
-  const dataWidgets = widgets.filter((w) => !isText(w) && !isSegment(w));
+  const dataWidgets = widgets.filter((w) => !isText(w) && !isSegment(w) && !isSearchTerm(w));
   const needsAd = dataWidgets.some((w) => w.platform !== "ga4");
   const needsGa4 = dataWidgets.some((w) => w.platform === "ga4");
   const needsCompare = dataWidgets.some(wantsCompare);
@@ -443,6 +478,10 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
   // פילוחים דמוגרפיים — שליפה חיה מ-Google Ads (קריאה אחת לכל פילוח)
   const segCache = new Map<string, SegmentRow[]>();
   const segDims = [...new Set(widgets.filter(isSegment).map((w) => w.dimension))];
+
+  // מונחי חיפוש — שליפה מה-DB לכל צירוף (campaignFilter). מפתח ריק = כל הקמפיינים.
+  const stCache = new Map<string, SearchTermAgg[]>();
+  const stKeys = [...new Set(widgets.filter(isSearchTerm).map((w) => w.campaignFilter ?? ""))];
 
   // שמות המרות מותאמות של מטא — רק אם יש ווידג'ט "לפי סוג המרה" בהיקף מטא
   const needsActionNames = dataWidgets.some((w) => w.dimension === "action" && (w.platform === "meta" || w.platform === "all"));
@@ -454,6 +493,7 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
     needsCompare && needsAd && prev ? getAdRows(ctx, prev, prevAdCache) : Promise.resolve(emptyAd),
     needsCompare && needsGa4 && prev ? getGa4(ctx, prev, prevGa4Cache) : Promise.resolve(null),
     ...segDims.map(async (d) => { segCache.set(d, await fetchGoogleSegment(ctx.clientId, range.since, range.until, d as GoogleSegment)); }),
+    ...stKeys.map(async (k) => { stCache.set(k, await fetchSearchTerms(ctx, range, k || undefined)); }),
     ...(needsActionNames ? [resolveMetaCustomNames(ctx.clientId).then((m) => { customNames = m; })] : []),
   ]);
 
@@ -461,6 +501,7 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
     let data: WidgetData;
     if (isText(w)) data = { type: "text", heading: w.displayType === "heading", body: w.textBody };
     else if (isSegment(w)) data = segmentToData(w, segCache.get(w.dimension) ?? []);
+    else if (isSearchTerm(w)) data = searchTermToData(w, stCache.get(w.campaignFilter ?? "") ?? []);
     else if (w.platform === "ga4") data = computeGa4Widget(w, ga4Cache.data, prevGa4Cache.data);
     else data = computeAdWidget(w, ctx, ad, prevAd, customNames);
     return { widgetId: w.id, data };

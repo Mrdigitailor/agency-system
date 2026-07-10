@@ -3,7 +3,7 @@ import { getCurrencySymbol } from "@/lib/utils/currency";
 
 export type Platform = "meta" | "google_ads" | "tiktok" | "ga4" | "all";
 export type DisplayType = "kpi" | "line" | "area" | "bar" | "pie" | "table" | "heading" | "text" | "platform_header";
-export type Dimension = "none" | "date" | "week" | "month" | "platform" | "campaign" | "channel" | "action" | "age" | "gender" | "device";
+export type Dimension = "none" | "date" | "week" | "month" | "platform" | "campaign" | "channel" | "action" | "searchTerm" | "age" | "gender" | "device";
 
 export interface MetricDef {
   id: string;
@@ -70,6 +70,7 @@ export const DIMENSION_LABELS: Record<Dimension, string> = {
   campaign: "לפי קמפיין",
   channel: "לפי ערוץ",
   action: "לפי סוג המרה",
+  searchTerm: "לפי מונח חיפוש (Google)",
   age: "לפי גיל (Google)",
   gender: "לפי מגדר (Google)",
   device: "לפי מכשיר (Google)",
@@ -93,6 +94,10 @@ export function validDimensions(displayType: DisplayType, platform?: Platform): 
     (displayType === "pie" || displayType === "bar" || displayType === "table")
   ) {
     dims = [...dims, "action"];
+  }
+  // מונחי חיפוש — טבלה בלבד, ל-Google Ads / כל הפלטפורמות
+  if ((platform === "google_ads" || platform === "all") && displayType === "table") {
+    dims = [...dims, "searchTerm"];
   }
   // פילוחים דמוגרפיים — רק ל-Google Ads, בתצוגות pie/bar
   if (platform === "google_ads" && (displayType === "pie" || displayType === "bar")) {

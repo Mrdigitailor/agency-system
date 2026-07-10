@@ -10,7 +10,7 @@ const MODEL = process.env.REPORT_AI_MODEL ?? "claude-sonnet-4-6";
 // מה שמותר להיווצר — חייב להתיישר עם המנוע (engine.ts) ועם metrics.ts
 const PLATFORMS = ["meta", "google_ads", "tiktok", "all", "ga4"] as const;
 const DISPLAY_TYPES = ["kpi", "line", "area", "bar", "pie", "table", "heading", "text", "platform_header"] as const;
-const DIMENSIONS = ["none", "date", "week", "month", "platform", "campaign", "action", "age", "gender", "device"] as const;
+const DIMENSIONS = ["none", "date", "week", "month", "platform", "campaign", "action", "searchTerm", "age", "gender", "device"] as const;
 
 export interface GeneratedWidget {
   platform: string;
@@ -43,15 +43,16 @@ const SYSTEM = `אתה בונה ווידג'טים לדשבורד שיווקי מ
 
 חוקים:
 - השתמש רק ב-platform/displayType/dimension/metrics מהקטלוג. אל תמציא מזהים.
-- dimension "action" = פילוח לפי סוג המרה (טופס/שיחה/פגישה וכו'). "campaign" = טבלה/עוגה לפי קמפיין. date/week/month = סדרת זמן (line/area/bar). platform = פילוח בין פלטפורמות. age/gender/device = רק ל-platform "google_ads".
+- dimension "action" = פילוח לפי סוג המרה (טופס/שיחה/פגישה וכו'). "campaign" = טבלה/עוגה לפי קמפיין. "searchTerm" = טבלת מונחי חיפוש (Google Ads בלבד, displayType "table"). date/week/month = סדרת זמן (line/area/bar). platform = פילוח בין פלטפורמות. age/gender/device = רק ל-platform "google_ads".
 - kpi = כרטיסי מספר (dimension תמיד "none"). table = טבלה (dimension "campaign" או "action").
 - campaignFilter: אם המשתמש ביקש מוצר/קמפיין ספציפי ("מקמפיין single family") — שים את המילה המזהה כאן (התאמת "מכיל").
 - excludeActions: אם ביקש להסתיר סוגי המרות מסוימים.
 - title: כותרת קצרה וברורה בעברית.
 - size: ברירת מחדל "full" ל-kpi/table/סדרת זמן; "half" לעוגות.
 
+מונחי חיפוש (search terms / keywords מגוגל) **כן נתמכים**: displayType "table", dimension "searchTerm", platform "google_ads" (או "all"), metrics לפי הבקשה (impressions/clicks/ctr/cpc/conversions/cpa/spend). אם ביקשו מקמפיין מסוים — campaignFilter.
+
 **מה שאי אפשר לבנות — הכנס ל-unsupported עם הסבר קצר בעברית מה חסר:**
-- טבלת "מונחי חיפוש" / search terms / keywords (לא מסונכרן מגוגל).
 - טבלת מודעות עם תמונות/thumbnails (לא זמין).
 - מדדים שלא קיימים בקטלוג (למשל LTV, רווח נקי, נתוני CRM/סגירות, אחוז המרה למודעות).
 - כל דבר שדורש מקור נתונים שאינו מטא/גוגל/טיקטוק/GA4.
@@ -62,7 +63,7 @@ const SYSTEM = `אתה בונה ווידג'טים לדשבורד שיווקי מ
 
 דוגמאות:
 - "טבלה של קליקים והמרות לפי קמפיין" → widgets: [table/campaign, metrics ["clicks","conversions"]]. unsupported: [].
-- "טבלה של מונחי החיפוש מקמפיין single family עם חשיפות וקליקים" → widgets: []. unsupported: ["טבלת מונחי חיפוש (search terms) אינה זמינה — הנתון לא מסונכרן מגוגל וצריך פיתוח."].
+- "טבלה של מונחי החיפוש מקמפיין single family עם חשיפות, קליקים, המרות ועלות להמרה" → widgets: [{platform:"google_ads", displayType:"table", dimension:"searchTerm", metrics:["impressions","clicks","conversions","cpa"], campaignFilter:"single family", title:"מונחי חיפוש – Single Family", size:"full"}]. unsupported: [].
 - "הרווח הנקי וה-LTV לכל לקוח" → widgets: []. unsupported: ["רווח נקי ו-LTV אינם זמינים — הם נתוני CRM/כספים שלא קיימים במערכת הפרסום."].`;
 
 /** מריץ את המודל ומחזיר ווידג'טים תקינים + מה שלא נתמך */

@@ -145,12 +145,65 @@ export async function syncGoogleAdsAccount(
       });
     }
 
+    // מונחי חיפוש — best effort, לא חוסם את סנכרון הקמפיינים
+    await syncSearchTerms(clientId, assetId, customerId, token, since, until, mccId).catch((err) => {
+      console.warn(`[GoogleAds Sync] search terms failed: ${(err as Error).message?.slice(0, 80)}`);
+    });
+
     return { fetched: results.length, errors };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
     console.error(`[GoogleAds Sync] Error:`, msg);
     errors.push(msg);
     return { fetched: 0, errors };
+  }
+}
+
+/**
+ * שליפת מונחי חיפוש (search_term_view) + שמירה. רק מונחים עם קליקים,
+ * כדי לצמצם cardinality. upserts במנות מקביליות.
+ */
+export async function syncSearchTerms(
+  clientId: string, assetId: string, customerId: string, token: string,
+  since: string, until: string, mccId?: string,
+): Promise<void> {
+  const query = `
+    SELECT
+      campaign.id, campaign.name,
+      search_term_view.search_term,
+      segments.date,
+      metrics.impressions, metrics.clicks, metrics.cost_micros,
+      metrics.conversions, metrics.conversions_value
+    FROM search_term_view
+    WHERE segments.date BETWEEN '${since}' AND '${until}' AND metrics.clicks > 0
+    ORDER BY segments.date DESC
+    LIMIT 8000
+  `;
+  const rows = await searchStream(customerId, query, { accessToken: token, loginCustomerId: mccId || undefined });
+  console.log(`[GoogleAds Sync] search terms: ${rows.length} rows for ${customerId}`);
+
+  const BATCH = 40;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    await Promise.all(rows.slice(i, i + BATCH).map((row) => {
+      const campaignId = String(row.campaign?.id ?? "");
+      const searchTerm = row.searchTermView?.searchTerm ?? "";
+      const date = row.segments?.date ?? "";
+      if (!campaignId || !searchTerm || !date) return Promise.resolve();
+      const m = row.metrics ?? {};
+      const data = {
+        campaignName: row.campaign?.name ?? "",
+        impressions: Number(m.impressions ?? 0),
+        clicks: Number(m.clicks ?? 0),
+        spend: Number(m.costMicros ?? 0) / MICROS,
+        conversions: Number(m.conversions ?? 0),
+        conversionsValue: Number(m.conversionsValue ?? 0),
+      };
+      return prisma.googleSearchTermDaily.upsert({
+        where: { assetId_campaignId_searchTerm_date: { assetId, campaignId, searchTerm, date } },
+        update: data,
+        create: { clientId, assetId, campaignId, searchTerm, date, ...data },
+      });
+    }));
   }
 }
 

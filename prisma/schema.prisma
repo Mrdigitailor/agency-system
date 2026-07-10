@@ -948,6 +948,31 @@ model GoogleAdsInsightDaily {
   @@map("google_ads_insight_daily")
 }
 
+// מונחי חיפוש ממירים ב-Google Ads (search_term_view) — לטבלת "מונחי חיפוש" בדשבורד.
+// נשמרים רק מונחים עם קליקים (לצמצום cardinality).
+model GoogleSearchTermDaily {
+  id               String   @id @default(cuid())
+  clientId         String
+  assetId          String   // PlatformAsset.id
+  campaignId       String
+  campaignName     String   @default("")
+  searchTerm       String
+  date             String   // YYYY-MM-DD
+
+  impressions      Int   @default(0)
+  clicks           Int   @default(0)
+  spend            Float @default(0)
+  conversions      Float @default(0)
+  conversionsValue Float @default(0)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([assetId, campaignId, searchTerm, date])
+  @@index([clientId, date])
+  @@map("google_search_term_daily")
+}
+
 // ==================== נתוני TikTok Ads ====================
 
 model TikTokInsightDaily {
