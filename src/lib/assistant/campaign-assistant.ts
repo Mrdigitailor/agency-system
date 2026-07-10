@@ -47,6 +47,20 @@ const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: "find_client",
+    description:
+      "מאמת אם לקוח קיים במערכת ומחזיר את פרטיו (שם רשמי, איש קשר, מנהל קמפיינים). " +
+      "השתמש כשהמשתמש שואל 'אתה מזהה את הלקוח X', מפנה ללקוח לפי שם איש קשר, או כדי לוודא שלקוח קיים. " +
+      "אפשר לחפש גם לפי שם איש קשר או מייל — לא רק שם העסק.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "שם העסק או שם איש הקשר לחיפוש" },
+      },
+      required: ["name"],
+    },
+  },
+  {
     name: "find_tasks",
     description:
       "מחפש משימות קיימות במערכת כדי לאתר משימה שהמשתמש מתייחס אליה (לפני עדכון/סגירה). " +
@@ -148,6 +162,22 @@ interface ClientLite {
   name: string;
   campaignManagerId: string | null;
   campaignManager: string;
+  contactEmail: string;
+  notes: string;
+}
+
+/**
+ * ניקוד התאמה לפי פרטי קשר (איש קשר / מייל) — סער חושב על לקוחות לפי האדם שמולו,
+ * לא תמיד לפי שם העסק. שמרני: דורש שכל הביטוי (או כל מילותיו) יופיע בפרטי הקשר.
+ */
+function scoreContact(query: string, contactText: string): number {
+  const q = normalizeName(query);
+  const t = normalizeName(contactText);
+  if (!q || !t || q.length < 3) return 0;
+  if (t.includes(q)) return 0.9;
+  const qt = q.split(" ").filter((w) => w.length >= 2);
+  if (qt.length >= 2 && qt.every((w) => t.includes(w))) return 0.85;
+  return 0;
 }
 
 /**
@@ -157,10 +187,11 @@ interface ClientLite {
 async function matchClient(query: string): Promise<{ best: ClientLite | null; suggestions: string[]; topScore: number }> {
   const clients = await prisma.client.findMany({
     where: { deletedAt: null },
-    select: { id: true, name: true, campaignManagerId: true, campaignManager: true },
+    select: { id: true, name: true, campaignManagerId: true, campaignManager: true, contactEmail: true, notes: true },
   });
   const scored = clients
-    .map((c) => ({ client: c, score: scoreClient(query, c.name) }))
+    // ניקוד = המקסימום בין התאמת שם-העסק להתאמת פרטי-הקשר (איש קשר/מייל)
+    .map((c) => ({ client: c, score: Math.max(scoreClient(query, c.name), scoreContact(query, `${c.notes} ${c.contactEmail}`)) }))
     .sort((a, b) => b.score - a.score);
 
   const CONFIDENT = 0.6; // סף ביטחון לשיוך אוטומטי
@@ -270,6 +301,31 @@ async function createTask(input: {
     priority: task.priority,
     due_date: task.dueDate || null,
     employee_notified: Boolean(assigneeId),
+  };
+}
+
+/** מאמת קיום לקוח ומחזיר את פרטיו — כולל התאמה לפי איש קשר */
+async function findClient(input: { name: string }) {
+  const m = await matchClient(input.name);
+  if (m.best) {
+    return {
+      found: true,
+      official_name: m.best.name,
+      contact: m.best.notes || null,
+      email: m.best.contactEmail || null,
+      campaign_manager: m.best.campaignManager || null,
+      note: normalizeName(input.name) !== normalizeName(m.best.name)
+        ? `"${input.name}" זוהה כלקוח "${m.best.name}" (ככל הנראה לפי איש הקשר). השתמש בשם הרשמי "${m.best.name}" לפעולות.`
+        : undefined,
+    };
+  }
+  return {
+    found: false,
+    searched: input.name,
+    suggestions: m.suggestions,
+    message: m.suggestions.length
+      ? `לא נמצא לקוח בשם "${input.name}". קרובים: ${m.suggestions.join(", ")}.`
+      : `לא נמצא לקוח בשם "${input.name}" ואין שמות קרובים.`,
   };
 }
 
@@ -420,13 +476,16 @@ async function getCampaignData(input: { client_name: string; days?: number }) {
 const SYSTEM_PROMPT = `אתה עוזר טלגרם של סוכנות שיווק דיגיטלי (Mr.digitailor).
 אתה מתקשר בעברית, בסגנון קצר וברור. מטבע: ₪ (שקלים). תאריך היום: {TODAY}.
 
-יש לך ארבעה כלים:
+יש לך חמישה כלים:
 1. create_task — לפתיחת משימה. שייך אותה ללקוח אם הוזכר. אם לא ברור מה העדיפות, אל תשאל — קבע medium.
 2. get_campaign_data — לשליפת ביצועי קמפיינים של לקוח כשנשאלת על נתונים/הוצאה/המרות.
-3. find_tasks — לאיתור משימות קיימות (לפי טקסט/לקוח/סטטוס).
-4. update_task — לעדכון משימה קיימת: סימון כהושלם ('done'), שינוי עדיפות/תאריך/כותרת.
+3. find_client — לאימות שלקוח קיים ולשליפת פרטיו. השתמש כשנשאלת "אתה מזהה את הלקוח X" או כשמפנים ללקוח לפי שם איש קשר.
+4. find_tasks — לאיתור משימות קיימות (לפי טקסט/לקוח/סטטוס).
+5. update_task — לעדכון משימה קיימת: סימון כהושלם ('done'), שינוי עדיפות/תאריך/כותרת.
 
 כללים:
+- **זיהוי לקוח:** אפשר לפנות ללקוח לפי שם העסק או לפי שם איש הקשר — הכלים מתאימים את שניהם. אם המשתמש שואל אם אתה מזהה לקוח, קרא ל-find_client. שים לב: find_tasks שמחזיר 0 משימות **לא** אומר שהלקוח לא קיים — לאימות קיום לקוח השתמש רק ב-find_client.
+- **אין לך כלי לשנות שם/פרטים של לקוח.** אם מבקשים לשנות שם לקוח, אמור שזה נעשה בממשק (טאב לקוחות → עריכת לקוח), ולא נסה לעשות זאת דרך הכלים.
 - כשפותחים משימה — אשר בקצרה למי היא שויכה ולאיזה לקוח.
 - כשמציגים נתוני קמפיין — סכם את העיקר (הוצאה, המרות, עלות להמרה) בנקודות קצרות, בלי טבלאות ענקיות.
 - אם כלי החזיר client_not_found — אל תפתח את המשימה ואל תנחש לקוח. אמור למשתמש שלא נמצא לקוח מתאים, הצג את השמות הקרובים (suggestions) ובקש שיכתוב את השם המדויק מהרשימה. אם המשתמש מאשר במפורש שאין לקוח — אפשר לפתוח את המשימה בלי שם לקוח (בלי הפרמטר client_name).
@@ -470,6 +529,8 @@ export async function runCampaignAssistant(text: string): Promise<string> {
           result = await createTask(block.input as Parameters<typeof createTask>[0]);
         } else if (block.name === "get_campaign_data") {
           result = await getCampaignData(block.input as Parameters<typeof getCampaignData>[0]);
+        } else if (block.name === "find_client") {
+          result = await findClient(block.input as Parameters<typeof findClient>[0]);
         } else if (block.name === "find_tasks") {
           result = await findTasks(block.input as Parameters<typeof findTasks>[0]);
         } else if (block.name === "update_task") {
