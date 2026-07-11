@@ -49,10 +49,11 @@ function changePct(value: number, prev: number | null): number | null {
 }
 
 // ---------- רכיבי מטריקה (לחישוב מטריקות נגזרות מסכומים) ----------
-interface Components { spend: number; impressions: number; clicks: number; conversions: number; purchaseValue: number }
-const zero = (): Components => ({ spend: 0, impressions: 0, clicks: 0, conversions: 0, purchaseValue: 0 });
+interface Components { spend: number; impressions: number; clicks: number; conversions: number; purchaseValue: number; reach: number; linkClicks: number; landingPageViews: number }
+const zero = (): Components => ({ spend: 0, impressions: 0, clicks: 0, conversions: 0, purchaseValue: 0, reach: 0, linkClicks: 0, landingPageViews: 0 });
 function addInto(a: Components, b: Components) {
   a.spend += b.spend; a.impressions += b.impressions; a.clicks += b.clicks; a.conversions += b.conversions; a.purchaseValue += b.purchaseValue;
+  a.reach += b.reach; a.linkClicks += b.linkClicks; a.landingPageViews += b.landingPageViews;
 }
 function metricValue(id: string, c: Components): number {
   switch (id) {
@@ -61,7 +62,11 @@ function metricValue(id: string, c: Components): number {
     case "clicks": return c.clicks;
     case "conversions": return c.conversions;
     case "purchaseValue": return c.purchaseValue;
+    case "reach": return c.reach;
+    case "linkClicks": return c.linkClicks;
+    case "landingPageViews": return c.landingPageViews;
     case "cpa": return c.conversions > 0 ? c.spend / c.conversions : 0;
+    case "convRate": return c.clicks > 0 ? (c.conversions / c.clicks) * 100 : 0;
     case "ctr": return c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
     case "cpc": return c.clicks > 0 ? c.spend / c.clicks : 0;
     case "cpm": return c.impressions > 0 ? (c.spend / c.impressions) * 1000 : 0;
@@ -71,14 +76,14 @@ function metricValue(id: string, c: Components): number {
 }
 
 // ---------- שורות גולמיות ----------
-interface MetaRow { spend: number; impressions: number; clicks: number; purchaseValue: number; conversions: number; leads: number; purchases: number; actionsJson: string; name: string; date: string }
+interface MetaRow { spend: number; impressions: number; clicks: number; purchaseValue: number; conversions: number; leads: number; purchases: number; reach: number; linkClicks: number; landingPageViews: number; actionsJson: string; name: string; date: string }
 interface GoogleRow { spend: number; impressions: number; clicks: number; conversions: number; conversionsValue: number; conversionsByAction: string; campaignName: string; date: string }
 interface TiktokRow { spend: number; impressions: number; clicks: number; conversions: number; campaignName: string; date: string }
 
 const sum = <T>(rows: T[], f: (r: T) => number) => rows.reduce((s, r) => s + (f(r) || 0), 0);
-const metaComp = (rows: MetaRow[], event: string): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: sum(rows, r => r.purchaseValue), conversions: countConversions(rows, event) });
-const googleComp = (rows: GoogleRow[], action: string): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: sum(rows, r => r.conversionsValue), conversions: countGoogleConversions(rows, action) });
-const tiktokComp = (rows: TiktokRow[]): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: 0, conversions: sum(rows, r => r.conversions) });
+const metaComp = (rows: MetaRow[], event: string): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: sum(rows, r => r.purchaseValue), conversions: countConversions(rows, event), reach: sum(rows, r => r.reach), linkClicks: sum(rows, r => r.linkClicks), landingPageViews: sum(rows, r => r.landingPageViews) });
+const googleComp = (rows: GoogleRow[], action: string): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: sum(rows, r => r.conversionsValue), conversions: countGoogleConversions(rows, action), reach: 0, linkClicks: 0, landingPageViews: 0 });
+const tiktokComp = (rows: TiktokRow[]): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: 0, conversions: sum(rows, r => r.conversions), reach: 0, linkClicks: 0, landingPageViews: 0 });
 
 // ---------- caches משותפים לבקשה ----------
 interface AdRows { meta: MetaRow[]; google: GoogleRow[]; tiktok: TiktokRow[] }
@@ -143,7 +148,7 @@ function searchTermToData(w: WidgetConfig, rows: SearchTermAgg[]): WidgetData {
   if (rows.length === 0) return { type: "empty", reason: "אין נתוני מונחי חיפוש בתקופה (זמין ל-Google Ads בלבד)" };
   const chosen = w.metrics.filter((m) => METRIC_BY_ID[m]?.platforms.some((p) => p === "google_ads" || p === "all"));
   const cols = chosen.length ? chosen : ["clicks", "conversions", "cpa"];
-  const comp = (r: SearchTermAgg): Components => ({ spend: r.spend, impressions: r.impressions, clicks: r.clicks, conversions: r.conversions, purchaseValue: r.conversionsValue });
+  const comp = (r: SearchTermAgg): Components => ({ ...zero(), spend: r.spend, impressions: r.impressions, clicks: r.clicks, conversions: r.conversions, purchaseValue: r.conversionsValue });
   return {
     type: "table",
     columns: [{ id: "term", label: "מונח חיפוש" }, ...cols.map((id) => ({ id, label: METRIC_BY_ID[id].label }))],

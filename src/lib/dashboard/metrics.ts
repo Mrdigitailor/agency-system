@@ -14,6 +14,7 @@ export interface MetricDef {
 }
 
 const AD: Platform[] = ["meta", "google_ads", "tiktok", "all"];
+const META_ALL: Platform[] = ["meta", "all"];
 
 export const METRICS: MetricDef[] = [
   { id: "spend", label: "הוצאה", platforms: AD, unit: "currency", kind: "additive" },
@@ -21,9 +22,14 @@ export const METRICS: MetricDef[] = [
   { id: "clicks", label: "קליקים", platforms: AD, unit: "number", kind: "additive" },
   { id: "conversions", label: "המרות", platforms: AD, unit: "number", kind: "additive" },
   { id: "cpa", label: "עלות להמרה", platforms: AD, unit: "currency", kind: "derived" },
+  { id: "convRate", label: "אחוז המרה", platforms: AD, unit: "percent", kind: "derived" },
   { id: "ctr", label: "CTR", platforms: AD, unit: "percent", kind: "derived" },
   { id: "cpc", label: "CPC", platforms: AD, unit: "currency", kind: "derived" },
   { id: "cpm", label: "CPM", platforms: AD, unit: "currency", kind: "derived" },
+  // מדדי מטא נוספים (עמודות קיימות ב-MetaInsightDaily). הערה: reach אינו ניתן
+  // לסכימה יומית (משתמשים ייחודיים חופפים בין ימים) — יתווסף בנפרד עם שליפה חיה.
+  { id: "linkClicks", label: "קליקים למעבר לאתר", platforms: META_ALL, unit: "number", kind: "additive" },
+  { id: "landingPageViews", label: "צפיות בדף נחיתה", platforms: META_ALL, unit: "number", kind: "additive" },
   { id: "purchaseValue", label: "ערך רכישות", platforms: ["meta", "all"], unit: "currency", kind: "additive" },
   { id: "roas", label: "ROAS", platforms: ["meta", "all"], unit: "ratio", kind: "derived" },
   // GA4
