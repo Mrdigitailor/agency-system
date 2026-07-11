@@ -107,10 +107,22 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
     return acc;
   }, {});
 
+  // שם קריא לאירוע פיקסל מותאם מתוך ה-action_type השמור
+  const prettyEventName = (id: string) => {
+    if (id.startsWith("offsite_conversion.fb_pixel_custom.")) return id.slice("offsite_conversion.fb_pixel_custom.".length);
+    if (id.startsWith("offsite_conversion.fb_pixel_")) return id.slice("offsite_conversion.fb_pixel_".length).replace(/_/g, " ");
+    return id;
+  };
+
   // שם תצוגה לכל ערך נבחר — מחפש קודם באירועי הפיקסל ואז בקבועי on-platform
   const labelFor = (id: string) =>
-    events.find((e) => e.id === id)?.name ?? ON_PLATFORM_LABEL_BY_VALUE.get(id) ?? id;
+    events.find((e) => e.id === id)?.name ?? ON_PLATFORM_LABEL_BY_VALUE.get(id) ?? prettyEventName(id);
   const currentNames = selected.map(labelFor);
+
+  // אירועים שנבחרו בעבר אך אינם ברשימות הנוכחיות (למשל אירוע פיקסל שלא ירה לאחרונה) —
+  // חייבים להציג אותם כדי שאפשר יהיה לראות ולבטל אותם.
+  const knownIds = new Set<string>([...events.map((e) => e.id), ...ON_PLATFORM_EVENTS.map((e) => e.value)]);
+  const orphanSelected = selected.filter((id) => !knownIds.has(id));
 
   return (
     <div className="rounded-lg border border-brand-border bg-brand-bg p-4">
@@ -153,6 +165,29 @@ export default function ConversionEventSelector({ clientId, currentEvent }: Conv
       )}
 
       {error && <p className="mb-3 rounded-lg bg-red-50 p-2 text-xs text-brand-danger">{error}</p>}
+
+      {/* ===== אירועים פעילים שלא ברשימה הנוכחית ===== */}
+      {orphanSelected.length > 0 && (
+        <div className="mb-3 rounded-lg border border-brand-gold/40 bg-brand-gold/5 p-3">
+          <p className="mb-1 text-[11px] font-semibold text-brand-dark">אירועים פעילים כעת</p>
+          <p className="mb-2 text-[10px] text-brand-muted">
+            נבחרו בעבר וממשיכים להיספר, אך לא הופיעו בשליפה האחרונה מהפיקסל (לא ירו לאחרונה). אפשר לבטל בחירה כאן.
+          </p>
+          <div className="space-y-1">
+            {orphanSelected.map((id) => (
+              <label key={id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-brand-dark hover:bg-brand-bg">
+                <input
+                  type="checkbox"
+                  checked
+                  onChange={() => toggleEvent(id)}
+                  className="h-3.5 w-3.5 rounded border-brand-border"
+                />
+                <span>{prettyEventName(id)} <span className="text-brand-muted">({id})</span></span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ===== סקשן 1: אירועי פיקסל ===== */}
       <div className="mb-3 rounded-lg border border-brand-border bg-brand-light p-3">
