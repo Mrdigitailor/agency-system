@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { countConversions, aggregateConversionActions } from "@/lib/utils/metaMetrics";
 import { countGoogleConversions } from "@/lib/utils/googleMetrics";
 import { fetchCustomConversions } from "@/lib/api/meta/conversions";
+import { fetchAdInsights } from "@/lib/api/meta/ad-insights";
 import { normalizeName } from "@/lib/reports/group-by-product";
 import { fetchAnalytics, type AnalyticsData } from "@/lib/api/ga4/client";
 import { getValidGoogleToken } from "@/lib/api/google-ads/client";
@@ -233,6 +234,20 @@ function actionBreakdown(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, customName
   return { type: "pie", metricId: "conversions", label: "המרות", slices: entries.slice(0, 10) };
 }
 
+/** Reach מדויק (dedup) ברמת חשבון המודעות לטווח — שליפה חיה ממטא (לא ניתן לסכום יומי) */
+async function fetchAccountReach(clientId: string, range: DateRange): Promise<number | null> {
+  try {
+    const conn = await prisma.platformConnection.findFirst({
+      where: { clientId, platform: "meta", isActive: true },
+      include: { assets: { where: { isSelected: true, assetType: "ad_account" } } },
+    });
+    const asset = conn?.assets[0];
+    if (!conn || !asset) return null;
+    const rows = await fetchAdInsights(asset.externalId, conn.accessToken, "account", range.since, range.until, false);
+    return rows.reduce((s, r) => s + (parseInt(String(r.reach ?? "0")) || 0), 0);
+  } catch { return null; }
+}
+
 async function getGa4(ctx: ClientCtx, range: DateRange, cache: Ga4Cache): Promise<AnalyticsData | null> {
   if (cache.loaded) return cache.data;
   cache.loaded = true;
@@ -282,7 +297,7 @@ function filterAdRows(ad: AdRows, filter: string): AdRows {
 }
 
 // ---------- חישוב ווידג'ט פרסום ----------
-function computeAdWidget(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, prevAd?: AdRows | null, customNames?: Map<string, string>): WidgetData {
+function computeAdWidget(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, prevAd?: AdRows | null, customNames?: Map<string, string>, liveReach?: number | null): WidgetData {
   // סינון פר-מוצר/קמפיין — לפני כל חישוב (כולל ההשוואה לתקופה קודמת)
   if (w.campaignFilter) {
     ad = filterAdRows(ad, w.campaignFilter);
@@ -299,10 +314,12 @@ function computeAdWidget(w: WidgetConfig, ctx: ClientCtx, ad: AdRows, prevAd?: A
   if (w.displayType === "kpi" || w.dimension === "none") {
     const c = rowsToComponents(w.platform, ad, ctx);
     const prev = w.compare && prevAd ? rowsToComponents(w.platform, prevAd, ctx) : null;
+    // reach מדויק — שליפה חיה ברמת חשבון (רק ללא סינון קמפיין, שם הדדופ תקף)
+    const useLiveReach = liveReach != null && !w.campaignFilter && (w.platform === "meta" || w.platform === "all");
     return {
       type: "kpi",
       metrics: metrics.map((id) => {
-        const value = metricValue(id, c);
+        const value = id === "reach" && useLiveReach ? liveReach! : metricValue(id, c);
         return { id, label: METRIC_BY_ID[id].label, value, unit: METRIC_BY_ID[id].unit, change: prev ? changePct(value, metricValue(id, prev)) : undefined };
       }),
     };
@@ -492,6 +509,10 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
   const needsActionNames = dataWidgets.some((w) => w.dimension === "action" && (w.platform === "meta" || w.platform === "all"));
   let customNames = new Map<string, string>();
 
+  // Reach חי — רק אם יש KPI מטא/הכל שמבקש reach בלי סינון קמפיין
+  const needsReach = dataWidgets.some((w) => (w.platform === "meta" || w.platform === "all") && (w.displayType === "kpi" || w.dimension === "none") && !w.campaignFilter && w.metrics.includes("reach"));
+  let liveReach: number | null = null;
+
   const [ad, , prevAd] = await Promise.all([
     needsAd ? getAdRows(ctx, range, adCache) : Promise.resolve(emptyAd),
     needsGa4 ? getGa4(ctx, range, ga4Cache) : Promise.resolve(null),
@@ -500,6 +521,7 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
     ...segDims.map(async (d) => { segCache.set(d, await fetchGoogleSegment(ctx.clientId, range.since, range.until, d as GoogleSegment)); }),
     ...stKeys.map(async (k) => { stCache.set(k, await fetchSearchTerms(ctx, range, k || undefined)); }),
     ...(needsActionNames ? [resolveMetaCustomNames(ctx.clientId).then((m) => { customNames = m; })] : []),
+    ...(needsReach ? [fetchAccountReach(ctx.clientId, range).then((v) => { liveReach = v; })] : []),
   ]);
 
   return widgets.map((w) => {
@@ -508,7 +530,7 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
     else if (isSegment(w)) data = segmentToData(w, segCache.get(w.dimension) ?? []);
     else if (isSearchTerm(w)) data = searchTermToData(w, stCache.get(w.campaignFilter ?? "") ?? []);
     else if (w.platform === "ga4") data = computeGa4Widget(w, ga4Cache.data, prevGa4Cache.data);
-    else data = computeAdWidget(w, ctx, ad, prevAd, customNames);
+    else data = computeAdWidget(w, ctx, ad, prevAd, customNames, liveReach);
     return { widgetId: w.id, data };
   });
 }

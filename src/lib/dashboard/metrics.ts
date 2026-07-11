@@ -26,8 +26,9 @@ export const METRICS: MetricDef[] = [
   { id: "ctr", label: "CTR", platforms: AD, unit: "percent", kind: "derived" },
   { id: "cpc", label: "CPC", platforms: AD, unit: "currency", kind: "derived" },
   { id: "cpm", label: "CPM", platforms: AD, unit: "currency", kind: "derived" },
-  // מדדי מטא נוספים (עמודות קיימות ב-MetaInsightDaily). הערה: reach אינו ניתן
-  // לסכימה יומית (משתמשים ייחודיים חופפים בין ימים) — יתווסף בנפרד עם שליפה חיה.
+  // מדדי מטא נוספים (עמודות קיימות ב-MetaInsightDaily).
+  // reach = משתמשים ייחודיים; לא ניתן לסכימה יומית ולכן נשלף חי ברמת החשבון לטווח.
+  { id: "reach", label: "משתמשים ייחודיים (Reach)", platforms: META_ALL, unit: "number", kind: "additive" },
   { id: "linkClicks", label: "קליקים למעבר לאתר", platforms: META_ALL, unit: "number", kind: "additive" },
   { id: "landingPageViews", label: "צפיות בדף נחיתה", platforms: META_ALL, unit: "number", kind: "additive" },
   { id: "purchaseValue", label: "ערך רכישות", platforms: ["meta", "all"], unit: "currency", kind: "additive" },
