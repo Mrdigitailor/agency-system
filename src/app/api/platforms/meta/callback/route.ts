@@ -95,7 +95,7 @@ export async function GET(req: Request) {
         updated++;
       }
       console.log(`[Meta Callback] reconnect-all: updated ${updated} connections`);
-      return NextResponse.redirect(`${origin}/clients?meta_reconnected=${updated}`);
+      return NextResponse.redirect(`${origin}/settings?meta_reconnected=${updated}`);
     }
 
     // 4. שמירה — token + פרטי משתמש
@@ -119,6 +119,7 @@ export async function GET(req: Request) {
   } catch (err) {
     console.error("[Meta Callback]", err);
     const msg = err instanceof Error ? err.message : "unknown";
-    return NextResponse.redirect(`${origin}/clients/${clientId}?meta_error=${encodeURIComponent(msg)}`);
+    const dest = reconnectAll ? `${origin}/settings` : `${origin}/clients/${clientId}`;
+    return NextResponse.redirect(`${dest}?meta_error=${encodeURIComponent(msg)}`);
   }
 }

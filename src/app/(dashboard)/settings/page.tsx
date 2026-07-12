@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, Pencil, Trash2, Globe, KeyRound, Copy, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, Globe, KeyRound, Copy, Check, RefreshCw } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { useApp } from "@/lib/data/context";
 import type { Employee, AgencyDigitalAssets } from "@/lib/data/types";
@@ -26,9 +26,41 @@ export default function SettingsPage() {
     clients, refreshEmployees,
   } = useApp();
   const { data: session, update: updateSession } = useSession();
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
 
   // המשתמש המחובר מ-DB
   const currentUser = employees.find((e) => e.email === session?.user?.email);
+
+  // חיבור מחדש מרוכז ל-Meta
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectBanner, setReconnectBanner] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const handleReconnectMeta = async () => {
+    setReconnecting(true);
+    try {
+      const res = await fetch("/api/platforms/meta/reconnect-all");
+      const data = await res.json();
+      if (data.authUrl) window.location.href = data.authUrl;
+      else { setReconnectBanner({ ok: false, text: data.error ?? "שגיאה בהתחברות" }); setReconnecting(false); }
+    } catch {
+      setReconnectBanner({ ok: false, text: "שגיאה בהתחברות ל-Meta" });
+      setReconnecting(false);
+    }
+  };
+
+  // הודעת הצלחה/שגיאה כשחוזרים מפייסבוק
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const n = sp.get("meta_reconnected");
+    const err = sp.get("meta_error");
+    if (n) {
+      setReconnectBanner({ ok: true, text: `✅ החיבור ל-Meta עודכן ל-${n} לקוחות. כל בחירות הנכסים נשמרו — הנתונים יסונכרנו אוטומטית.` });
+      window.history.replaceState({}, "", "/settings");
+    } else if (err) {
+      setReconnectBanner({ ok: false, text: `שגיאה בחיבור ל-Meta: ${decodeURIComponent(err)}` });
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, []);
 
   // פרופיל
   const [profileForm, setProfileForm] = useState({
@@ -495,6 +527,33 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {/* חיבורי פרסום — התחברות מרוכזת ל-Meta */}
+      {isAdmin && (
+        <div className="rounded-lg border border-brand-border bg-brand-light p-6 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <RefreshCw className="h-5 w-5 text-brand-gold" />
+            <h2 className="text-lg font-semibold text-brand-dark">חיבורי פרסום</h2>
+          </div>
+          <p className="mb-4 max-w-2xl text-sm text-brand-muted">
+            שינית סיסמה בפייסבוק? במקום להתחבר לכל לקוח בנפרד — התחברות אחת כאן תעדכן את החיבור ל-Meta
+            אצל <strong className="text-brand-dark">כל הלקוחות</strong> בבת אחת. כל בחירות הנכסים (חשבונות מודעות, פיקסלים, עמודים) יישמרו.
+          </p>
+          {reconnectBanner && (
+            <div className={`mb-4 rounded-lg border p-3 text-sm ${reconnectBanner.ok ? "border-brand-success bg-brand-success/10 text-brand-success" : "border-brand-danger bg-brand-danger/10 text-brand-danger"}`}>
+              {reconnectBanner.text}
+            </div>
+          )}
+          <button
+            onClick={handleReconnectMeta}
+            disabled={reconnecting}
+            className="flex items-center gap-2 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${reconnecting ? "animate-spin" : ""}`} />
+            {reconnecting ? "מפנה לפייסבוק..." : "חבר מחדש את כל הלקוחות ל-Meta"}
+          </button>
+        </div>
+      )}
 
       {/* ניהול עובדים */}
       <div className="rounded-lg border border-brand-border bg-brand-light p-6 shadow-sm">

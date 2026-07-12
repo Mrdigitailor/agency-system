@@ -2,8 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, MoreHorizontal, Trash2, PauseCircle, AlertTriangle, Search, ChevronUp, ChevronDown, ChevronsUpDown, X, RefreshCw } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { Plus, MoreHorizontal, Trash2, PauseCircle, AlertTriangle, Search, ChevronUp, ChevronDown, ChevronsUpDown, X } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
 import DateRangePicker, { getPresetRange, type DateRange } from "@/components/ui/DateRangePicker";
@@ -37,39 +36,6 @@ export default function ClientsPage() {
     refreshClients(dateRange.since, dateRange.until);
   }, [dateRange.since, dateRange.until, refreshClients]);
 
-  const { data: session } = useSession();
-  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
-
-  // חיבור מחדש מרוכז ל-Meta
-  const [reconnecting, setReconnecting] = useState(false);
-  const [reconnectBanner, setReconnectBanner] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const handleReconnectMeta = async () => {
-    setReconnecting(true);
-    try {
-      const res = await fetch("/api/platforms/meta/reconnect-all");
-      const data = await res.json();
-      if (data.authUrl) window.location.href = data.authUrl;
-      else { setReconnectBanner({ ok: false, text: data.error ?? "שגיאה בהתחברות" }); setReconnecting(false); }
-    } catch {
-      setReconnectBanner({ ok: false, text: "שגיאה בהתחברות ל-Meta" });
-      setReconnecting(false);
-    }
-  };
-
-  // הודעת הצלחה/שגיאה כשחוזרים מפייסבוק
-  useEffect(() => {
-    const sp = new URLSearchParams(window.location.search);
-    const n = sp.get("meta_reconnected");
-    const err = sp.get("meta_error");
-    if (n) {
-      setReconnectBanner({ ok: true, text: `✅ החיבור ל-Meta עודכן ל-${n} לקוחות. כל בחירות הנכסים נשמרו — הנתונים יסונכרנו אוטומטית.` });
-      window.history.replaceState({}, "", "/clients");
-    } else if (err) {
-      setReconnectBanner({ ok: false, text: `שגיאה בחיבור ל-Meta: ${decodeURIComponent(err)}` });
-      window.history.replaceState({}, "", "/clients");
-    }
-  }, []);
   const campaigners = employees.filter((e) => e.role === "campaignManager" || e.role === "admin");
   const managers = employees.filter((e) => e.role === "manager" || e.role === "admin");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -235,17 +201,6 @@ export default function ClientsPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {isAdmin && (
-            <button
-              onClick={handleReconnectMeta}
-              disabled={reconnecting}
-              title="התחברות אחת ל-Meta שמעדכנת את כל הלקוחות — בחירת הנכסים נשמרת"
-              className="flex items-center gap-2 rounded-lg border border-brand-border bg-brand-light px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-bg disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${reconnecting ? "animate-spin" : ""}`} />
-              {reconnecting ? "מפנה לפייסבוק..." : "חבר מחדש Meta"}
-            </button>
-          )}
           <DateRangePicker value={dateRange} onChange={setDateRange} />
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="flex items-center gap-2 rounded-lg bg-brand-gold px-4 py-2 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80">
             <Plus className="h-4 w-4" />
@@ -253,12 +208,6 @@ export default function ClientsPage() {
           </button>
         </div>
       </div>
-
-      {reconnectBanner && (
-        <div className={`rounded-lg border p-3 text-sm ${reconnectBanner.ok ? "border-brand-success bg-brand-success/10 text-brand-success" : "border-brand-danger bg-brand-danger/10 text-brand-danger"}`}>
-          {reconnectBanner.text}
-        </div>
-      )}
 
       {/* סרגל סינון */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-brand-border bg-brand-light p-3 shadow-sm">
