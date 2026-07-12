@@ -42,7 +42,8 @@ function splitDateRange(since: string, until: string, maxDays = 7): Array<{ sinc
 
 export async function syncAdAccount(
   clientId: string, accessToken: string, assetId: string, externalId: string,
-  since: string, until: string, stats: SyncStats
+  since: string, until: string, stats: SyncStats,
+  opts: { skipSubLevels?: boolean } = {},
 ) {
   console.log(`[Sync] Ad Account ${externalId} | client: ${clientId} | range: ${since} → ${until}`);
 
@@ -86,8 +87,10 @@ export async function syncAdAccount(
 
   // רמות adset (קהלים) ו-ad (קריאייטיבים) — חלון קבוע של 14 יום אחורה.
   // מספיק לדוח השבועי + השוואה לשבוע קודם, בלי להכביד על ה-API בטווחים ארוכים.
-  // כשל כאן לא שובר את סנכרון הקמפיינים (ה-try פנימי).
-  await syncSubLevels(clientId, accessToken, assetId, externalId, until, stats);
+  // כשל כאן לא שובר את סנכרון הקמפיינים (ה-try פנימי). מדלגים במסלול המהיר.
+  if (!opts.skipSubLevels) {
+    await syncSubLevels(clientId, accessToken, assetId, externalId, until, stats);
+  }
 
   await prisma.syncLog.create({
     data: {
@@ -303,8 +306,8 @@ async function getMissingDates(clientId: string, since: string, until: string): 
  * סנכרון של לקוח אחד — incremental: שואב רק ימים חסרים + last 2 days
  * forceAll=true: שואב את כל התקופה מחדש (כשלוחצים "סנכרן עכשיו")
  */
-export async function syncClientMeta(clientId: string, daysBack = 30, forceAll = false): Promise<SyncStats> {
-  console.log(`\n=== [SyncMeta] START client=${clientId} daysBack=${daysBack} forceAll=${forceAll} ===`);
+export async function syncClientMeta(clientId: string, daysBack = 30, forceAll = false, opts: { campaignsOnly?: boolean } = {}): Promise<SyncStats> {
+  console.log(`\n=== [SyncMeta] START client=${clientId} daysBack=${daysBack} forceAll=${forceAll} campaignsOnly=${!!opts.campaignsOnly} ===`);
   const stats: SyncStats = { adInsightsFetched: 0, pagePostsFetched: 0, igMediaFetched: 0, errors: [] };
 
   const connection = await prisma.platformConnection.findFirst({
@@ -345,10 +348,13 @@ export async function syncClientMeta(clientId: string, daysBack = 30, forceAll =
     console.log(`[SyncMeta] Processing asset: ${asset.assetType} ${asset.externalId} (${asset.name})`);
     try {
       if (asset.assetType === "ad_account") {
-        await syncAdAccount(clientId, connection.accessToken, asset.id, asset.externalId, effectiveSince, effectiveUntil, stats);
+        await syncAdAccount(clientId, connection.accessToken, asset.id, asset.externalId, effectiveSince, effectiveUntil, stats, { skipSubLevels: opts.campaignsOnly });
         // מסמנים סנכרון מיד אחרי ה-ad insights (הדאטה הקריטי) — כדי שסנכרון עמוד/אינסטגרם
         // איטי שנקטע ב-60ש' לא ישאיר את החיבור מסומן "לא סונכרן"
         await prisma.platformConnection.update({ where: { id: connection.id }, data: { lastSyncAt: new Date() } }).catch(() => {});
+      } else if (opts.campaignsOnly) {
+        // מסלול מהיר (לפני הפקת דוח) — רק נתוני קמפיינים, בלי עמוד/אינסטגרם
+        continue;
       } else if (asset.assetType === "facebook_page") {
         const extra = JSON.parse(asset.extraData ?? "{}");
         const pageToken = extra.pageAccessToken ?? connection.accessToken;

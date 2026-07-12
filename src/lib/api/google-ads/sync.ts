@@ -16,6 +16,7 @@ export async function syncGoogleAdsAccount(
   since: string,
   until: string,
   mccId?: string,
+  opts: { skipSearchTerms?: boolean } = {},
 ): Promise<{ fetched: number; errors: string[] }> {
   const errors: string[] = [];
 
@@ -145,10 +146,12 @@ export async function syncGoogleAdsAccount(
       });
     }
 
-    // מונחי חיפוש — best effort, לא חוסם את סנכרון הקמפיינים
-    await syncSearchTerms(clientId, assetId, customerId, token, since, until, mccId).catch((err) => {
-      console.warn(`[GoogleAds Sync] search terms failed: ${(err as Error).message?.slice(0, 80)}`);
-    });
+    // מונחי חיפוש — best effort, לא חוסם את סנכרון הקמפיינים (מדולג במסלול המהיר)
+    if (!opts.skipSearchTerms) {
+      await syncSearchTerms(clientId, assetId, customerId, token, since, until, mccId).catch((err) => {
+        console.warn(`[GoogleAds Sync] search terms failed: ${(err as Error).message?.slice(0, 80)}`);
+      });
+    }
 
     return { fetched: results.length, errors };
   } catch (err) {
@@ -210,11 +213,11 @@ export async function syncSearchTerms(
 /**
  * סנכרון כל חשבונות Google Ads של לקוח
  */
-export async function syncClientGoogleAds(clientId: string, daysBack = 30): Promise<{
+export async function syncClientGoogleAds(clientId: string, daysBack = 30, opts: { skipSearchTerms?: boolean } = {}): Promise<{
   fetched: number;
   errors: string[];
 }> {
-  console.log(`[GoogleAds] syncClientGoogleAds client=${clientId} daysBack=${daysBack}`);
+  console.log(`[GoogleAds] syncClientGoogleAds client=${clientId} daysBack=${daysBack} skipSearchTerms=${!!opts.skipSearchTerms}`);
 
   const connection = await prisma.platformConnection.findFirst({
     where: { clientId, platform: "google_ads", isActive: true },
@@ -253,6 +256,7 @@ export async function syncClientGoogleAds(clientId: string, daysBack = 30): Prom
       since,
       until,
       mccId,
+      { skipSearchTerms: opts.skipSearchTerms },
     );
     totalFetched += result.fetched;
     allErrors.push(...result.errors);

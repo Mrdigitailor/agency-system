@@ -8,7 +8,9 @@ import { getWeeklyClientData, getWeeklyBreakdowns, type WeeklyClientData, type P
 import { groupCampaignsByProduct } from "./group-by-product";
 import { classifyBusinessType, buildBusinessKnowledge, type LeadFunnel, type CrmAccess } from "@/lib/agent/business-knowledge";
 import { detectClientFunnel, type CampaignFunnel } from "@/lib/agent/funnel-detect";
-import { shiftYmd } from "@/lib/utils/ildate";
+import { syncClientMeta } from "@/lib/api/meta/sync";
+import { syncClientGoogleAds } from "@/lib/api/google-ads/sync";
+import { shiftYmd, todayIL } from "@/lib/utils/ildate";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = process.env.REPORT_AI_MODEL ?? "claude-sonnet-4-6";
@@ -234,6 +236,21 @@ export async function generateWeeklyReportContent(
 }
 
 /**
+ * סנכרון מהיר של השבוע לפני הפקת הדוח — רק אם השבוע קרוב (14 יום אחרונים),
+ * כדי לא לסנכרן מחדש דוחות היסטוריים. קמפיינים בלבד, guarded (כשל לא חוסם הפקה).
+ */
+async function ensureWeekSynced(clientId: string, weekEnd: string) {
+  const daysSinceEnd = Math.round((new Date(todayIL()).getTime() - new Date(weekEnd).getTime()) / 86400000);
+  if (daysSinceEnd > 14) return; // דוח היסטורי — הדאטה כבר קיימת
+  const daysBack = Math.min(10, Math.max(9, daysSinceEnd + 8)); // מכסה את השבוע שהסתיים; השבוע הקודם להשוואה כבר מסונכרן
+  // אינקרמנטלי (לא forceAll) — מושך רק ימים חסרים + 3 אחרונים, מהיר מספיק לתוך ההפקה
+  await Promise.all([
+    syncClientMeta(clientId, daysBack, false, { campaignsOnly: true }).catch(() => null),
+    syncClientGoogleAds(clientId, daysBack, { skipSearchTerms: true }).catch(() => null),
+  ]);
+}
+
+/**
  * מייצר ושומר טיוטת דוח שבועי. אידמפוטנטי: אם קיימת טיוטה עם תוכן ואין force — מחזיר אותה.
  */
 export async function generateAndSaveWeeklyReport(
@@ -246,6 +263,11 @@ export async function generateAndSaveWeeklyReport(
     where: { clientId_weekStart: { clientId, weekStart } },
   });
   if (existing && existing.content && !force) return existing;
+
+  // ודא שהשבוע סונכרן במלואו לפני ההפקה — מונע דוח על נתונים חלקיים
+  // (הסנכרון היומי לא תמיד מספיק למשוך את הימים האחרונים לפני הפקת הדוח).
+  // מסלול מהיר: קמפיינים בלבד, בלי רמות קהל/מודעה/עמוד ובלי מונחי חיפוש.
+  await ensureWeekSynced(clientId, weekEnd);
 
   const content = await generateWeeklyReportContent(clientId, weekStart, weekEnd);
 
