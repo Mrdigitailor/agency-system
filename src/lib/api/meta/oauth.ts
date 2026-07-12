@@ -49,9 +49,9 @@ export function getRedirectUri(origin?: string): string {
  * בניית URL להתחברות של המשתמש ל-Meta
  * ה-state מכיל את ה-clientId כדי לדעת באיזה לקוח מדובר אחרי ה-callback
  */
-export function buildAuthUrl(clientId: string, userId: string, origin?: string): string {
+export function buildAuthUrl(clientId: string, userId: string, origin?: string, mode: "single" | "all" = "single"): string {
   const redirectUri = getRedirectUri(origin);
-  const state = Buffer.from(JSON.stringify({ clientId, userId, ts: Date.now() })).toString("base64url");
+  const state = Buffer.from(JSON.stringify({ clientId, userId, mode, ts: Date.now() })).toString("base64url");
 
   const params = new URLSearchParams({
     client_id: META_APP_ID,
@@ -70,7 +70,7 @@ export function buildAuthUrl(clientId: string, userId: string, origin?: string):
 /**
  * פיענוח state מה-callback
  */
-export function decodeState(state: string): { clientId: string; userId: string; ts: number } | null {
+export function decodeState(state: string): { clientId: string; userId: string; mode?: "single" | "all"; ts: number } | null {
   try {
     const decoded = Buffer.from(state, "base64url").toString("utf-8");
     return JSON.parse(decoded);
