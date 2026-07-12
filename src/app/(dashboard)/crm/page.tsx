@@ -597,8 +597,14 @@ export default function CrmPage() {
 
   async function handleDeleteProposal() {
     if (!selectedLead) return;
-    await updateLead(selectedLead.id, { proposalUrl: "", proposalFileName: "", proposalFileData: "" } as Partial<Lead>);
-    setSelectedLead((p) => p ? { ...p, proposalUrl: "", proposalFileName: "" } : null);
+    // איפוס פרטי ההצעה. חשוב: בלי שדות שלא קיימים בסכמה (proposalFileData) —
+    // שדה לא מוכר גורם ל-Prisma לדחות את כל העדכון והמחיקה נכשלת בשקט.
+    const cleared: Partial<Lead> = {
+      proposalUrl: "", proposalFileName: "", proposalUploadedAt: "",
+      proposalStatus: "", proposalAmount: 0, hasProposal: false,
+    };
+    await updateLead(selectedLead.id, cleared);
+    setSelectedLead((p) => p ? { ...p, ...cleared } : null);
   }
 
   const openDetailModal = (lead: Lead) => {
