@@ -2,7 +2,7 @@
 // מחזיר סיכומים כוללים, פילוח לפי פלטפורמה, ופילוח לפי קמפיין (לדוחות פר-מוצר).
 
 import { prisma } from "@/lib/db/prisma";
-import { countConversions } from "@/lib/utils/metaMetrics";
+import { countConversions, categorizeSelectedConversions } from "@/lib/utils/metaMetrics";
 import { countGoogleConversions } from "@/lib/utils/googleMetrics";
 
 export interface CampaignRow {
@@ -30,6 +30,8 @@ export interface WeeklyClientData {
   totals: PlatformTotals & { cpa: number; roas: number };
   perPlatform: { meta: PlatformTotals; google: PlatformTotals; tiktok: PlatformTotals };
   perCampaign: CampaignRow[];
+  /** פילוח המרות מטא לקטגוריות (לידים/שיחות/רכישות) — להצגה נפרדת בדוח */
+  conversionCategories: Array<{ label: string; count: number }>;
 }
 
 const emptyTotals = (): PlatformTotals => ({ spend: 0, impressions: 0, clicks: 0, conversions: 0, conversionsValue: 0 });
@@ -203,6 +205,9 @@ export async function getWeeklyClientData(
 
   perCampaign.sort((a, b) => b.spend - a.spend);
 
+  // פילוח קטגוריות המרה של מטא (לידים/שיחות/רכישות) — להצגה נפרדת בדוח
+  const conversionCategories = categorizeSelectedConversions(metaRows, selectedEvent);
+
   return {
     weekStart,
     weekEnd,
@@ -218,5 +223,6 @@ export async function getWeeklyClientData(
     },
     perPlatform: { meta, google, tiktok },
     perCampaign,
+    conversionCategories,
   };
 }

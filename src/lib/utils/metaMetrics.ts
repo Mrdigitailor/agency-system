@@ -139,3 +139,37 @@ export function aggregateConversionActions(insights: Array<{ actionsJson: string
     })
     .sort((a, b) => b.count - a.count);
 }
+
+// ==================== קטגוריזציה של ההמרות שנבחרו (לדוח השבועי) ====================
+// כשהגדרת ההמרות מערבבת סוגים שונים (לידים מטופס + שיחות בהודעות וכו') —
+// מפרקים לקטגוריות כדי שהדוח יציג "9 לידים · 4 שיחות" במקום "13" מטעה.
+
+const LEAD_EVENTS = new Set(["lead", "onsite_conversion.lead_grouped", "leadgen_grouped", "leadgen.other", "offsite_conversion.fb_pixel_lead", "onsite_web_lead", "onsite_conversion.lead"]);
+const MESSAGING_EVENTS = new Set(["onsite_conversion.messaging_conversation_started_7d", "onsite_conversion.total_messaging_connection", "onsite_conversion.messaging_first_reply"]);
+const PURCHASE_EVENTS = new Set(["purchase", "offsite_conversion.fb_pixel_purchase", "onsite_conversion.purchase"]);
+
+function categoryLabel(event: string): string {
+  if (LEAD_EVENTS.has(event)) return "לידים";
+  if (MESSAGING_EVENTS.has(event)) return "שיחות בהודעות";
+  if (PURCHASE_EVENTS.has(event)) return "רכישות";
+  return ACTION_LABELS[event] ?? "המרות אחרות";
+}
+
+/**
+ * מפרק את ההמרות שנבחרו (metaConversionEvent) לקטגוריות מוצגות.
+ * מחזיר [] אם אין בחירה, או קטגוריה אחת בלבד (אין צורך בהפרדה).
+ */
+export function categorizeSelectedConversions(insights: Insight[], selectedEventRaw: string): Array<{ label: string; count: number }> {
+  const events = parseConversionEvents(selectedEventRaw);
+  if (events.length === 0) return [];
+  const cat = new Map<string, number>();
+  for (const ins of insights) {
+    const actions = extractActions(ins.actionsJson);
+    for (const ev of events) {
+      let cnt = 0;
+      for (const a of actions) if (a.action_type === ev) cnt += parseFloat(a.value) || 0;
+      if (cnt > 0) cat.set(categoryLabel(ev), (cat.get(categoryLabel(ev)) ?? 0) + cnt);
+    }
+  }
+  return [...cat.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+}
