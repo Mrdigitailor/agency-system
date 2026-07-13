@@ -3,8 +3,8 @@ import { requireAuth } from "@/lib/auth/api-guard";
 import { generateAndSaveWeeklyReport } from "@/lib/reports/generate";
 import { getLastWeekRange } from "@/lib/utils/dates";
 
-// יצירת הדוח כרוכה בקריאת AI — מאריכים את חלון ההרצה
-export const maxDuration = 60;
+// יצירת הדוח = סנכרון-מקדים + קריאת AI ארוכה (דוח ארוך ~60ש'). 60ש' לא הספיקו.
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 /**

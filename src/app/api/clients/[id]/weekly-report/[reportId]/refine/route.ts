@@ -8,7 +8,8 @@ import { detectClientFunnel } from "@/lib/agent/funnel-detect";
 import { classifyBusinessType } from "@/lib/agent/business-knowledge";
 import { shiftYmd } from "@/lib/utils/ildate";
 
-export const maxDuration = 60;
+// דוחות ארוכים לוקחים ל-Claude 60-70ש' — 60ש' הרגו את הפונקציה. מרחיבים (Vercel Pro/Railway).
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -89,7 +90,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             `הערת תיקון: ${note}\n\nהחזר את הדוח המלא המעודכן.`,
         },
       ],
-    }, { timeout: 45_000, maxRetries: 1 }); // גבול-זמן מפורש כדי לא להיהרג ע"י ה-serverless (60ש')
+    }, { timeout: 240_000, maxRetries: 0 }); // בתוך תקציב ה-maxDuration (300ש'), בלי retries שמכפילים זמן
 
     const block = response.content.find((b) => b.type === "text");
     const revised = block && "text" in block ? block.text.trim() : "";
