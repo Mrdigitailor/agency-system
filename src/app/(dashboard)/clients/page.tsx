@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, MoreHorizontal, Trash2, PauseCircle, AlertTriangle, Search, ChevronUp, ChevronDown, ChevronsUpDown, X } from "lucide-react";
+import { Plus, MoreHorizontal, Trash2, PauseCircle, PlayCircle, AlertTriangle, Search, ChevronUp, ChevronDown, ChevronsUpDown, X } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
 import DateRangePicker, { getPresetRange, type DateRange } from "@/components/ui/DateRangePicker";
@@ -408,13 +408,23 @@ export default function ClientsPage() {
                         </button>
                         {openMenuId === client.id && (
                           <div className="absolute left-0 top-full z-50 mt-1 w-44 rounded-lg border border-brand-border bg-brand-light py-1 shadow-lg">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setDeactivateTarget({ id: client.id, name: client.name }); setOpenMenuId(null); }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
-                            >
-                              <PauseCircle className="h-4 w-4" />
-                              {t('deactivateClient')}
-                            </button>
+                            {client.status === "inactive" ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleReactivate(client.id); setOpenMenuId(null); }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-brand-success hover:bg-brand-success/10"
+                              >
+                                <PlayCircle className="h-4 w-4" />
+                                החזר לפעיל
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDeactivateTarget({ id: client.id, name: client.name }); setOpenMenuId(null); }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
+                              >
+                                <PauseCircle className="h-4 w-4" />
+                                {t('deactivateClient')}
+                              </button>
+                            )}
                             <button
                               onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: client.id, name: client.name }); setOpenMenuId(null); }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-brand-danger hover:bg-red-50"
