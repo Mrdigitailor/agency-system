@@ -32,25 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "דוח לא נמצא" }, { status: 404 });
   }
 
-  // הקשר הנתונים — כדי שהתיקון יישאר מעוגן במספרים האמיתיים
-  const [profile, client] = await Promise.all([
-    prisma.clientProfile.findUnique({ where: { clientId } }),
-    prisma.client.findUnique({ where: { id: clientId }, select: { currency: true, clientType: true } }),
-  ]);
-  const format = profile?.weeklyReportFormat ?? "standard";
-  const products: Array<{ name: string }> = profile ? JSON.parse(profile.products ?? "[]") : [];
-  const currency = client?.currency || "ILS";
-  const [data, prevData, funnelDetection, breakdowns] = await Promise.all([
-    getWeeklyClientData(clientId, report.weekStart, report.weekEnd),
-    getWeeklyClientData(clientId, shiftYmd(report.weekStart, -7), shiftYmd(report.weekEnd, -7)),
-    detectClientFunnel(clientId, { until: report.weekEnd }),
-    getWeeklyBreakdowns(clientId, report.weekStart, report.weekEnd),
-  ]);
-  const campaignFunnels =
-    classifyBusinessType(client?.clientType) === "leads" ? funnelDetection.metaCampaigns : undefined;
-  const dataText = buildWeeklyDataText(data, format, products, currency, prevData, campaignFunnels, breakdowns);
-
-  // שומרים את הערת המשתמש מיד — כדי שלעולם לא תאבד אם ה-AI נכשל/נתקע
+  // שומרים את הערת המשתמש מיד — לפני כל שליפת נתונים/AI — כדי שלעולם לא תאבד
   await prisma.weeklyReportMessage.create({ data: { reportId, role: "user", content: note } });
 
   const respondWith = async (assistantMsg: string, revised: string | null, ok: boolean, status = 200) => {
@@ -59,6 +41,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const messages = await prisma.weeklyReportMessage.findMany({ where: { reportId }, orderBy: { createdAt: "asc" } });
     return NextResponse.json({ content: revised ?? report.content, messages, ok }, { status });
   };
+
+  // הקשר הנתונים — כדי שהתיקון יישאר מעוגן במספרים האמיתיים. עטוף כדי שכשל
+  // בשליפה (ולא רק ב-AI) יחזיר משוב ברור במקום 500 שקט.
+  let dataText: string;
+  let currency = "ILS";
+  try {
+    const [profile, client] = await Promise.all([
+      prisma.clientProfile.findUnique({ where: { clientId } }),
+      prisma.client.findUnique({ where: { id: clientId }, select: { currency: true, clientType: true } }),
+    ]);
+    const format = profile?.weeklyReportFormat ?? "standard";
+    const products: Array<{ name: string }> = profile ? JSON.parse(profile.products ?? "[]") : [];
+    currency = client?.currency || "ILS";
+    const [data, prevData, funnelDetection, breakdowns] = await Promise.all([
+      getWeeklyClientData(clientId, report.weekStart, report.weekEnd),
+      getWeeklyClientData(clientId, shiftYmd(report.weekStart, -7), shiftYmd(report.weekEnd, -7)),
+      detectClientFunnel(clientId, { until: report.weekEnd }),
+      getWeeklyBreakdowns(clientId, report.weekStart, report.weekEnd),
+    ]);
+    const campaignFunnels =
+      classifyBusinessType(client?.clientType) === "leads" ? funnelDetection.metaCampaigns : undefined;
+    dataText = buildWeeklyDataText(data, format, products, currency, prevData, campaignFunnels, breakdowns);
+  } catch (err) {
+    console.error("[WeeklyReport refine] data step", err);
+    const reason = err instanceof Error ? err.message.slice(0, 120) : "שגיאה לא ידועה";
+    return respondWith(`❌ התיקון נכשל בשליפת הנתונים — ההערה שלך נשמרה, נסה שוב.\n(סיבה: ${reason})`, null, false);
+  }
 
   try {
     const response = await anthropic.messages.create({
@@ -80,7 +89,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             `הערת תיקון: ${note}\n\nהחזר את הדוח המלא המעודכן.`,
         },
       ],
-    });
+    }, { timeout: 45_000, maxRetries: 1 }); // גבול-זמן מפורש כדי לא להיהרג ע"י ה-serverless (60ש')
 
     const block = response.content.find((b) => b.type === "text");
     const revised = block && "text" in block ? block.text.trim() : "";
@@ -89,7 +98,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return respondWith("✅ עדכנתי את הדוח לפי ההערה.", revised, true);
   } catch (err) {
     console.error("[WeeklyReport refine]", err);
-    // ההערה כבר נשמרה — מחזירים משוב ברור בלי לאבד אותה
-    return respondWith("❌ התיקון נכשל (שגיאה זמנית). ההערה שלך נשמרה — נסה לשלוח שוב.", null, false);
+    // ההערה כבר נשמרה — מחזירים משוב ברור (כולל סיבה) בלי לאבד אותה
+    const reason = err instanceof Error ? err.message.slice(0, 120) : "שגיאה לא ידועה";
+    return respondWith(`❌ התיקון נכשל — ההערה שלך נשמרה, נסה שוב.\n(סיבה: ${reason})`, null, false);
   }
 }
