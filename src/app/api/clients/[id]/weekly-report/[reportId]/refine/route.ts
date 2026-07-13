@@ -50,6 +50,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     classifyBusinessType(client?.clientType) === "leads" ? funnelDetection.metaCampaigns : undefined;
   const dataText = buildWeeklyDataText(data, format, products, currency, prevData, campaignFunnels, breakdowns);
 
+  // שומרים את הערת המשתמש מיד — כדי שלעולם לא תאבד אם ה-AI נכשל/נתקע
+  await prisma.weeklyReportMessage.create({ data: { reportId, role: "user", content: note } });
+
+  const respondWith = async (assistantMsg: string, revised: string | null, ok: boolean, status = 200) => {
+    await prisma.weeklyReportMessage.create({ data: { reportId, role: "assistant", content: assistantMsg } });
+    if (ok && revised) await prisma.weeklyReport.update({ where: { id: reportId }, data: { content: revised } });
+    const messages = await prisma.weeklyReportMessage.findMany({ where: { reportId }, orderBy: { createdAt: "asc" } });
+    return NextResponse.json({ content: revised ?? report.content, messages, ok }, { status });
+  };
+
   try {
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -74,22 +84,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const block = response.content.find((b) => b.type === "text");
     const revised = block && "text" in block ? block.text.trim() : "";
-    if (!revised) return NextResponse.json({ error: "לא התקבל תוכן מעודכן" }, { status: 500 });
+    if (!revised) return respondWith("❌ לא הצלחתי לעדכן את הדוח — נסה לשלוח את ההערה שוב.", null, false);
 
-    const [updated] = await prisma.$transaction([
-      prisma.weeklyReport.update({ where: { id: reportId }, data: { content: revised } }),
-      prisma.weeklyReportMessage.create({ data: { reportId, role: "user", content: note } }),
-      prisma.weeklyReportMessage.create({ data: { reportId, role: "assistant", content: "✅ עדכנתי את הדוח לפי ההערה." } }),
-    ]);
-
-    const messages = await prisma.weeklyReportMessage.findMany({
-      where: { reportId },
-      orderBy: { createdAt: "asc" },
-    });
-
-    return NextResponse.json({ content: updated.content, messages });
+    return respondWith("✅ עדכנתי את הדוח לפי ההערה.", revised, true);
   } catch (err) {
     console.error("[WeeklyReport refine]", err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : "unknown" }, { status: 500 });
+    // ההערה כבר נשמרה — מחזירים משוב ברור בלי לאבד אותה
+    return respondWith("❌ התיקון נכשל (שגיאה זמנית). ההערה שלך נשמרה — נסה לשלוח שוב.", null, false);
   }
 }

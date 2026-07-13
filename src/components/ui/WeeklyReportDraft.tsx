@@ -176,11 +176,14 @@ export default function WeeklyReportDraft({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ note: text }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setReport((r) => (r ? { ...r, content: data.content } : r));
-        setMessages(data.messages ?? []);
-      }
+      const data = await res.json().catch(() => null);
+      // תמיד מציגים את ההודעות שחזרו (כולל ההערה + משוב הצלחה/כישלון) — ההערה לא נעלמת
+      if (data?.messages) setMessages(data.messages);
+      if (data?.content) setReport((r) => (r ? { ...r, content: data.content } : r));
+      if (!data) { setNote(text); alert("שגיאה בשליחת ההערה — נסה שוב."); }
+    } catch {
+      setNote(text); // מחזירים את ההערה לתיבה כדי שלא תאבד
+      alert("שגיאה בחיבור — ההערה לא נשלחה, נסה שוב.");
     } finally {
       setRefining(false);
     }
