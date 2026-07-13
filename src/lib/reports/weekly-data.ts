@@ -13,6 +13,8 @@ export interface CampaignRow {
   clicks: number;
   conversions: number;
   conversionsValue: number;
+  /** רכישות בפועל (מטא) — נפרד מהמרות/לידים; 0 לפלטפורמות אחרות */
+  purchases: number;
 }
 
 export interface PlatformTotals {
@@ -32,6 +34,9 @@ export interface WeeklyClientData {
   perCampaign: CampaignRow[];
   /** פילוח המרות מטא לקטגוריות (לידים/שיחות/רכישות) — להצגה נפרדת בדוח */
   conversionCategories: Array<{ label: string; count: number }>;
+  /** רכישות מטא בפועל בשבוע (נפרד מלידים) + ערכן */
+  metaPurchases: number;
+  metaPurchaseValue: number;
 }
 
 const emptyTotals = (): PlatformTotals => ({ spend: 0, impressions: 0, clicks: 0, conversions: 0, conversionsValue: 0 });
@@ -143,13 +148,16 @@ export async function getWeeklyClientData(
     if (arr) arr.push(r);
     else metaGroups.set(key, [r]);
   }
+  let metaPurchases = 0;
   for (const [campaignName, rows] of metaGroups) {
     const spend = rows.reduce((s, i) => s + i.spend, 0);
     const impressions = rows.reduce((s, i) => s + i.impressions, 0);
     const clicks = rows.reduce((s, i) => s + i.clicks, 0);
     const conversions = countConversions(rows, selectedEvent);
     const conversionsValue = rows.reduce((s, i) => s + i.purchaseValue, 0);
-    perCampaign.push({ platform: "meta", campaignName, spend, impressions, clicks, conversions, conversionsValue });
+    const purchases = rows.reduce((s, i) => s + i.purchases, 0);
+    metaPurchases += purchases;
+    perCampaign.push({ platform: "meta", campaignName, spend, impressions, clicks, conversions, conversionsValue, purchases });
     meta.spend += spend;
     meta.impressions += impressions;
     meta.clicks += clicks;
@@ -171,7 +179,7 @@ export async function getWeeklyClientData(
     const clicks = rows.reduce((s, i) => s + i.clicks, 0);
     const conversions = countGoogleConversions(rows, googleSelected);
     const conversionsValue = rows.reduce((s, i) => s + i.conversionsValue, 0);
-    perCampaign.push({ platform: "google", campaignName, spend, impressions, clicks, conversions, conversionsValue });
+    perCampaign.push({ platform: "google", campaignName, spend, impressions, clicks, conversions, conversionsValue, purchases: 0 });
     google.spend += spend;
     google.impressions += impressions;
     google.clicks += clicks;
@@ -192,7 +200,7 @@ export async function getWeeklyClientData(
     const impressions = rows.reduce((s, i) => s + i.impressions, 0);
     const clicks = rows.reduce((s, i) => s + i.clicks, 0);
     const conversions = rows.reduce((s, i) => s + i.conversions, 0);
-    perCampaign.push({ platform: "tiktok", campaignName, spend, impressions, clicks, conversions, conversionsValue: 0 });
+    perCampaign.push({ platform: "tiktok", campaignName, spend, impressions, clicks, conversions, conversionsValue: 0, purchases: 0 });
     tiktok.spend += spend;
     tiktok.impressions += impressions;
     tiktok.clicks += clicks;
@@ -224,5 +232,7 @@ export async function getWeeklyClientData(
     perPlatform: { meta, google, tiktok },
     perCampaign,
     conversionCategories,
+    metaPurchases,
+    metaPurchaseValue: meta.conversionsValue,
   };
 }

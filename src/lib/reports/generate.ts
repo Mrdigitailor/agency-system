@@ -79,6 +79,10 @@ export function buildWeeklyDataText(
     lines.push(`- המרות: ${num(t.conversions)}`);
     lines.push(`- עלות להמרה: ${t.conversions > 0 ? money(t.spend / t.conversions, currency) : "—"}`);
   }
+  // רכישות (מטא) — נפרד מלידים. מוצג רק אם יש, כדי שספירת רכישות תהיה מדויקת ולא תנוחש
+  if (data.metaPurchases > 0) {
+    lines.push(`- רכישות (מטא, נפרד מלידים): ${num(data.metaPurchases)}${data.metaPurchaseValue > 0 ? ` · ערך ${money(data.metaPurchaseValue, currency)}` : ""}`);
+  }
   lines.push(`- ערך המרות: ${money(t.conversionsValue, currency)}`);
   lines.push(`- ROAS: ${t.roas > 0 ? dec(t.roas) : "—"}`);
   lines.push(`- קליקים: ${num(t.clicks)} | חשיפות: ${num(t.impressions)} | CTR: ${t.impressions > 0 ? dec((t.clicks / t.impressions) * 100) + "%" : "—"}`);
@@ -122,7 +126,7 @@ export function buildWeeklyDataText(
       const cpa = g.totals.conversions > 0 ? money(g.totals.spend / g.totals.conversions, currency) : "—";
       lines.push(`- **${g.product}**: הוצאה ${money(g.totals.spend, currency)}, ${num(g.totals.conversions)} המרות, עלות/המרה ${cpa}`);
       for (const c of g.campaigns) {
-        lines.push(`    · ${c.campaignName} [${c.platform}]${funnelTag(c)}: ${money(c.spend, currency)}, ${num(c.conversions)} המרות`);
+        lines.push(`    · ${c.campaignName} [${c.platform}]${funnelTag(c)}: ${money(c.spend, currency)}, ${num(c.conversions)} המרות${c.purchases > 0 ? `, ${num(c.purchases)} רכישות` : ""}`);
       }
     }
   } else {
@@ -130,7 +134,7 @@ export function buildWeeklyDataText(
     lines.push(`**קמפיינים מובילים (לפי הוצאה):**`);
     for (const c of data.perCampaign.slice(0, 15)) {
       const cpa = c.conversions > 0 ? money(c.spend / c.conversions, currency) : "—";
-      lines.push(`- ${c.campaignName} [${c.platform}]${funnelTag(c)}: ${money(c.spend, currency)}, ${num(c.conversions)} המרות, עלות/המרה ${cpa}`);
+      lines.push(`- ${c.campaignName} [${c.platform}]${funnelTag(c)}: ${money(c.spend, currency)}, ${num(c.conversions)} המרות, עלות/המרה ${cpa}${c.purchases > 0 ? `, ${num(c.purchases)} רכישות` : ""}`);
     }
   }
 
@@ -166,6 +170,8 @@ const REPORT_INSTRUCTIONS = `אתה כותב דוח שבועי ללקוח של �
 
 חוקים מחייבים:
 - התבסס אך ורק על המספרים שסופקו, אל תמציא נתונים. אם אין נתונים לפלטפורמה — אל תזכיר אותה.
+- **לעולם אל תכתוב שחסרים נתונים, ש"יש לספק נתונים", או בקשות פנימיות כלשהן.** זה דוח שנשלח ללקוח. אם נתון/סקשן מסוים (למשל פילוח קהלים/מודעות) אינו קיים בנתונים — פשוט השמט אותו בשקט, בלי להזכיר שהוא חסר.
+- **רכישות מול לידים:** אם סופקה שורת "רכישות" — היא נתון נפרד ומדויק. כשמדובר בקמפייני רכישה (מכירת קורס/מוצר) הצג את מספר הרכישות שסופק כפי שהוא. לעולם אל תנחש או תגזור מספר רכישות — השתמש אך ורק במספר שסופק. אל תערבב רכישות עם לידים.
 - אם סופק בלוק "השוואה לשבוע הקודם" — שקף את הכיוון (↑/↓ ואחוז) של המדדים המרכזיים בטקסט, במיוחד בסיכום המנהלים. שים לב: בעלות-לליד ובעלות-להמרה ירידה היא שיפור, בהמרות/ROAS עלייה היא שיפור.
 - אם קמפיינים מתויגים "(טופס לידים)" או "(דף נחיתה)" — בסיכום הכולל אחד את כל הלידים למספר אחד, אבל בפילוח לפי מוצר/שירות הפרד בין לידים מטופס לבין לידים מדף נחיתה/אתר.
 - אם סופק "המרות (פילוח)" עם כמה קטגוריות (למשל לידים + שיחות בהודעות) — **חובה להציג אותן בנפרד** לכל אורך הדוח. לעולם אל תאחד אותן למספר אחד ואל תקרא לכולן "לידים". השתמש בעלות-לליד שסופקה (הוצאה ÷ לידים בלבד), לא בעלות שמחלקת את ההוצאה גם בשיחות.
