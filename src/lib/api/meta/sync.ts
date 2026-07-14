@@ -129,13 +129,11 @@ function insightData(ins: MetaInsight, name: string) {
   };
 }
 
-/** סנכרון רמות adset + ad ל-14 הימים האחרונים — לפירוק קהלים/קריאייטיבים בדוחות */
+/** סנכרון רמות adset + ad לטווח נתון — לפירוק קהלים/קריאייטיבים בדוחות */
 async function syncSubLevels(
   clientId: string, accessToken: string, assetId: string, externalId: string,
-  until: string, stats: SyncStats,
+  until: string, stats: SyncStats, since = shiftYmd(until, -13),
 ) {
-  const since = shiftYmd(until, -13);
-
   for (const level of ["adset", "ad"] as const) {
     try {
       const chunks = splitDateRange(since, until, 7);
@@ -166,6 +164,23 @@ async function syncSubLevels(
       console.error(`[Sync] ${msg}`);
       stats.errors.push(msg);
     }
+  }
+}
+
+/**
+ * סנכרון רמות adset+ad לטווח נתון עבור לקוח — לחשיפת פילוח קהלים/מודעות בדוח.
+ * רץ בנפרד מסנכרון הקמפיינים (שמדלג על עצמו כשאין ימים חסרים), כדי שהרמות
+ * העמוקות ייסנכרנו גם כשנתוני הקמפיין כבר מלאים. best-effort.
+ */
+export async function syncClientMetaSubLevels(clientId: string, since: string, until: string): Promise<void> {
+  const connection = await prisma.platformConnection.findFirst({
+    where: { clientId, platform: "meta", isActive: true },
+    include: { assets: { where: { isSelected: true, assetType: "ad_account" } } },
+  });
+  if (!connection) return;
+  const stats: SyncStats = { adInsightsFetched: 0, pagePostsFetched: 0, igMediaFetched: 0, errors: [] };
+  for (const asset of connection.assets) {
+    await syncSubLevels(clientId, connection.accessToken, asset.id, asset.externalId, until, stats, since).catch(() => {});
   }
 }
 

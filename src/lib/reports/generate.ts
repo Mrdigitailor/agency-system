@@ -8,7 +8,7 @@ import { getWeeklyClientData, getWeeklyBreakdowns, type WeeklyClientData, type P
 import { groupCampaignsByProduct } from "./group-by-product";
 import { classifyBusinessType, buildBusinessKnowledge, type LeadFunnel, type CrmAccess } from "@/lib/agent/business-knowledge";
 import { detectClientFunnel, type CampaignFunnel } from "@/lib/agent/funnel-detect";
-import { syncClientMeta } from "@/lib/api/meta/sync";
+import { syncClientMeta, syncClientMetaSubLevels } from "@/lib/api/meta/sync";
 import { syncClientGoogleAds } from "@/lib/api/google-ads/sync";
 import { shiftYmd, todayIL } from "@/lib/utils/ildate";
 
@@ -61,6 +61,9 @@ export function buildWeeklyDataText(
     if (f === "landing_page") return " (דף נחיתה)";
     return "";
   };
+  // תיוג מטרת הקמפיין — כדי שהדוח יציג את התוצאה הנכונה (רכישות מול לידים)
+  const goalTag = (c: { resultType?: string }): string =>
+    c.resultType === "purchases" ? " {מטרה: רכישות}" : c.resultType === "messages" ? " {מטרה: שיחות}" : "";
   const t = data.totals;
   const lines: string[] = [];
   lines.push(`תקופת הדיווח: ${data.weekStart} עד ${data.weekEnd}`);
@@ -126,7 +129,7 @@ export function buildWeeklyDataText(
       const cpa = g.totals.conversions > 0 ? money(g.totals.spend / g.totals.conversions, currency) : "—";
       lines.push(`- **${g.product}**: הוצאה ${money(g.totals.spend, currency)}, ${num(g.totals.conversions)} המרות, עלות/המרה ${cpa}`);
       for (const c of g.campaigns) {
-        lines.push(`    · ${c.campaignName} [${c.platform}]${funnelTag(c)}: ${money(c.spend, currency)}, ${num(c.conversions)} המרות${c.purchases > 0 ? `, ${num(c.purchases)} רכישות` : ""}`);
+        lines.push(`    · ${c.campaignName} [${c.platform}]${funnelTag(c)}${goalTag(c)}: ${money(c.spend, currency)}, ${num(c.conversions)} לידים${c.purchases > 0 ? `, ${num(c.purchases)} רכישות` : ""}`);
       }
     }
   } else {
@@ -134,7 +137,7 @@ export function buildWeeklyDataText(
     lines.push(`**קמפיינים מובילים (לפי הוצאה):**`);
     for (const c of data.perCampaign.slice(0, 15)) {
       const cpa = c.conversions > 0 ? money(c.spend / c.conversions, currency) : "—";
-      lines.push(`- ${c.campaignName} [${c.platform}]${funnelTag(c)}: ${money(c.spend, currency)}, ${num(c.conversions)} המרות, עלות/המרה ${cpa}${c.purchases > 0 ? `, ${num(c.purchases)} רכישות` : ""}`);
+      lines.push(`- ${c.campaignName} [${c.platform}]${funnelTag(c)}${goalTag(c)}: ${money(c.spend, currency)}, ${num(c.conversions)} לידים, עלות/ליד ${cpa}${c.purchases > 0 ? `, ${num(c.purchases)} רכישות` : ""}`);
     }
   }
 
@@ -171,7 +174,8 @@ const REPORT_INSTRUCTIONS = `אתה כותב דוח שבועי ללקוח של �
 חוקים מחייבים:
 - התבסס אך ורק על המספרים שסופקו, אל תמציא נתונים. אם אין נתונים לפלטפורמה — אל תזכיר אותה.
 - **לעולם אל תכתוב שחסרים נתונים, ש"יש לספק נתונים", או בקשות פנימיות כלשהן.** זה דוח שנשלח ללקוח. אם נתון/סקשן מסוים (למשל פילוח קהלים/מודעות) אינו קיים בנתונים — פשוט השמט אותו בשקט, בלי להזכיר שהוא חסר.
-- **רכישות מול לידים:** אם סופקה שורת "רכישות" — היא נתון נפרד ומדויק. כשמדובר בקמפייני רכישה (מכירת קורס/מוצר) הצג את מספר הרכישות שסופק כפי שהוא. לעולם אל תנחש או תגזור מספר רכישות — השתמש אך ורק במספר שסופק. אל תערבב רכישות עם לידים.
+- **רכישות מול לידים:** אם סופקה שורת "רכישות" — היא נתון נפרד ומדויק. לעולם אל תנחש או תגזור מספר רכישות — השתמש אך ורק במספר שסופק. אל תערבב רכישות עם לידים.
+- **מטרת קמפיין:** קמפיין המתויג "{מטרה: רכישות}" הוא קמפיין מכירות — הצג את ה**רכישות** שלו כתוצאה העיקרית (ועלות לרכישה = הוצאה חלקי רכישות), לא את הלידים. קמפיין "{מטרה: שיחות}" — התוצאה היא שיחות. קמפיין בלי תיוג — לידים. נתח כל קמפיין לפי המטרה שלו, אל תכפה ספירת לידים על קמפיין רכישות.
 - אם סופק בלוק "השוואה לשבוע הקודם" — שקף את הכיוון (↑/↓ ואחוז) של המדדים המרכזיים בטקסט, במיוחד בסיכום המנהלים. שים לב: בעלות-לליד ובעלות-להמרה ירידה היא שיפור, בהמרות/ROAS עלייה היא שיפור.
 - אם קמפיינים מתויגים "(טופס לידים)" או "(דף נחיתה)" — בסיכום הכולל אחד את כל הלידים למספר אחד, אבל בפילוח לפי מוצר/שירות הפרד בין לידים מטופס לבין לידים מדף נחיתה/אתר.
 - אם סופק "המרות (פילוח)" עם כמה קטגוריות (למשל לידים + שיחות בהודעות) — **חובה להציג אותן בנפרד** לכל אורך הדוח. לעולם אל תאחד אותן למספר אחד ואל תקרא לכולן "לידים". השתמש בעלות-לליד שסופקה (הוצאה ÷ לידים בלבד), לא בעלות שמחלקת את ההוצאה גם בשיחות.
@@ -245,14 +249,20 @@ export async function generateWeeklyReportContent(
  * סנכרון מהיר של השבוע לפני הפקת הדוח — רק אם השבוע קרוב (14 יום אחרונים),
  * כדי לא לסנכרן מחדש דוחות היסטוריים. קמפיינים בלבד, guarded (כשל לא חוסם הפקה).
  */
-async function ensureWeekSynced(clientId: string, weekEnd: string) {
+async function ensureWeekSynced(clientId: string, weekStart: string, weekEnd: string) {
   const daysSinceEnd = Math.round((new Date(todayIL()).getTime() - new Date(weekEnd).getTime()) / 86400000);
   if (daysSinceEnd > 14) return; // דוח היסטורי — הדאטה כבר קיימת
   const daysBack = Math.min(10, Math.max(9, daysSinceEnd + 8)); // מכסה את השבוע שהסתיים; השבוע הקודם להשוואה כבר מסונכרן
-  // אינקרמנטלי (לא forceAll) — מושך רק ימים חסרים + 3 אחרונים, מהיר מספיק לתוך ההפקה
+  // גבול-זמן לשאיבת רמות עמוקות — נתון "נחמד שיש" (פילוח קהלים/מודעות), לא קריטי.
+  // בחשבון גדול זה עלול לקחת דקות; אם חורג — הדוח מופק עם מה שנשאב עד כה.
+  const withTimeout = <T>(p: Promise<T>, ms: number) =>
+    Promise.race([p, new Promise<null>((res) => setTimeout(() => res(null), ms))]);
   await Promise.all([
+    // קמפיינים: אינקרמנטלי (מהיר) — מושך ימים חסרים + 3 אחרונים
     syncClientMeta(clientId, daysBack, false, { campaignsOnly: true }).catch(() => null),
     syncClientGoogleAds(clientId, daysBack, { skipSearchTerms: true }).catch(() => null),
+    // רמות קהל/מודעה: בנפרד לשבוע הדוח — כי סנכרון הקמפיינים מדלג עליהן כשאין ימים חסרים
+    withTimeout(syncClientMetaSubLevels(clientId, weekStart, weekEnd).catch(() => null), 120_000),
   ]);
 }
 
@@ -273,7 +283,7 @@ export async function generateAndSaveWeeklyReport(
   // ודא שהשבוע סונכרן במלואו לפני ההפקה — מונע דוח על נתונים חלקיים
   // (הסנכרון היומי לא תמיד מספיק למשוך את הימים האחרונים לפני הפקת הדוח).
   // מסלול מהיר: קמפיינים בלבד, בלי רמות קהל/מודעה/עמוד ובלי מונחי חיפוש.
-  await ensureWeekSynced(clientId, weekEnd);
+  await ensureWeekSynced(clientId, weekStart, weekEnd);
 
   const content = await generateWeeklyReportContent(clientId, weekStart, weekEnd);
 

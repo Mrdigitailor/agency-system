@@ -5,6 +5,9 @@ import { prisma } from "@/lib/db/prisma";
 import { countConversions, categorizeSelectedConversions } from "@/lib/utils/metaMetrics";
 import { countGoogleConversions } from "@/lib/utils/googleMetrics";
 
+/** סוג התוצאה של הקמפיין — נגזר ממטרת האופטימיזציה + הנתונים בפועל */
+export type CampaignResult = "purchases" | "leads" | "messages" | "unknown";
+
 export interface CampaignRow {
   platform: "meta" | "google" | "tiktok";
   campaignName: string;
@@ -15,6 +18,19 @@ export interface CampaignRow {
   conversionsValue: number;
   /** רכישות בפועל (מטא) — נפרד מהמרות/לידים; 0 לפלטפורמות אחרות */
   purchases: number;
+  /** מה הקמפיין מנסה להשיג — כדי להציג את התוצאה הנכונה (לידים מול רכישות) */
+  resultType: CampaignResult;
+}
+
+/** מזהה את סוג התוצאה של קמפיין מטא ממטרת האופטימיזציה + הנתונים */
+function classifyCampaignResult(objective: string, conversions: number, purchases: number): CampaignResult {
+  const obj = objective.toUpperCase();
+  if (obj.includes("SALES") || obj.includes("PURCHASE")) return "purchases";
+  if (obj.includes("ENGAGEMENT") || obj.includes("MESSAGE")) return "messages";
+  // מבוסס-דאטה: אם יש יותר רכישות מלידים — זה קמפיין רכישות (גם אם המטרה מסומנת אחרת)
+  if (purchases > 0 && purchases >= conversions) return "purchases";
+  if (obj.includes("LEAD") || conversions > 0) return "leads";
+  return "unknown";
 }
 
 export interface PlatformTotals {
@@ -157,7 +173,11 @@ export async function getWeeklyClientData(
     const conversionsValue = rows.reduce((s, i) => s + i.purchaseValue, 0);
     const purchases = rows.reduce((s, i) => s + i.purchases, 0);
     metaPurchases += purchases;
-    perCampaign.push({ platform: "meta", campaignName, spend, impressions, clicks, conversions, conversionsValue, purchases });
+    // מטרת הקמפיין — מהשורה העדכנית ביותר שיש בה objective
+    let objective = "";
+    for (const r of rows) { try { const o = JSON.parse(r.actionsJson).objective; if (o) { objective = o; break; } } catch { /* skip */ } }
+    const resultType = classifyCampaignResult(objective, conversions, purchases);
+    perCampaign.push({ platform: "meta", campaignName, spend, impressions, clicks, conversions, conversionsValue, purchases, resultType });
     meta.spend += spend;
     meta.impressions += impressions;
     meta.clicks += clicks;
@@ -179,7 +199,7 @@ export async function getWeeklyClientData(
     const clicks = rows.reduce((s, i) => s + i.clicks, 0);
     const conversions = countGoogleConversions(rows, googleSelected);
     const conversionsValue = rows.reduce((s, i) => s + i.conversionsValue, 0);
-    perCampaign.push({ platform: "google", campaignName, spend, impressions, clicks, conversions, conversionsValue, purchases: 0 });
+    perCampaign.push({ platform: "google", campaignName, spend, impressions, clicks, conversions, conversionsValue, purchases: 0, resultType: conversions > 0 ? "leads" : "unknown" });
     google.spend += spend;
     google.impressions += impressions;
     google.clicks += clicks;
@@ -200,7 +220,7 @@ export async function getWeeklyClientData(
     const impressions = rows.reduce((s, i) => s + i.impressions, 0);
     const clicks = rows.reduce((s, i) => s + i.clicks, 0);
     const conversions = rows.reduce((s, i) => s + i.conversions, 0);
-    perCampaign.push({ platform: "tiktok", campaignName, spend, impressions, clicks, conversions, conversionsValue: 0, purchases: 0 });
+    perCampaign.push({ platform: "tiktok", campaignName, spend, impressions, clicks, conversions, conversionsValue: 0, purchases: 0, resultType: conversions > 0 ? "leads" : "unknown" });
     tiktok.spend += spend;
     tiktok.impressions += impressions;
     tiktok.clicks += clicks;
