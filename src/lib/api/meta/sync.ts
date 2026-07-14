@@ -1,7 +1,7 @@
 // לוגיקת סנכרון משותפת בין manual sync ל-cron
 
 import { prisma } from "@/lib/db/prisma";
-import { fetchAdInsights, extractMetrics, type MetaInsight } from "./ad-insights";
+import { fetchAdInsights, extractMetrics, LEAN_INSIGHT_FIELDS, type MetaInsight } from "./ad-insights";
 import { fetchPagePosts, fetchPostInsights, fetchPostEngagement, extractMediaInfo } from "./page";
 import { fetchIgMedia, fetchIgMediaInsights } from "./instagram";
 import { shiftYmd } from "@/lib/utils/ildate";
@@ -131,9 +131,8 @@ function insightData(ins: MetaInsight, name: string) {
 
 /**
  * סנכרון רמות adset + ad לטווח נתון — לפירוק קהלים/קריאייטיבים בדוחות.
- * **מסוכם על כל הטווח (בלי פירוק יומי)** — ה-API מחזיר רק ישויות עם חשיפות בטווח,
- * ושורה אחת לכל ישות במקום שורה-ליום. חוסך זמן משמעותית (הפילוח מסכם ממילא).
- * שומר את השורה בתאריך `since` (מייצג את הטווח).
+ * שורה-ליום (עקבי עם רמת הקמפיין; הפילוח מסכם על השבוע). ה-API מחזיר רק
+ * ישויות שהיו בהן חשיפות בטווח, אז לא סורקים את כל החשבון.
  */
 async function syncSubLevels(
   clientId: string, accessToken: string, assetId: string, externalId: string,
@@ -141,9 +140,8 @@ async function syncSubLevels(
 ) {
   for (const level of ["adset", "ad"] as const) {
     try {
-      // dailyBreakdown=false → אגרגציה על הטווח; מחזיר רק ישויות שהיו בהן חשיפות
-      const rows = await fetchAdInsights(externalId, accessToken, level, since, until, false);
-      console.log(`[Sync] ${level} insights: ${rows.length} rows aggregated (${since} → ${until})`);
+      const rows = await fetchAdInsights(externalId, accessToken, level, since, until, true, LEAN_INSIGHT_FIELDS);
+      console.log(`[Sync] ${level} insights: ${rows.length} rows (${since} → ${until})`);
 
       const BATCH = 25;
       for (let i = 0; i < rows.length; i += BATCH) {
@@ -153,9 +151,9 @@ async function syncSubLevels(
           const parentId = (level === "adset" ? ins.campaign_id : ins.adset_id) ?? "";
           const name = (level === "adset" ? ins.adset_name : ins.ad_name) ?? "";
           return prisma.metaInsightDaily.upsert({
-            where: { assetId_level_externalId_date: { assetId, level, externalId: entityId, date: since } },
+            where: { assetId_level_externalId_date: { assetId, level, externalId: entityId, date: ins.date_start } },
             update: insightData(ins, name),
-            create: { clientId, assetId, level, externalId: entityId, parentId, date: since, ...insightData(ins, name) },
+            create: { clientId, assetId, level, externalId: entityId, parentId, date: ins.date_start, ...insightData(ins, name) },
           });
         }));
       }

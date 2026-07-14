@@ -144,21 +144,30 @@ export function buildWeeklyDataText(
     }
   }
 
+  // מילת התוצאה לפי סוג הקמפיין (רבים + יחיד) — רכישות/לידים/שיחות/מעורבות
+  const resultWord = (rt?: string) =>
+    rt === "purchases" ? { pl: "רכישות", sg: "רכישה" }
+    : rt === "messages" ? { pl: "שיחות", sg: "שיחה" }
+    : rt === "engagement" ? { pl: "תוצאות", sg: "תוצאה" }
+    : { pl: "לידים", sg: "ליד" };
+
   // פירוק קהלים (קבוצות מודעות) ומודעות — מטא. מופיע רק אם נשאבו נתוני תת-רמות.
   if (breakdowns && breakdowns.audiences.length > 0) {
     lines.push(``);
     lines.push(`**קהלים מובילים (קבוצות מודעות, מטא — לפי הוצאה):**`);
     for (const b of breakdowns.audiences) {
+      const w = resultWord(b.resultType);
       const cpa = b.conversions > 0 ? money(b.spend / b.conversions, currency) : "—";
-      lines.push(`- ${b.name}${b.parentName ? ` [קמפיין: ${b.parentName}]` : ""}: ${money(b.spend, currency)}, ${num(b.conversions)} המרות, עלות/המרה ${cpa}`);
+      lines.push(`- ${b.name}${b.parentName ? ` [קמפיין: ${b.parentName}]` : ""}: ${money(b.spend, currency)}, ${num(b.conversions)} ${w.pl}, עלות/${w.sg} ${cpa}`);
     }
   }
   if (breakdowns && breakdowns.ads.length > 0) {
     lines.push(``);
     lines.push(`**מודעות מובילות (מטא — לפי הוצאה):**`);
     for (const b of breakdowns.ads) {
+      const w = resultWord(b.resultType);
       const cpa = b.conversions > 0 ? money(b.spend / b.conversions, currency) : "—";
-      lines.push(`- ${b.name}${b.parentName ? ` [קבוצה: ${b.parentName}]` : ""}: ${money(b.spend, currency)}, ${num(b.conversions)} המרות, עלות/המרה ${cpa}`);
+      lines.push(`- ${b.name}${b.parentName ? ` [קבוצה: ${b.parentName}]` : ""}: ${money(b.spend, currency)}, ${num(b.conversions)} ${w.pl}, עלות/${w.sg} ${cpa}`);
     }
   }
 

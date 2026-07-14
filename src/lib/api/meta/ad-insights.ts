@@ -64,17 +64,28 @@ const INSIGHT_FIELDS = [
 /**
  * שליפת insights של חשבון מודעות ברמה מבוקשת
  */
+// רשימת שדות מצומצמת לרמות קהל/מודעה — רק מה שהפילוח צריך. מזרז משמעותית
+// מול INSIGHT_FIELDS המלא (עשרות שדות וידאו/דירוגים שלא נחוצים לפירוק).
+export const LEAN_INSIGHT_FIELDS = [
+  "campaign_name", "campaign_id", "adset_name", "adset_id", "ad_name", "ad_id",
+  "objective", "optimization_goal",
+  "spend", "impressions", "clicks", "reach",
+  "actions", "action_values",
+  "date_start", "date_stop",
+].join(",");
+
 export async function fetchAdInsights(
   adAccountId: string,
   accessToken: string,
   level: InsightLevel,
   since: string,
   until: string,
-  dailyBreakdown = true
+  dailyBreakdown = true,
+  fields: string = INSIGHT_FIELDS,
 ): Promise<MetaInsight[]> {
   const params: Record<string, string> = {
     level,
-    fields: INSIGHT_FIELDS,
+    fields,
     time_range: JSON.stringify({ since, until }),
     // Attribution window שתואם ל-Meta Ads Manager (ברירת מחדל)
     action_attribution_windows: JSON.stringify(["7d_click", "1d_view"]),

@@ -74,7 +74,9 @@ export interface BreakdownRow {
   name: string;
   parentName: string; // שם הקמפיין (לקהל) או קבוצת המודעות (למודעה)
   spend: number;
+  /** התוצאה הרלוונטית לפי סוג הקמפיין (רכישות לקמפיין רכישות, לידים אחרת) */
   conversions: number;
+  resultType: CampaignResult;
 }
 
 export interface WeeklyBreakdowns {
@@ -90,7 +92,7 @@ export async function getWeeklyBreakdowns(
   clientId: string,
   weekStart: string,
   weekEnd: string,
-  topN = 8,
+  topN = 15,
 ): Promise<WeeklyBreakdowns> {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
@@ -123,12 +125,15 @@ export async function getWeeklyBreakdowns(
     for (const [, rs] of groups) {
       const spend = rs.reduce((s, i) => s + i.spend, 0);
       if (spend === 0) continue;
-      out.push({
-        name: rs[0].name || "(ללא שם)",
-        parentName: parentNames.get(rs[0].parentId) ?? "",
-        spend,
-        conversions: countConversions(rs, selectedEvent),
-      });
+      const leads = countConversions(rs, selectedEvent);
+      const purchases = rs.reduce((s, i) => s + i.purchases, 0);
+      // סוג התוצאה של הישות — ממטרת הקמפיין (objective/optimization_goal בשורה)
+      let objective = "", optGoal = "";
+      for (const r of rs) { try { const j = JSON.parse(r.actionsJson); if (j.objective && !objective) objective = j.objective; if (j.optimization_goal && !optGoal) optGoal = j.optimization_goal; if (objective && optGoal) break; } catch { /* skip */ } }
+      const resultType = classifyCampaignResult(objective, optGoal, leads, purchases);
+      // סופרים את התוצאה הרלוונטית: רכישות לקמפיין רכישות, אחרת לידים
+      const conversions = resultType === "purchases" ? purchases : leads;
+      out.push({ name: rs[0].name || "(ללא שם)", parentName: parentNames.get(rs[0].parentId) ?? "", spend, conversions, resultType });
     }
     return out.sort((a, b) => b.spend - a.spend).slice(0, topN);
   };
