@@ -129,21 +129,22 @@ function insightData(ins: MetaInsight, name: string) {
   };
 }
 
-/** סנכרון רמות adset + ad לטווח נתון — לפירוק קהלים/קריאייטיבים בדוחות */
+/**
+ * סנכרון רמות adset + ad לטווח נתון — לפירוק קהלים/קריאייטיבים בדוחות.
+ * **מסוכם על כל הטווח (בלי פירוק יומי)** — ה-API מחזיר רק ישויות עם חשיפות בטווח,
+ * ושורה אחת לכל ישות במקום שורה-ליום. חוסך זמן משמעותית (הפילוח מסכם ממילא).
+ * שומר את השורה בתאריך `since` (מייצג את הטווח).
+ */
 async function syncSubLevels(
   clientId: string, accessToken: string, assetId: string, externalId: string,
   until: string, stats: SyncStats, since = shiftYmd(until, -13),
 ) {
   for (const level of ["adset", "ad"] as const) {
     try {
-      const chunks = splitDateRange(since, until, 7);
-      const rows: MetaInsight[] = [];
-      for (const chunk of chunks) {
-        rows.push(...await fetchAdInsights(externalId, accessToken, level, chunk.since, chunk.until, true));
-      }
-      console.log(`[Sync] ${level} insights: ${rows.length} rows (${since} → ${until})`);
+      // dailyBreakdown=false → אגרגציה על הטווח; מחזיר רק ישויות שהיו בהן חשיפות
+      const rows = await fetchAdInsights(externalId, accessToken, level, since, until, false);
+      console.log(`[Sync] ${level} insights: ${rows.length} rows aggregated (${since} → ${until})`);
 
-      // upserts במנות מקביליות — רמת ad יכולה להחזיר מאות שורות
       const BATCH = 25;
       for (let i = 0; i < rows.length; i += BATCH) {
         await Promise.all(rows.slice(i, i + BATCH).map((ins) => {
@@ -152,9 +153,9 @@ async function syncSubLevels(
           const parentId = (level === "adset" ? ins.campaign_id : ins.adset_id) ?? "";
           const name = (level === "adset" ? ins.adset_name : ins.ad_name) ?? "";
           return prisma.metaInsightDaily.upsert({
-            where: { assetId_level_externalId_date: { assetId, level, externalId: entityId, date: ins.date_start } },
+            where: { assetId_level_externalId_date: { assetId, level, externalId: entityId, date: since } },
             update: insightData(ins, name),
-            create: { clientId, assetId, level, externalId: entityId, parentId, date: ins.date_start, ...insightData(ins, name) },
+            create: { clientId, assetId, level, externalId: entityId, parentId, date: since, ...insightData(ins, name) },
           });
         }));
       }

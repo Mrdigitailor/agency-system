@@ -6,7 +6,7 @@ import { countConversions, categorizeSelectedConversions } from "@/lib/utils/met
 import { countGoogleConversions } from "@/lib/utils/googleMetrics";
 
 /** סוג התוצאה של הקמפיין — נגזר ממטרת האופטימיזציה + הנתונים בפועל */
-export type CampaignResult = "purchases" | "leads" | "messages" | "unknown";
+export type CampaignResult = "purchases" | "leads" | "messages" | "engagement" | "unknown";
 
 export interface CampaignRow {
   platform: "meta" | "google" | "tiktok";
@@ -22,12 +22,24 @@ export interface CampaignRow {
   resultType: CampaignResult;
 }
 
-/** מזהה את סוג התוצאה של קמפיין מטא ממטרת האופטימיזציה + הנתונים */
-function classifyCampaignResult(objective: string, conversions: number, purchases: number): CampaignResult {
+/**
+ * מזהה את סוג התוצאה של קמפיין מטא ממטרת האופטימיזציה (objective + optimization_goal)
+ * ומהנתונים. optimization_goal מדויק יותר: PROFILE_AND_PAGE_ENGAGEMENT=עוקבים/מעורבות,
+ * CONVERSATIONS=שיחות, OFFSITE_CONVERSIONS+SALES=רכישות.
+ */
+function classifyCampaignResult(objective: string, optGoal: string, conversions: number, purchases: number): CampaignResult {
   const obj = objective.toUpperCase();
-  if (obj.includes("SALES") || obj.includes("PURCHASE")) return "purchases";
-  if (obj.includes("ENGAGEMENT") || obj.includes("MESSAGE")) return "messages";
-  // מבוסס-דאטה: אם יש יותר רכישות מלידים — זה קמפיין רכישות (גם אם המטרה מסומנת אחרת)
+  const goal = optGoal.toUpperCase();
+  if (obj.includes("SALES") || goal.includes("PURCHASE")) return "purchases";
+  if (goal.includes("CONVERSATION") || goal.includes("REPL") || goal.includes("MESSAG")) return "messages";
+  // מעורבות/עוקבים/תנועה/מודעות — לפי optimization_goal (לא ENGAGEMENT גורף שגורר גם שיחות)
+  if (
+    goal.includes("ENGAGEMENT") || goal.includes("PROFILE") || goal.includes("PAGE_LIKE") ||
+    goal.includes("REACH") || goal.includes("IMPRESSION") || goal.includes("THRUPLAY") ||
+    goal.includes("VIDEO") || goal.includes("LINK_CLICK") || goal.includes("LANDING_PAGE") ||
+    obj.includes("AWARENESS") || obj.includes("TRAFFIC")
+  ) return "engagement";
+  // מבוסס-דאטה: יותר רכישות מלידים → קמפיין רכישות (גם אם המטרה מסומנת אחרת)
   if (purchases > 0 && purchases >= conversions) return "purchases";
   if (obj.includes("LEAD") || conversions > 0) return "leads";
   return "unknown";
@@ -173,10 +185,10 @@ export async function getWeeklyClientData(
     const conversionsValue = rows.reduce((s, i) => s + i.purchaseValue, 0);
     const purchases = rows.reduce((s, i) => s + i.purchases, 0);
     metaPurchases += purchases;
-    // מטרת הקמפיין — מהשורה העדכנית ביותר שיש בה objective
-    let objective = "";
-    for (const r of rows) { try { const o = JSON.parse(r.actionsJson).objective; if (o) { objective = o; break; } } catch { /* skip */ } }
-    const resultType = classifyCampaignResult(objective, conversions, purchases);
+    // מטרת הקמפיין — מהשורה העדכנית ביותר שיש בה objective/optimization_goal
+    let objective = "", optGoal = "";
+    for (const r of rows) { try { const j = JSON.parse(r.actionsJson); if (j.objective && !objective) objective = j.objective; if (j.optimization_goal && !optGoal) optGoal = j.optimization_goal; if (objective && optGoal) break; } catch { /* skip */ } }
+    const resultType = classifyCampaignResult(objective, optGoal, conversions, purchases);
     perCampaign.push({ platform: "meta", campaignName, spend, impressions, clicks, conversions, conversionsValue, purchases, resultType });
     meta.spend += spend;
     meta.impressions += impressions;
