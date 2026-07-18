@@ -35,6 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       campaignIds: JSON.stringify(body.campaignIds ?? []),
       actionTaken: body.actionTaken ?? "",
       expectedOutcome: body.expectedOutcome ?? "",
+      trackFollowUp: body.trackFollowUp ?? false,
       description: body.actionTaken ?? "", // legacy field — שומר את אותו ערך
     },
   });

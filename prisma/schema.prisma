@@ -208,6 +208,7 @@ model Optimization {
   campaignIds     String    @default("[]") // JSON array של שמות/IDs של קמפיינים
   actionTaken     String    @default("") // מה ביצענו
   expectedOutcome String    @default("") // מה אנחנו מצפים לקבל
+  trackFollowUp   Boolean   @default(false) // האם לעקוב אחרי התוצאה (נכנס לרשימת "לבדוק"); אחרת → "בוצע" בלבד
   isChecked       Boolean   @default(false)
   checkedAt       DateTime?
   actualResult    String    @default("") // מה קרה בפועל

@@ -12,6 +12,7 @@ export interface Optimization {
   campaignIds: string[];
   actionTaken: string;
   expectedOutcome: string;
+  trackFollowUp: boolean;
   isChecked: boolean;
   checkedAt: string | null;
   actualResult: string;
@@ -98,6 +99,7 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
     campaignIds: [] as string[],
     actionTaken: "",
     expectedOutcome: "",
+    trackFollowUp: false,
   });
   const [saving, setSaving] = useState(false);
 
@@ -188,9 +190,9 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
 
   /* ============ Derived data ============ */
 
-  // "Waiting for check" — not checked AND at least 3 days old
+  // "Waiting for check" — סומן למעקב, עדיין לא נבדק, ולפחות 3 ימים עברו
   const waitingForCheck = useMemo(() => {
-    return optimizations.filter((o) => !o.isChecked && o.date && daysBetween(o.date) >= 3);
+    return optimizations.filter((o) => o.trackFollowUp && !o.isChecked && o.date && daysBetween(o.date) >= 3);
   }, [optimizations]);
 
   // History: all optimizations, filtered
@@ -226,7 +228,7 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newOpt),
       });
-      setNewOpt({ date: todayIso(), platform: "", campaignIds: [], actionTaken: "", expectedOutcome: "" });
+      setNewOpt({ date: todayIso(), platform: "", campaignIds: [], actionTaken: "", expectedOutcome: "", trackFollowUp: false });
       setShowAddModal(false);
       await fetchOptimizations();
     } finally {
@@ -465,10 +467,10 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
                 const platformStyle = PLATFORM_STYLES[opt.platform] || { bg: "bg-brand-bg", text: "text-brand-dark", icon: "?" };
                 return (
                   <div key={opt.id} className="relative pr-10">
-                    {/* Timeline dot */}
+                    {/* Timeline dot — כתום רק אם במעקב וטרם נבדק; אחרת ירוק (בוצע/נבדק) */}
                     <div
                       className={`absolute right-1.5 top-4 h-4 w-4 rounded-full border-2 border-white shadow-sm ${
-                        opt.isChecked ? "bg-brand-success" : "bg-orange-400"
+                        opt.trackFollowUp && !opt.isChecked ? "bg-orange-400" : "bg-brand-success"
                       }`}
                     />
 
@@ -501,7 +503,7 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
                         </div>
                       )}
 
-                      {/* Checked result or waiting badge */}
+                      {/* תוצאה שנבדקה / ממתין לבדיקה / בוצע (ללא מעקב) */}
                       {opt.isChecked ? (
                         <div className="mt-3 rounded-lg bg-green-50 border border-green-200 p-3">
                           <div className="flex items-center gap-1.5 mb-1">
@@ -515,11 +517,18 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
                           </div>
                           <p className="text-sm text-green-800">{opt.actualResult}</p>
                         </div>
-                      ) : (
+                      ) : opt.trackFollowUp ? (
                         <div className="mt-3">
                           <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700">
                             <Clock className="h-3 w-3" />
                             {t("toCheck")}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="mt-3">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-success/10 px-2.5 py-0.5 text-xs font-medium text-brand-success">
+                            <CheckCircle2 className="h-3 w-3" />
+                            בוצע
                           </span>
                         </div>
                       )}
@@ -617,6 +626,22 @@ export default function OptimizationsTab({ clientId }: { clientId: string }) {
               placeholder={t("whatWeExpect")}
             />
           </div>
+
+          {/* מעקב אחרי התוצאה — רק אם מסומן, האופטימיזציה תיכנס לרשימת "לבדוק" */}
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-brand-border bg-brand-bg p-3">
+            <input
+              type="checkbox"
+              checked={newOpt.trackFollowUp}
+              onChange={(e) => setNewOpt((p) => ({ ...p, trackFollowUp: e.target.checked }))}
+              className="mt-0.5 h-4 w-4 rounded border-brand-border accent-brand-gold"
+            />
+            <span>
+              <span className="block text-sm font-medium text-brand-dark">להמשיך מעקב אחרי האופטימיזציה?</span>
+              <span className="block text-xs text-brand-muted">
+                אם מסומן — תיכנס לרשימת &quot;לבדוק&quot; שדורשת סימון כנבדק אחרי כמה ימים. אם לא — תיכנס ישר לרשימת האופטימיזציות שביצענו.
+              </span>
+            </span>
+          </label>
 
           <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
             <button
