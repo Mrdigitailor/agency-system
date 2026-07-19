@@ -51,22 +51,45 @@ function extractActions(actionsJson: string): Array<{ action_type: string; value
  * - המשתמש יכול לבחור events ספציפיים כמו offsite_conversion.fb_pixel_lead
  *   + onsite_conversion.lead_grouped — ואם נשתמש ב-i.leads זה ייצור כפילות
  */
+/**
+ * קבוצת action types ש-Meta מדווחת עבור **אותו ליד** (ליד אתר/פיקסל/טופס) תחת שמות שונים.
+ * כשנבחרים כמה מהם — הם לא מתווספים זה לזה אלא מייצגים את אותה המרה, ולכן סופרים
+ * פעם אחת (המקסימום). אירועים שמחוץ לקבוצה (למשל WhatsApp/רכישה) נספרים בנפרד.
+ */
+const LEAD_EQUIVALENT_ACTIONS = new Set([
+  "lead",
+  "onsite_web_lead",
+  "offsite_conversion.fb_pixel_lead",
+  "onsite_conversion.lead",
+  "onsite_conversion.lead_grouped",
+  "onsite_conversion.leadgen_grouped",
+  "offsite_conversion.lead_grouped",
+  "leadgen_grouped",
+  "leadgen.other",
+]);
+
 export function countConversions(insights: Insight[], selectedEventRaw: string): number {
   const events = parseConversionEvents(selectedEventRaw);
   if (events.length === 0) {
     return insights.reduce((s, i) => s + i.conversions, 0);
   }
 
+  // מפרידים: אירועי-ליד שקולים (נספרים פעם אחת) מול אירועים ייחודיים (מתווספים)
+  const leadEvents = events.filter((e) => LEAD_EQUIVALENT_ACTIONS.has(e));
+  const distinctEvents = events.filter((e) => !LEAD_EQUIVALENT_ACTIONS.has(e));
+
   let total = 0;
   for (const ins of insights) {
     const actions = extractActions(ins.actionsJson);
-    for (const event of events) {
-      for (const a of actions) {
-        if (a.action_type === event) {
-          total += parseFloat(a.value) || 0;
-        }
-      }
+    const valueOf = (type: string) =>
+      actions.filter((a) => a.action_type === type).reduce((s, a) => s + (parseFloat(a.value) || 0), 0);
+
+    // אירועי ליד שקולים → סופרים פעם אחת (המקסימום), כי הם אותו ליד תחת שמות שונים
+    if (leadEvents.length > 0) {
+      total += Math.max(...leadEvents.map(valueOf));
     }
+    // אירועים ייחודיים (WhatsApp, רכישה, וכו') → מתווספים
+    for (const e of distinctEvents) total += valueOf(e);
   }
   return total;
 }
