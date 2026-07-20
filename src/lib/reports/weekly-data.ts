@@ -88,6 +88,30 @@ export interface WeeklyBreakdowns {
  * פירוק שבועי לפי קהלים (adset) ומודעות (ad) — מטא בלבד.
  * מחזיר את המובילים לפי הוצאה; ריק אם עדיין לא נשאבו נתוני תת-רמות.
  */
+
+/**
+ * ספירת רכישות "כמו ב-Ads Manager": אם הקמפיין מכוון להמרה מותאמת ספציפית
+ * (_targetConversionId שנשמר בסנכרון) — סופרים אך ורק אותה. אחרת נופלים לרכישה
+ * הגנרית של הפיקסל. בלי זה, רכישות של קמפיין אחד נזקפות גם לקמפיינים אחרים.
+ */
+function countCampaignPurchases(rows: Array<{ purchases: number; actionsJson: string }>): number {
+  let targetId = "";
+  for (const r of rows) {
+    try { const j = JSON.parse(r.actionsJson); if (j._targetConversionId) { targetId = j._targetConversionId; break; } } catch { /* skip */ }
+  }
+  if (!targetId) return rows.reduce((s, i) => s + i.purchases, 0);
+
+  const wanted = `offsite_conversion.custom.${targetId}`;
+  let total = 0;
+  for (const r of rows) {
+    try {
+      const j = JSON.parse(r.actionsJson);
+      for (const a of (j.actions ?? [])) if (a.action_type === wanted) total += parseFloat(a.value) || 0;
+    } catch { /* skip */ }
+  }
+  return total;
+}
+
 export async function getWeeklyBreakdowns(
   clientId: string,
   weekStart: string,
@@ -126,7 +150,7 @@ export async function getWeeklyBreakdowns(
       const spend = rs.reduce((s, i) => s + i.spend, 0);
       if (spend === 0) continue;
       const leads = countConversions(rs, selectedEvent);
-      const purchases = rs.reduce((s, i) => s + i.purchases, 0);
+      const purchases = countCampaignPurchases(rs);
       // סוג התוצאה של הישות — ממטרת הקמפיין (objective/optimization_goal בשורה)
       let objective = "", optGoal = "";
       for (const r of rs) { try { const j = JSON.parse(r.actionsJson); if (j.objective && !objective) objective = j.objective; if (j.optimization_goal && !optGoal) optGoal = j.optimization_goal; if (objective && optGoal) break; } catch { /* skip */ } }
@@ -188,7 +212,7 @@ export async function getWeeklyClientData(
     const clicks = rows.reduce((s, i) => s + i.clicks, 0);
     const conversions = countConversions(rows, selectedEvent);
     const conversionsValue = rows.reduce((s, i) => s + i.purchaseValue, 0);
-    const purchases = rows.reduce((s, i) => s + i.purchases, 0);
+    const purchases = countCampaignPurchases(rows);
     metaPurchases += purchases;
     // מטרת הקמפיין — מהשורה העדכנית ביותר שיש בה objective/optimization_goal
     let objective = "", optGoal = "";

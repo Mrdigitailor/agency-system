@@ -1,7 +1,7 @@
 // לוגיקת סנכרון משותפת בין manual sync ל-cron
 
 import { prisma } from "@/lib/db/prisma";
-import { fetchAdInsights, extractMetrics, LEAN_INSIGHT_FIELDS, type MetaInsight } from "./ad-insights";
+import { fetchAdInsights, extractMetrics, fetchCampaignTargetConversions, LEAN_INSIGHT_FIELDS, type MetaInsight } from "./ad-insights";
 import { fetchPagePosts, fetchPostInsights, fetchPostEngagement, extractMediaInfo } from "./page";
 import { fetchIgMedia, fetchIgMediaInsights } from "./instagram";
 import { shiftYmd } from "@/lib/utils/ildate";
@@ -66,6 +66,10 @@ export async function syncAdAccount(
   const insights = allInsights;
   console.log(`[Sync] Ad Account ${externalId} → ${insights.length} total insight rows`);
 
+  // ההמרה המותאמת שכל קמפיין מכוון אליה — כדי לספור תוצאות כמו ב-Ads Manager
+  // ולא לפי רכישות גנריות של הפיקסל (שכוללות המרות של קמפיינים אחרים).
+  const targetConvByCampaign = await fetchCampaignTargetConversions(externalId, accessToken);
+
   for (const ins of insights) {
     await prisma.metaInsightDaily.upsert({
       where: {
@@ -73,13 +77,13 @@ export async function syncAdAccount(
           assetId, level: "campaign", externalId: ins.campaign_id ?? "", date: ins.date_start,
         },
       },
-      update: insightData(ins, ins.campaign_name ?? ""),
+      update: insightData(ins, ins.campaign_name ?? "", targetConvByCampaign[ins.campaign_id ?? ""]),
       create: {
         clientId, assetId, level: "campaign",
         externalId: ins.campaign_id ?? "",
         parentId: "",
         date: ins.date_start,
-        ...insightData(ins, ins.campaign_name ?? ""),
+        ...insightData(ins, ins.campaign_name ?? "", targetConvByCampaign[ins.campaign_id ?? ""]),
       },
     });
     stats.adInsightsFetched++;
@@ -101,7 +105,7 @@ export async function syncAdAccount(
 }
 
 /** בונה את אובייקט המדדים לשמירה מתוך שורת insight (זהה לכל הרמות) */
-function insightData(ins: MetaInsight, name: string) {
+function insightData(ins: MetaInsight, name: string, targetConversionId?: string) {
   const m = extractMetrics(ins);
   return {
     name,
@@ -125,7 +129,8 @@ function insightData(ins: MetaInsight, name: string) {
     purchases: m.purchases,
     leads: m.leads,
     costPerLead: m.costPerLead,
-    actionsJson: JSON.stringify(ins),
+    // _targetConversionId — ההמרה המותאמת שהקמפיין מכוון אליה (לספירת תוצאות כמו ב-Ads Manager)
+    actionsJson: JSON.stringify(targetConversionId ? { ...ins, _targetConversionId: targetConversionId } : ins),
   };
 }
 

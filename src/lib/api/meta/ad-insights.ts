@@ -181,6 +181,30 @@ export interface MetaCampaign {
   bid_strategy?: string;
 }
 
+/**
+ * מיפוי campaign_id → custom_conversion_id שהקמפיין מכוון אליו (מוגדר ברמת ה-adset).
+ * זה מה ש-Ads Manager מציג בעמודת "תוצאות" — ולא ספירת הרכישות הגנרית של הפיקסל.
+ */
+export async function fetchCampaignTargetConversions(
+  adAccountId: string,
+  accessToken: string,
+): Promise<Record<string, string>> {
+  try {
+    const adsets = await metaApiGetAll<{ campaign_id?: string; promoted_object?: { custom_conversion_id?: string } }>(
+      `/${adAccountId}/adsets`,
+      { accessToken, params: { fields: "campaign_id,promoted_object{custom_conversion_id}", limit: "300" } },
+    );
+    const map: Record<string, string> = {};
+    for (const a of adsets) {
+      const id = a.promoted_object?.custom_conversion_id;
+      if (id && a.campaign_id) map[a.campaign_id] = id;
+    }
+    return map;
+  } catch {
+    return {}; // כשל כאן לעולם לא מפיל סנכרון — נופלים לספירה הגנרית
+  }
+}
+
 export async function fetchCampaigns(adAccountId: string, accessToken: string): Promise<MetaCampaign[]> {
   return metaApiGetAll<MetaCampaign>(`/${adAccountId}/campaigns`, {
     accessToken,
