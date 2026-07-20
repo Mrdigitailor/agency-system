@@ -14,6 +14,9 @@ const CM_ALLOWED_FIELDS = new Set([
   "notes",
   // Meta conversion event (נבחר בכרטיס)
   "metaConversionEvent",
+  // תקציב המדיה החודשי — מנהל הקמפיינים אחראי עליו בפועל.
+  // (התשלום שלנו — monthlyRetainer וכו' — נשאר admin-only ומוסתר ע"י stripAgencyPayment)
+  "monthlyBudget",
 ]);
 
 // שדות שאף אחד חוץ מ-admin לא יכול לגעת בהם
@@ -23,7 +26,7 @@ const ADMIN_ONLY_FIELDS = new Set([
   "managerId",
   "name",
   "status", "clientType",
-  "monthlyBudget", "currency",
+  "currency",
   "targetConversions", "targetCostPerConversion",
   "platforms",
 ]);
