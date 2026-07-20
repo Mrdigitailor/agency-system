@@ -56,16 +56,27 @@ function extractActions(actionsJson: string): Array<{ action_type: string; value
  * כשנבחרים כמה מהם — הם לא מתווספים זה לזה אלא מייצגים את אותה המרה, ולכן סופרים
  * פעם אחת (המקסימום). אירועים שמחוץ לקבוצה (למשל WhatsApp/רכישה) נספרים בנפרד.
  */
-const LEAD_EQUIVALENT_ACTIONS = new Set([
-  "lead",
+// ליד מהאתר/פיקסל — אותו ליד שמטא מדווחת תחת כמה שמות
+const WEBSITE_LEAD_ACTIONS = new Set([
   "onsite_web_lead",
   "offsite_conversion.fb_pixel_lead",
   "onsite_conversion.lead",
+]);
+// ליד מטופס מיידי של מטא (on-Facebook) — מקור **נפרד** מליד אתר
+const FORM_LEAD_ACTIONS = new Set([
   "onsite_conversion.lead_grouped",
   "onsite_conversion.leadgen_grouped",
   "offsite_conversion.lead_grouped",
   "leadgen_grouped",
   "leadgen.other",
+]);
+// "lead" הוא הסכום הכולל של כל סוגי הלידים — לא מתווסף לקבוצות, אלא מתחרה בהן
+const AGGREGATE_LEAD_ACTION = "lead";
+
+const LEAD_EQUIVALENT_ACTIONS = new Set([
+  AGGREGATE_LEAD_ACTION,
+  ...WEBSITE_LEAD_ACTIONS,
+  ...FORM_LEAD_ACTIONS,
 ]);
 
 export function countConversions(insights: Insight[], selectedEventRaw: string): number {
@@ -74,8 +85,10 @@ export function countConversions(insights: Insight[], selectedEventRaw: string):
     return insights.reduce((s, i) => s + i.conversions, 0);
   }
 
-  // מפרידים: אירועי-ליד שקולים (נספרים פעם אחת) מול אירועים ייחודיים (מתווספים)
-  const leadEvents = events.filter((e) => LEAD_EQUIVALENT_ACTIONS.has(e));
+  // מפרידים לפי מקור: ליד-אתר, ליד-טופס, הסכום הכולל, ואירועים ייחודיים
+  const websiteEvents = events.filter((e) => WEBSITE_LEAD_ACTIONS.has(e));
+  const formEvents = events.filter((e) => FORM_LEAD_ACTIONS.has(e));
+  const hasAggregate = events.includes(AGGREGATE_LEAD_ACTION);
   const distinctEvents = events.filter((e) => !LEAD_EQUIVALENT_ACTIONS.has(e));
 
   let total = 0;
@@ -84,11 +97,15 @@ export function countConversions(insights: Insight[], selectedEventRaw: string):
     const valueOf = (type: string) =>
       actions.filter((a) => a.action_type === type).reduce((s, a) => s + (parseFloat(a.value) || 0), 0);
 
-    // אירועי ליד שקולים → סופרים פעם אחת (המקסימום), כי הם אותו ליד תחת שמות שונים
-    if (leadEvents.length > 0) {
-      total += Math.max(...leadEvents.map(valueOf));
-    }
-    // אירועים ייחודיים (WhatsApp, רכישה, וכו') → מתווספים
+    // בתוך אותו מקור — אותו ליד בשמות שונים, סופרים פעם אחת (max).
+    // בין מקורות שונים (אתר מול טופס מיידי) — מחברים, אלה לידים שונים.
+    const websiteLeads = websiteEvents.length ? Math.max(...websiteEvents.map(valueOf)) : 0;
+    const formLeads = formEvents.length ? Math.max(...formEvents.map(valueOf)) : 0;
+    // "lead" הוא הסכום הכולל של מטא — לוקחים את הגדול מבין הסכום שחישבנו לבינו,
+    // כך שהוא לא מתווסף פעמיים אך גם לא מפספס סוג ליד שלא נבחר במפורש.
+    total += Math.max(hasAggregate ? valueOf(AGGREGATE_LEAD_ACTION) : 0, websiteLeads + formLeads);
+
+    // אירועים ייחודיים (WhatsApp, הרשמה, רכישה) → מתווספים בנפרד
     for (const e of distinctEvents) total += valueOf(e);
   }
   return total;
