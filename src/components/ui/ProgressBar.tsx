@@ -33,9 +33,9 @@ export default function ProgressBar({ current, target, inverted = false, pace, b
     else if (projectedRatio <= 1.1) color = "bg-brand-warning";
     else color = "bg-brand-danger";
   } else if (inverted) {
-    // עלות — ירוק אם מתחת ליעד, כתום אם קרוב, אדום אם בחריגה
-    if (ratio <= 0.85) color = "bg-brand-success";
-    else if (ratio <= 1.0) color = "bg-brand-warning";
+    // עלות — ירוק כל עוד עומדים ביעד או מתחתיו, כתום בחריגה עד 25%, אדום מעל 25%
+    if (ratio <= 1.0) color = "bg-brand-success";
+    else if (ratio <= 1.25) color = "bg-brand-warning";
     else color = "bg-brand-danger";
   } else if (pace !== undefined && pace > 0) {
     // כמות עם קצב חודשי — עקפנו יעד = ירוק; אחרת משווים לקצב הצפוי עד היום
