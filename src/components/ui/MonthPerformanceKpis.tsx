@@ -78,17 +78,28 @@ export default function MonthPerformanceKpis({
   const dailyBudgetNeeded = daysRemaining > 0 ? budgetRemaining / daysRemaining : 0;
 
   /* ============ קוביית עלות להמרה ============ */
+  // ירוק עד היעד, כתום בחריגה עד 25%, אדום מעל (עקבי עם טאב הלקוחות)
   const cpcDiff = costPerConversion - targetCostPerConversion;
   const cpcGood = targetCostPerConversion > 0 && costPerConversion > 0 && costPerConversion <= targetCostPerConversion;
-  const cpcBad = targetCostPerConversion > 0 && costPerConversion > targetCostPerConversion;
+  const cpcWarn = targetCostPerConversion > 0 && costPerConversion > targetCostPerConversion && costPerConversion <= targetCostPerConversion * 1.25;
+  const cpcColor: "success" | "warning" | "danger" = cpcGood ? "success" : cpcWarn ? "warning" : "danger";
+  const cpcClasses = COLOR_CLASSES[cpcColor];
   // מיקום נקודות על סקאלה ויזואלית: 0 → 200% מהיעד
   const cpcMaxScale = targetCostPerConversion * 2 || 1;
   const targetPos = targetCostPerConversion > 0 ? Math.min(100, (targetCostPerConversion / cpcMaxScale) * 100) : 50;
   const actualPos = costPerConversion > 0 ? Math.min(100, (costPerConversion / cpcMaxScale) * 100) : 0;
 
   /* ============ קוביית המרות ============ */
+  // עקיפת היעד = הישג (ירוק), לא חריגה. מתחת ליעד — צבע לפי קצב מול החודש.
   const convPct = targetConversions > 0 ? (conversions / targetConversions) * 100 : 0;
-  const convColor = paceColor(convPct, monthPct);
+  const hitConvGoal = targetConversions > 0 && conversions >= targetConversions;
+  const convColor: "success" | "warning" | "danger" = hitConvGoal
+    ? "success"
+    : monthPct > 0 && convPct >= monthPct * 0.9
+      ? "success"
+      : monthPct > 0 && convPct >= monthPct * 0.7
+        ? "warning"
+        : "danger";
   const convClasses = COLOR_CLASSES[convColor];
   const conversionsRemaining = Math.max(0, targetConversions - conversions);
   const dailyConversionsNeeded = daysRemaining > 0 ? Math.ceil(conversionsRemaining / daysRemaining) : 0;
@@ -146,13 +157,13 @@ export default function MonthPerformanceKpis({
         </div>
 
         {/* ============ קוביית עלות להמרה ============ */}
-        <div className={`rounded-lg border p-4 ${cpcGood ? COLOR_CLASSES.success.border + " " + COLOR_CLASSES.success.bg : cpcBad ? COLOR_CLASSES.danger.border + " " + COLOR_CLASSES.danger.bg : "border-brand-border bg-brand-bg"}`}>
+        <div className={`rounded-lg border p-4 ${targetCostPerConversion > 0 && costPerConversion > 0 ? `${cpcClasses.border} ${cpcClasses.bg}` : "border-brand-border bg-brand-bg"}`}>
           <p className="text-xs font-medium text-brand-muted">{t('costPerConversion')}</p>
           <p className="mt-1 text-2xl font-semibold text-brand-dark">
             {formatCurrency(costPerConversion, currency)}
           </p>
           {targetCostPerConversion > 0 && costPerConversion > 0 && (
-            <p className={`text-xs font-medium ${cpcGood ? COLOR_CLASSES.success.text : COLOR_CLASSES.danger.text}`}>
+            <p className={`text-xs font-medium ${cpcClasses.text}`}>
               {formatCurrency(Math.abs(cpcDiff), currency)} {cpcGood ? t('belowTarget') : t('aboveTarget')}
             </p>
           )}
@@ -173,7 +184,7 @@ export default function MonthPerformanceKpis({
               {/* נקודה נוכחית */}
               {costPerConversion > 0 && (
                 <div
-                  className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 translate-x-1/2 rounded-full border-2 border-brand-light ${cpcGood ? "bg-brand-success" : "bg-brand-danger"}`}
+                  className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 translate-x-1/2 rounded-full border-2 border-brand-light ${cpcClasses.bar}`}
                   style={{ right: `${actualPos}%` }}
                 />
               )}
@@ -202,7 +213,9 @@ export default function MonthPerformanceKpis({
             {conversions.toLocaleString()}
             <span className="text-sm font-normal text-brand-muted"> / {targetConversions.toLocaleString()}</span>
           </p>
-          <p className={`text-xs font-medium ${convClasses.text}`}>{Math.round(convPct)}% {t('ofTarget')}</p>
+          <p className={`text-xs font-medium ${convClasses.text}`}>
+            {hitConvGoal ? `🎯 ${Math.round(convPct)}% — עקף את היעד!` : `${Math.round(convPct)}% ${t('ofTarget')}`}
+          </p>
 
           <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-brand-border/60">
             <div
@@ -212,11 +225,17 @@ export default function MonthPerformanceKpis({
           </div>
 
           <div className="mt-3 border-t border-brand-border/60 pt-2">
-            <p className="text-xs text-brand-muted">{t('convNeededPerDay')}</p>
-            <p className="text-sm font-semibold text-brand-dark">
-              {dailyConversionsNeeded.toLocaleString()} {t('conversions')}
-              <span className="text-xs font-normal text-brand-muted"> · {daysRemaining} {t('daysRemaining')}</span>
-            </p>
+            {hitConvGoal ? (
+              <p className="text-sm font-semibold text-brand-success">✓ היעד החודשי הושג — כל המרה מכאן היא בונוס</p>
+            ) : (
+              <>
+                <p className="text-xs text-brand-muted">{t('convNeededPerDay')}</p>
+                <p className="text-sm font-semibold text-brand-dark">
+                  {dailyConversionsNeeded.toLocaleString()} {t('conversions')}
+                  <span className="text-xs font-normal text-brand-muted"> · {daysRemaining} {t('daysRemaining')}</span>
+                </p>
+              </>
+            )}
           </div>
           {hasBreakdown && (
             <div className="mt-2 border-t border-brand-border/60 pt-2 text-[11px] text-brand-muted">
