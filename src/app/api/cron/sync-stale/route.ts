@@ -28,6 +28,26 @@ export async function GET(req: Request) {
 
   await prisma.cronRun.create({ data: { job: "sync-stale", detail: new URL(req.url).searchParams.get("src") ?? "cron" } }).catch(() => {});
 
+  // Self-healing (הועבר לכאן אחרי השבתת המתזמן החיצוני): אם הסנכרון היומי המלא
+  // או ניתוח הבוקר פוספסו — מפעילים אותם מכאן. כשל כאן לא מפיל את הריצה.
+  try {
+    const origin = process.env.APP_BASE_URL ?? new URL(req.url).origin;
+    const lastOf = async (job: string) => {
+      const r = await prisma.cronRun.findFirst({ where: { job }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+      return r ? (Date.now() - r.createdAt.getTime()) / 3600000 : Infinity;
+    };
+    if ((await lastOf("sync-all")) >= 22) {
+      console.log("[sync-stale] sync-all לא רץ 22+ שעות — self-heal");
+      fetch(`${origin}/api/cron/sync-all?src=self-heal`, { headers: { authorization: `Bearer ${expected}` } }).catch(() => {});
+    }
+    if ((await lastOf("detect")) >= 26) {
+      console.log("[sync-stale] detect לא רץ 26+ שעות — self-heal");
+      fetch(`${origin}/api/cron/detect?src=self-heal`, { method: "POST", headers: { authorization: `Bearer ${expected}` } }).catch(() => {});
+    }
+  } catch (e) {
+    console.error("[sync-stale] self-heal check failed:", e);
+  }
+
   const cutoff = new Date(Date.now() - STALE_MINUTES * 60 * 1000);
   const connections = await prisma.platformConnection.findMany({
     where: {

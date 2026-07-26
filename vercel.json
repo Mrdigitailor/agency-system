@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/sync-stale",
-      "schedule": "0 */2 * * *"
+      "schedule": "0 5-17/2 * * *"
     },
     {
       "path": "/api/cron/detect",
