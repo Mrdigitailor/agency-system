@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
-import { countConversions, breakdownConversions } from "@/lib/utils/metaMetrics";
-import { countGoogleConversions } from "@/lib/utils/googleMetrics";
+import { countConversions, breakdownConversions, breakdownConversionsLabeled } from "@/lib/utils/metaMetrics";
+import { countGoogleConversions, breakdownGoogleConversions } from "@/lib/utils/googleMetrics";
 
 /**
  * GET /api/clients/[id]/performance?since=...&until=...
@@ -99,6 +99,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     gadsConversions,
     ttSpend,
     ttConversions,
+    // פירוק המרות פר-פלטפורמה לפי סוג — לתצוגת שקיפות ב-tooltip
+    conversionBreakdown: {
+      meta: breakdownConversionsLabeled(insights, selectedEventRaw),
+      google: breakdownGoogleConversions(gadsInsights, googleSelectedRaw),
+      tiktok: ttConversions > 0 ? [{ label: "המרות (TikTok)", count: Math.round(ttConversions) }] : [],
+    },
     selectedEvent: selectedEventRaw,
     lastSync: lastSync?.lastSyncAt ?? null,
     lastOptimization: lastOpt?.date ?? (lastOpt?.createdAt ? lastOpt.createdAt.toISOString().split("T")[0] : null),

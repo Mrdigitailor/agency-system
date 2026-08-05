@@ -35,3 +35,19 @@ export function countGoogleConversions(rows: GoogleRow[], selectedRaw: string): 
   }
   return total;
 }
+
+/** פירוק המרות Google לפי סוג הפעולה שנבחרה — לתצוגת שקיפות (tooltip) */
+export function breakdownGoogleConversions(rows: GoogleRow[], selectedRaw: string): Array<{ label: string; count: number }> {
+  const selected = parseGoogleActions(selectedRaw);
+  if (selected.length === 0) {
+    const total = rows.reduce((s, r) => s + r.conversions, 0);
+    return total > 0 ? [{ label: "כל ההמרות", count: Math.round(total) }] : [];
+  }
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    let byAction: Record<string, number> = {};
+    try { byAction = JSON.parse(r.conversionsByAction || "{}"); } catch { byAction = {}; }
+    for (const a of selected) if (byAction[a]) counts.set(a, (counts.get(a) ?? 0) + byAction[a]);
+  }
+  return [...counts.entries()].filter(([, c]) => c > 0).map(([label, count]) => ({ label, count: Math.round(count) })).sort((a, b) => b.count - a.count);
+}

@@ -18,7 +18,33 @@ interface Props {
   gadsConversions?: number;
   ttSpend?: number;
   ttConversions?: number;
+  /** פירוק המרות פר-פלטפורמה לפי סוג — ל-tooltip שקיפות */
+  conversionBreakdown?: {
+    meta?: Array<{ label: string; count: number }>;
+    google?: Array<{ label: string; count: number }>;
+    tiktok?: Array<{ label: string; count: number }>;
+  };
   lastSyncAt?: string | null;
+}
+
+/** שם פלטפורמה + כמות המרות, עם tooltip בריחוף שמפרט את סוגי ההמרות שנספרו */
+function ConvChip({ name, count, items }: { name: string; count: number; items?: Array<{ label: string; count: number }> }) {
+  return (
+    <span className="group relative cursor-help border-b border-dotted border-brand-muted/40">
+      {name}: {count.toLocaleString()}
+      {items && items.length > 0 && (
+        <span className="pointer-events-none absolute bottom-full right-0 z-20 mb-1 hidden w-max min-w-[180px] max-w-[240px] rounded-lg border border-brand-border bg-brand-light p-2.5 text-right text-[11px] shadow-lg group-hover:block">
+          <span className="mb-1 block font-semibold text-brand-dark">{name} — {count.toLocaleString()} המרות לפי סוג:</span>
+          {items.map((it, i) => (
+            <span key={i} className="flex justify-between gap-3 py-0.5 text-brand-muted">
+              <span className="truncate">{it.label}</span>
+              <span className="shrink-0 font-medium text-brand-dark">{it.count.toLocaleString()}</span>
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  );
 }
 
 /**
@@ -64,6 +90,7 @@ export default function MonthPerformanceKpis({
   gadsConversions,
   ttSpend,
   ttConversions,
+  conversionBreakdown,
   lastSyncAt,
 }: Props) {
   const { t } = useLanguage();
@@ -238,12 +265,12 @@ export default function MonthPerformanceKpis({
             )}
           </div>
           {hasBreakdown && (
-            <div className="mt-2 border-t border-brand-border/60 pt-2 text-[11px] text-brand-muted">
-              {(metaConversions ?? 0) > 0 && <span>Meta: {(metaConversions ?? 0).toLocaleString()}</span>}
-              {(metaConversions ?? 0) > 0 && (gadsConversions ?? 0) > 0 && <span> · </span>}
-              {(gadsConversions ?? 0) > 0 && <span>Google: {(gadsConversions ?? 0).toLocaleString()}</span>}
-              {((metaConversions ?? 0) > 0 || (gadsConversions ?? 0) > 0) && (ttConversions ?? 0) > 0 && <span> · </span>}
-              {(ttConversions ?? 0) > 0 && <span>TikTok: {(ttConversions ?? 0).toLocaleString()}</span>}
+            <div className="mt-2 flex flex-wrap items-center gap-x-1 border-t border-brand-border/60 pt-2 text-[11px] text-brand-muted">
+              {(metaConversions ?? 0) > 0 && <ConvChip name="Meta" count={metaConversions ?? 0} items={conversionBreakdown?.meta} />}
+              {(metaConversions ?? 0) > 0 && (gadsConversions ?? 0) > 0 && <span>·</span>}
+              {(gadsConversions ?? 0) > 0 && <ConvChip name="Google" count={gadsConversions ?? 0} items={conversionBreakdown?.google} />}
+              {((metaConversions ?? 0) > 0 || (gadsConversions ?? 0) > 0) && (ttConversions ?? 0) > 0 && <span>·</span>}
+              {(ttConversions ?? 0) > 0 && <ConvChip name="TikTok" count={ttConversions ?? 0} items={conversionBreakdown?.tiktok} />}
             </div>
           )}
         </div>

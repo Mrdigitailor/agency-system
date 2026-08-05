@@ -174,7 +174,7 @@ export default function ClientDetailPage() {
   const client = getClient(params.id as string);
 
   // נתוני ביצועים מ-Meta (החודש הנוכחי)
-  const [metaPerf, setMetaPerf] = useState<{ totalSpend: number; totalConversions: number; avgCostPerConv: number; hasMetaData: boolean; lastOptimization: string | null; lastSync?: string | null; metaSpend?: number; metaConversions?: number; gadsSpend?: number; gadsConversions?: number; ttSpend?: number; ttConversions?: number } | null>(null);
+  const [metaPerf, setMetaPerf] = useState<{ totalSpend: number; totalConversions: number; avgCostPerConv: number; hasMetaData: boolean; lastOptimization: string | null; lastSync?: string | null; metaSpend?: number; metaConversions?: number; gadsSpend?: number; gadsConversions?: number; ttSpend?: number; ttConversions?: number; conversionBreakdown?: { meta?: Array<{ label: string; count: number }>; google?: Array<{ label: string; count: number }>; tiktok?: Array<{ label: string; count: number }> } } | null>(null);
   const [connectedPlatforms, setConnectedPlatforms] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (!client?.id) return;
@@ -549,6 +549,7 @@ export default function ClientDetailPage() {
             gadsConversions={metaPerf?.gadsConversions}
             ttSpend={metaPerf?.ttSpend}
             ttConversions={metaPerf?.ttConversions}
+            conversionBreakdown={metaPerf?.conversionBreakdown}
             lastSyncAt={metaPerf?.lastSync}
           />
 

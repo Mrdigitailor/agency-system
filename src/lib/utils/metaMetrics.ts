@@ -132,6 +132,36 @@ export function breakdownConversions(insights: Insight[], selectedEventRaw: stri
   });
 }
 
+/** תווית ידידותית בעברית לסוג אירוע המרה של מטא (לתצוגת שקיפות) */
+export function metaEventLabel(event: string): string {
+  const MAP: Record<string, string> = {
+    "all": "כל ההמרות",
+    "lead": "לידים (סה\"כ)",
+    "onsite_conversion.lead_grouped": "ליד — טופס בפלטפורמה",
+    "offsite_conversion.fb_pixel_lead": "ליד — אתר (פיקסל)",
+    "onsite_web_lead": "ליד — אתר",
+    "offsite_conversion.fb_pixel_complete_registration": "השלמת הרשמה",
+    "offsite_conversion.fb_pixel_purchase": "רכישה",
+    "onsite_conversion.purchase": "רכישה בפלטפורמה",
+    "offsite_conversion.fb_pixel_schedule": "תיאום פגישה",
+    "offsite_conversion.fb_pixel_contact": "יצירת קשר",
+    "offsite_conversion.fb_pixel_subscribe": "הרשמה למנוי",
+    "onsite_conversion.messaging_conversation_started_7d": "שיחה בהודעות",
+  };
+  if (MAP[event]) return MAP[event];
+  if (event.startsWith("offsite_conversion.custom.")) return "המרה מותאמת";
+  if (event.startsWith("offsite_conversion.fb_pixel_custom.")) return event.split(".").pop() ?? "המרה מותאמת";
+  return event;
+}
+
+/** פירוק המרות מטא לפי סוג, עם תוויות ידידותיות — לתצוגת שקיפות (tooltip) */
+export function breakdownConversionsLabeled(insights: Insight[], selectedEventRaw: string): Array<{ label: string; count: number }> {
+  return breakdownConversions(insights, selectedEventRaw)
+    .filter((b) => b.count > 0)
+    .map((b) => ({ label: metaEventLabel(b.event), count: Math.round(b.count) }))
+    .sort((a, b) => b.count - a.count);
+}
+
 // ==================== פירוק המרות לפי סוג (לווידג'ט "סוגי המרות") ====================
 // סופרים רק action types ספציפיים (ערוץ-מסוים) כדי לא לספור כפול:
 // מטא מדווח גם "lead" גנרי וגם onsite/offsite ספציפיים על אותם לידים.
