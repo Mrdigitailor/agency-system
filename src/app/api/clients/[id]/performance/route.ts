@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
-import { countConversions, breakdownConversions, breakdownConversionsLabeled } from "@/lib/utils/metaMetrics";
+import { countConversions } from "@/lib/utils/metaMetrics";
 import { countGoogleConversions, breakdownGoogleConversions } from "@/lib/utils/googleMetrics";
+import { countMetaCampaignResults } from "@/lib/utils/campaignResults";
 
 /**
  * GET /api/clients/[id]/performance?since=...&until=...
@@ -27,6 +28,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   });
   const selectedEventRaw = client?.metaConversionEvent ?? "";
   const googleSelectedRaw = client?.googleConversionAction ?? "";
+  // שליפה חסינה — אם העמודה עדיין לא קיימת ב-DB (לפני db push) לא לשבור את העמוד
+  let excludedCampaigns: string[] = [];
+  try {
+    const ec = await prisma.client.findUnique({ where: { id: clientId }, select: { excludedCampaigns: true } });
+    const p = JSON.parse(ec?.excludedCampaigns ?? "[]");
+    if (Array.isArray(p)) excludedCampaigns = p.filter((x) => typeof x === "string");
+  } catch { /* עמודה עדיין לא קיימת / JSON לא תקין */ }
 
   // Meta Insights — level="campaign" בלבד (אחרת adset+ad מסכמים פי 3)
   const insights = await prisma.metaInsightDaily.findMany({
@@ -39,7 +47,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const totalPurchases = insights.reduce((s, i) => s + i.purchases, 0);
   const totalPurchaseValue = insights.reduce((s, i) => s + i.purchaseValue, 0);
   const totalLeads = insights.reduce((s, i) => s + i.leads, 0);
-  const metaConversions = countConversions(insights, selectedEventRaw);
+  // ספירה פר-קמפיין לפי ה-Result של כל קמפיין (מחריג קמפיינים שסומנו), במקום סכום-אירועים על כל החשבון
+  const metaResults = countMetaCampaignResults(insights, excludedCampaigns);
+  const metaConversions = metaResults.total;
+  const metaConversionsLegacy = countConversions(insights, selectedEventRaw); // לצורך לוג/השוואה בלבד
 
   // Google Ads Insights
   const gadsInsights = await prisma.googleAdsInsightDaily.findMany({
@@ -72,10 +83,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     select: { date: true, createdAt: true },
   });
 
-  const metaBreakdown = breakdownConversions(insights, selectedEventRaw);
-  console.log(`[Performance] client=${clientId} | event="${selectedEventRaw}" | range=${since}→${until}`);
-  console.log(`  Meta: spend=${metaSpend.toFixed(2)}, filteredConversions=${metaConversions}, rawConversionsField=${insights.reduce((s, i) => s + i.conversions, 0)}, rawLeadsField=${totalLeads}, rawPurchasesField=${totalPurchases}`);
-  console.log(`  Meta breakdown by event:`, metaBreakdown.map((b) => `${b.event}=${b.count}`).join(", "));
+  // פירוק מטא לפי סוג-תוצאה (מהספירה פר-קמפיין, בלי המוחרגים) — ל-tooltip
+  const RESULT_LABELS: Record<string, string> = { leads: "לידים", registrations: "הרשמות", purchases: "רכישות", messages: "שיחות", none: "אחר" };
+  const metaByType = new Map<string, number>();
+  for (const p of metaResults.perCampaign) {
+    if (p.excluded || p.count === 0 || p.resultType === "none") continue;
+    metaByType.set(p.resultType, (metaByType.get(p.resultType) ?? 0) + p.count);
+  }
+  const metaTooltip = [...metaByType.entries()].map(([t, c]) => ({ label: RESULT_LABELS[t] ?? t, count: c })).sort((a, b) => b.count - a.count);
+
+  console.log(`[Performance] client=${clientId} | range=${since}→${until}`);
+  console.log(`  Meta: spend=${metaSpend.toFixed(2)}, perCampaignResults=${metaConversions} (legacy sum=${metaConversionsLegacy}), excluded=${excludedCampaigns.length}`);
   console.log(`  Google: spend=${gadsSpend.toFixed(2)}, conversions=${gadsConversions}`);
   console.log(`  TikTok: spend=${ttSpend.toFixed(2)}, conversions=${ttConversions}`);
   console.log(`  Total: spend=${totalSpend.toFixed(2)}, conversions=${conversions}, CPA=${avgCostPerConv.toFixed(2)}`);
@@ -101,10 +119,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     ttConversions,
     // פירוק המרות פר-פלטפורמה לפי סוג — לתצוגת שקיפות ב-tooltip
     conversionBreakdown: {
-      meta: breakdownConversionsLabeled(insights, selectedEventRaw),
+      meta: metaTooltip,
       google: breakdownGoogleConversions(gadsInsights, googleSelectedRaw),
       tiktok: ttConversions > 0 ? [{ label: "המרות (TikTok)", count: Math.round(ttConversions) }] : [],
     },
+    // ספירה פר-קמפיין (מטא) — לניהול החרגות בממשק
+    metaCampaignResults: metaResults.perCampaign,
     selectedEvent: selectedEventRaw,
     lastSync: lastSync?.lastSyncAt ?? null,
     lastOptimization: lastOpt?.date ?? (lastOpt?.createdAt ? lastOpt.createdAt.toISOString().split("T")[0] : null),

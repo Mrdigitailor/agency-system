@@ -1,8 +1,10 @@
 "use client";
 
-import { TrendingUp } from "lucide-react";
+import { useState } from "react";
+import { TrendingUp, SlidersHorizontal } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/currency";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
+import ConversionManager, { type CampaignResult } from "@/components/ui/ConversionManager";
 
 interface Props {
   currency?: string;
@@ -24,6 +26,10 @@ interface Props {
     google?: Array<{ label: string; count: number }>;
     tiktok?: Array<{ label: string; count: number }>;
   };
+  /** תוצאות פר-קמפיין (מטא) + ניהול החרגות — למנהלים */
+  clientId?: string;
+  metaCampaignResults?: CampaignResult[];
+  onExclusionsChanged?: () => void;
   lastSyncAt?: string | null;
 }
 
@@ -91,9 +97,13 @@ export default function MonthPerformanceKpis({
   ttSpend,
   ttConversions,
   conversionBreakdown,
+  clientId,
+  metaCampaignResults,
+  onExclusionsChanged,
   lastSyncAt,
 }: Props) {
   const { t } = useLanguage();
+  const [managerOpen, setManagerOpen] = useState(false);
   const hasBreakdown = (metaSpend ?? 0) > 0 || (gadsSpend ?? 0) > 0 || (ttSpend ?? 0) > 0;
   const { totalDays, daysElapsed, daysRemaining, monthPct } = getMonthProgress();
 
@@ -235,7 +245,18 @@ export default function MonthPerformanceKpis({
 
         {/* ============ קוביית המרות ============ */}
         <div className={`rounded-lg border ${convClasses.border} ${convClasses.bg} p-4`}>
-          <p className="text-xs font-medium text-brand-muted">{t('conversionsThisMonth')}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-brand-muted">{t('conversionsThisMonth')}</p>
+            {clientId && (metaCampaignResults?.length ?? 0) > 0 && (
+              <button
+                onClick={() => setManagerOpen(true)}
+                title="נהל אילו קמפיינים נספרים בהמרות"
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-brand-muted hover:bg-brand-bg hover:text-brand-dark"
+              >
+                <SlidersHorizontal className="h-3 w-3" /> נהל
+              </button>
+            )}
+          </div>
           <p className="mt-1 text-2xl font-semibold text-brand-dark">
             {conversions.toLocaleString()}
             <span className="text-sm font-normal text-brand-muted"> / {targetConversions.toLocaleString()}</span>
@@ -275,6 +296,15 @@ export default function MonthPerformanceKpis({
           )}
         </div>
       </div>
+
+      {managerOpen && clientId && metaCampaignResults && (
+        <ConversionManager
+          clientId={clientId}
+          campaigns={metaCampaignResults}
+          onClose={() => setManagerOpen(false)}
+          onSaved={() => onExclusionsChanged?.()}
+        />
+      )}
     </div>
   );
 }

@@ -52,6 +52,7 @@ model Client {
   currency      String   @default("ILS") // ILS | USD
   metaConversionEvent String @default("") // action_type שנחשב כהמרה (לדוגמה "lead", "purchase", או "offsite_conversion.custom.123")
   googleConversionAction String @default("") // JSON array של שמות conversion actions שנספרים כהמרה (ריק = כל ההמרות)
+  excludedCampaigns String @default("[]") // JSON array של campaign externalId שלא נספרים בהמרות (למשל קמפייני גיוס)
   clientType    String   @default("לידים")
   status        String   @default("active") // active | at_risk | upsell
   contactEmail  String   @default("")

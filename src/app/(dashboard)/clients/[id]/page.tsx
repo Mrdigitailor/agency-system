@@ -174,7 +174,7 @@ export default function ClientDetailPage() {
   const client = getClient(params.id as string);
 
   // נתוני ביצועים מ-Meta (החודש הנוכחי)
-  const [metaPerf, setMetaPerf] = useState<{ totalSpend: number; totalConversions: number; avgCostPerConv: number; hasMetaData: boolean; lastOptimization: string | null; lastSync?: string | null; metaSpend?: number; metaConversions?: number; gadsSpend?: number; gadsConversions?: number; ttSpend?: number; ttConversions?: number; conversionBreakdown?: { meta?: Array<{ label: string; count: number }>; google?: Array<{ label: string; count: number }>; tiktok?: Array<{ label: string; count: number }> } } | null>(null);
+  const [metaPerf, setMetaPerf] = useState<{ totalSpend: number; totalConversions: number; avgCostPerConv: number; hasMetaData: boolean; lastOptimization: string | null; lastSync?: string | null; metaSpend?: number; metaConversions?: number; gadsSpend?: number; gadsConversions?: number; ttSpend?: number; ttConversions?: number; conversionBreakdown?: { meta?: Array<{ label: string; count: number }>; google?: Array<{ label: string; count: number }>; tiktok?: Array<{ label: string; count: number }> }; metaCampaignResults?: Array<{ campaignId: string; campaignName: string; resultType: "purchases" | "leads" | "registrations" | "messages" | "none"; count: number; excluded: boolean }> } | null>(null);
   const [connectedPlatforms, setConnectedPlatforms] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (!client?.id) return;
@@ -550,6 +550,9 @@ export default function ClientDetailPage() {
             ttSpend={metaPerf?.ttSpend}
             ttConversions={metaPerf?.ttConversions}
             conversionBreakdown={metaPerf?.conversionBreakdown}
+            clientId={client.id}
+            metaCampaignResults={metaPerf?.metaCampaignResults}
+            onExclusionsChanged={() => fetch(`/api/clients/${client.id}/performance`).then((r) => r.json()).then(setMetaPerf).catch(() => {})}
             lastSyncAt={metaPerf?.lastSync}
           />
 
