@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { countConversions } from "@/lib/utils/metaMetrics";
-import { countGoogleConversions, breakdownGoogleConversions } from "@/lib/utils/googleMetrics";
-import { countMetaCampaignResults } from "@/lib/utils/campaignResults";
+import { parseGoogleActions } from "@/lib/utils/googleMetrics";
+import { countMetaCampaignResults, countGoogleCampaignResults, countTiktokCampaignResults } from "@/lib/utils/campaignResults";
 
 /**
  * GET /api/clients/[id]/performance?since=...&until=...
@@ -57,14 +57,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     where: { clientId, date: { gte: since, lte: until } },
   });
   const gadsSpend = gadsInsights.reduce((s, i) => s + i.spend, 0);
-  const gadsConversions = countGoogleConversions(gadsInsights, googleSelectedRaw);
+  const gadsResults = countGoogleCampaignResults(gadsInsights, parseGoogleActions(googleSelectedRaw), excludedCampaigns);
+  const gadsConversions = gadsResults.total;
 
   // TikTok Insights
   const ttInsights = await prisma.tikTokInsightDaily.findMany({
     where: { clientId, date: { gte: since, lte: until } },
   });
   const ttSpend = ttInsights.reduce((s, i) => s + i.spend, 0);
-  const ttConversions = ttInsights.reduce((s, i) => s + i.conversions, 0);
+  const ttResults = countTiktokCampaignResults(ttInsights, excludedCampaigns);
+  const ttConversions = ttResults.total;
 
   // Combined
   const totalSpend = metaSpend + gadsSpend + ttSpend;
@@ -83,14 +85,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     select: { date: true, createdAt: true },
   });
 
-  // פירוק מטא לפי סוג-תוצאה (מהספירה פר-קמפיין, בלי המוחרגים) — ל-tooltip
-  const RESULT_LABELS: Record<string, string> = { leads: "לידים", registrations: "הרשמות", purchases: "רכישות", messages: "שיחות", none: "אחר" };
-  const metaByType = new Map<string, number>();
-  for (const p of metaResults.perCampaign) {
-    if (p.excluded || p.count === 0 || p.resultType === "none") continue;
-    metaByType.set(p.resultType, (metaByType.get(p.resultType) ?? 0) + p.count);
-  }
-  const metaTooltip = [...metaByType.entries()].map(([t, c]) => ({ label: RESULT_LABELS[t] ?? t, count: c })).sort((a, b) => b.count - a.count);
+  // פירוק לפי סוג-תוצאה (מהספירה פר-קמפיין, בלי המוחרגים) — ל-tooltip, פר פלטפורמה
+  const RESULT_LABELS: Record<string, string> = { leads: "לידים", registrations: "הרשמות", purchases: "רכישות", messages: "שיחות", conversions: "המרות", none: "אחר" };
+  const tooltipFor = (perCampaign: typeof metaResults.perCampaign) => {
+    const byType = new Map<string, number>();
+    for (const p of perCampaign) {
+      if (p.excluded || p.count === 0 || p.resultType === "none") continue;
+      byType.set(p.resultType, (byType.get(p.resultType) ?? 0) + p.count);
+    }
+    return [...byType.entries()].map(([t, c]) => ({ label: RESULT_LABELS[t] ?? t, count: c })).sort((a, b) => b.count - a.count);
+  };
+
+  // כל הקמפיינים מכל הפלטפורמות — לניהול החרגות
+  const allCampaignResults = [...metaResults.perCampaign, ...gadsResults.perCampaign, ...ttResults.perCampaign];
 
   console.log(`[Performance] client=${clientId} | range=${since}→${until}`);
   console.log(`  Meta: spend=${metaSpend.toFixed(2)}, perCampaignResults=${metaConversions} (legacy sum=${metaConversionsLegacy}), excluded=${excludedCampaigns.length}`);
@@ -119,12 +126,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     ttConversions,
     // פירוק המרות פר-פלטפורמה לפי סוג — לתצוגת שקיפות ב-tooltip
     conversionBreakdown: {
-      meta: metaTooltip,
-      google: breakdownGoogleConversions(gadsInsights, googleSelectedRaw),
-      tiktok: ttConversions > 0 ? [{ label: "המרות (TikTok)", count: Math.round(ttConversions) }] : [],
+      meta: tooltipFor(metaResults.perCampaign),
+      google: tooltipFor(gadsResults.perCampaign),
+      tiktok: tooltipFor(ttResults.perCampaign),
     },
-    // ספירה פר-קמפיין (מטא) — לניהול החרגות בממשק
-    metaCampaignResults: metaResults.perCampaign,
+    // ספירה פר-קמפיין (כל הפלטפורמות) — לניהול החרגות בממשק
+    metaCampaignResults: allCampaignResults,
     selectedEvent: selectedEventRaw,
     lastSync: lastSync?.lastSyncAt ?? null,
     lastOptimization: lastOpt?.date ?? (lastOpt?.createdAt ? lastOpt.createdAt.toISOString().split("T")[0] : null),

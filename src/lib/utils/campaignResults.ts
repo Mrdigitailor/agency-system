@@ -12,11 +12,12 @@ const WEB_LEAD_ACTIONS = ["offsite_conversion.fb_pixel_lead", "onsite_web_lead"]
 const REG_ACTIONS = ["offsite_conversion.fb_pixel_complete_registration", "onsite_conversion.complete_registration"];
 const MSG_ACTIONS = ["onsite_conversion.messaging_conversation_started_7d", "onsite_conversion.total_messaging_connection"];
 
-export type CampaignResultType = "purchases" | "leads" | "registrations" | "messages" | "none";
+export type CampaignResultType = "purchases" | "leads" | "registrations" | "messages" | "conversions" | "none";
 
 export interface CampaignResult {
   campaignId: string;
   campaignName: string;
+  platform: "meta" | "google" | "tiktok";
   resultType: CampaignResultType;
   count: number;
   excluded: boolean;
@@ -85,7 +86,72 @@ export function countMetaCampaignResults(
   for (const [id, rs] of groups) {
     const { resultType, count } = classifyOne(rs);
     const isExcluded = excluded.has(id);
-    perCampaign.push({ campaignId: id, campaignName: rs[0].name || "(ללא שם)", resultType, count, excluded: isExcluded });
+    perCampaign.push({ campaignId: id, campaignName: rs[0].name || "(ללא שם)", platform: "meta", resultType, count, excluded: isExcluded });
+    if (!isExcluded) total += count;
+  }
+  perCampaign.sort((a, b) => b.count - a.count);
+  return { total, perCampaign };
+}
+
+// ==================== Google + TikTok — ספירה פר-קמפיין ====================
+// אצל גוגל/טיקטוק ה-"conversions" של הקמפיין הוא כבר ה-Result שלו (הפלטפורמה
+// מייחסת המרות פר-קמפיין). אין objective כמו במטא, אז סוג התוצאה = "המרות".
+
+interface GoogleRow { campaignId: string; campaignName: string; conversions: number; conversionsByAction: string }
+interface TiktokRow { campaignId: string; campaignName: string; conversions: number }
+
+/** סופר המרות Google פר-קמפיין (לפי הפעולות שנבחרו), מחריג קמפיינים שסומנו */
+export function countGoogleCampaignResults(
+  rows: GoogleRow[],
+  selectedActions: string[],
+  excludedCampaignIds: string[] = [],
+): { total: number; perCampaign: CampaignResult[] } {
+  const excluded = new Set(excludedCampaignIds);
+  const useSelected = selectedActions.length > 0;
+  const groups = new Map<string, { name: string; count: number }>();
+  for (const r of rows) {
+    const id = r.campaignId || r.campaignName;
+    const e = groups.get(id) ?? { name: r.campaignName || "(ללא שם)", count: 0 };
+    if (useSelected) {
+      let byAction: Record<string, number> = {};
+      try { byAction = JSON.parse(r.conversionsByAction || "{}"); } catch { byAction = {}; }
+      for (const a of selectedActions) e.count += byAction[a] ?? 0;
+    } else {
+      e.count += r.conversions;
+    }
+    groups.set(id, e);
+  }
+  const perCampaign: CampaignResult[] = [];
+  let total = 0;
+  for (const [id, g] of groups) {
+    const isExcluded = excluded.has(id);
+    const count = Math.round(g.count);
+    perCampaign.push({ campaignId: id, campaignName: g.name, platform: "google", resultType: "conversions", count, excluded: isExcluded });
+    if (!isExcluded) total += count;
+  }
+  perCampaign.sort((a, b) => b.count - a.count);
+  return { total, perCampaign };
+}
+
+/** סופר המרות TikTok פר-קמפיין, מחריג קמפיינים שסומנו */
+export function countTiktokCampaignResults(
+  rows: TiktokRow[],
+  excludedCampaignIds: string[] = [],
+): { total: number; perCampaign: CampaignResult[] } {
+  const excluded = new Set(excludedCampaignIds);
+  const groups = new Map<string, { name: string; count: number }>();
+  for (const r of rows) {
+    const id = r.campaignId || r.campaignName;
+    const e = groups.get(id) ?? { name: r.campaignName || "(ללא שם)", count: 0 };
+    e.count += r.conversions;
+    groups.set(id, e);
+  }
+  const perCampaign: CampaignResult[] = [];
+  let total = 0;
+  for (const [id, g] of groups) {
+    const isExcluded = excluded.has(id);
+    const count = Math.round(g.count);
+    perCampaign.push({ campaignId: id, campaignName: g.name, platform: "tiktok", resultType: "conversions", count, excluded: isExcluded });
     if (!isExcluded) total += count;
   }
   perCampaign.sort((a, b) => b.count - a.count);

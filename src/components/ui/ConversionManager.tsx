@@ -7,13 +7,18 @@ import Modal from "@/components/ui/Modal";
 export interface CampaignResult {
   campaignId: string;
   campaignName: string;
-  resultType: "purchases" | "leads" | "registrations" | "messages" | "none";
+  platform: "meta" | "google" | "tiktok";
+  resultType: "purchases" | "leads" | "registrations" | "messages" | "conversions" | "none";
   count: number;
   excluded: boolean;
 }
 
 const RESULT_LABEL: Record<string, string> = {
-  purchases: "רכישות", leads: "לידים", registrations: "הרשמות", messages: "שיחות", none: "—",
+  purchases: "רכישות", leads: "לידים", registrations: "הרשמות", messages: "שיחות", conversions: "המרות", none: "—",
+};
+const PLATFORM_LABEL: Record<string, string> = { meta: "Meta", google: "Google", tiktok: "TikTok" };
+const PLATFORM_COLOR: Record<string, string> = {
+  meta: "bg-[#1877F2]/10 text-[#1877F2]", google: "bg-[#4285F4]/10 text-[#4285F4]", tiktok: "bg-black/10 text-black",
 };
 
 /** ניקוי שם קמפיין לתצוגה — הסרת קידומות פנימיות */
@@ -70,9 +75,10 @@ export default function ConversionManager({
           {rows.map((c) => {
             const on = !excluded.has(c.campaignId);
             return (
-              <label key={c.campaignId} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 hover:bg-brand-bg">
+              <label key={`${c.platform}-${c.campaignId}`} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 hover:bg-brand-bg">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <input type="checkbox" checked={on} onChange={() => toggle(c.campaignId)} className="h-4 w-4 shrink-0 rounded border-brand-border accent-brand-gold" />
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${PLATFORM_COLOR[c.platform]}`}>{PLATFORM_LABEL[c.platform]}</span>
                   <span className={`truncate text-sm ${on ? "text-brand-dark" : "text-brand-muted line-through"}`}>{cleanName(c.campaignName)}</span>
                 </div>
                 <span className="shrink-0 text-xs text-brand-muted">
