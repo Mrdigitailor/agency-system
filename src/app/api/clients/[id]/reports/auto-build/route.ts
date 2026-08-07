@@ -9,15 +9,19 @@ export const dynamic = "force-dynamic";
  * בונה "דשבורד חכם" — ClientReport חדש עם ווידג'טים שנגזרים אוטומטית
  * מפרופיל העסק (סוג עסק, פלטפורמות פעילות, כוכב הצפון).
  */
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const { id: clientId } = await params;
 
+  // variant "deep" — דשבורד מפורט פר-מוצר (דמוגרפיה + קהלים + מודעות)
+  let variant: "standard" | "deep" = "standard";
+  try { const body = await req.json(); if (body?.variant === "deep") variant = "deep"; } catch { /* בלי גוף — ברירת מחדל */ }
+
   try {
-    const result = await buildSmartDashboard(clientId);
+    const result = await buildSmartDashboard(clientId, { variant });
     return NextResponse.json(
-      { ...result.report, widgetCount: result.widgetCount, businessType: result.businessType, platforms: result.platforms },
+      { ...result.report, widgetCount: result.widgetCount, businessType: result.businessType, platforms: result.platforms, products: result.products, variant: result.variant },
       { status: 201 },
     );
   } catch (err) {

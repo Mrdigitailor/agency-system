@@ -10,6 +10,7 @@ import { normalizeName } from "@/lib/reports/group-by-product";
 import { fetchAnalytics, type AnalyticsData } from "@/lib/api/ga4/client";
 import { getValidGoogleToken } from "@/lib/api/google-ads/client";
 import { fetchGoogleSegment, type GoogleSegment, type SegmentRow } from "@/lib/api/google-ads/segments";
+import { fetchMetaSegment, type MetaSegment, type MetaSegmentRow } from "@/lib/api/meta/segments";
 import { METRIC_BY_ID, PLATFORM_LABELS, type Platform, type DisplayType, type Dimension } from "./metrics";
 
 export interface DateRange { since: string; until: string }
@@ -50,11 +51,11 @@ function changePct(value: number, prev: number | null): number | null {
 }
 
 // ---------- רכיבי מטריקה (לחישוב מטריקות נגזרות מסכומים) ----------
-interface Components { spend: number; impressions: number; clicks: number; conversions: number; purchaseValue: number; reach: number; linkClicks: number; landingPageViews: number }
-const zero = (): Components => ({ spend: 0, impressions: 0, clicks: 0, conversions: 0, purchaseValue: 0, reach: 0, linkClicks: 0, landingPageViews: 0 });
+interface Components { spend: number; impressions: number; clicks: number; conversions: number; purchaseValue: number; reach: number; linkClicks: number; landingPageViews: number; leads: number }
+const zero = (): Components => ({ spend: 0, impressions: 0, clicks: 0, conversions: 0, purchaseValue: 0, reach: 0, linkClicks: 0, landingPageViews: 0, leads: 0 });
 function addInto(a: Components, b: Components) {
   a.spend += b.spend; a.impressions += b.impressions; a.clicks += b.clicks; a.conversions += b.conversions; a.purchaseValue += b.purchaseValue;
-  a.reach += b.reach; a.linkClicks += b.linkClicks; a.landingPageViews += b.landingPageViews;
+  a.reach += b.reach; a.linkClicks += b.linkClicks; a.landingPageViews += b.landingPageViews; a.leads += b.leads;
 }
 function metricValue(id: string, c: Components): number {
   switch (id) {
@@ -72,6 +73,9 @@ function metricValue(id: string, c: Components): number {
     case "cpc": return c.clicks > 0 ? c.spend / c.clicks : 0;
     case "cpm": return c.impressions > 0 ? (c.spend / c.impressions) * 1000 : 0;
     case "roas": return c.spend > 0 ? c.purchaseValue / c.spend : 0;
+    case "leads": return c.leads;
+    case "cpl": return c.leads > 0 ? c.spend / c.leads : 0;
+    case "cplc": return c.linkClicks > 0 ? c.spend / c.linkClicks : 0;
     default: return 0;
   }
 }
@@ -82,9 +86,9 @@ interface GoogleRow { spend: number; impressions: number; clicks: number; conver
 interface TiktokRow { spend: number; impressions: number; clicks: number; conversions: number; campaignName: string; date: string }
 
 const sum = <T>(rows: T[], f: (r: T) => number) => rows.reduce((s, r) => s + (f(r) || 0), 0);
-const metaComp = (rows: MetaRow[], event: string): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: sum(rows, r => r.purchaseValue), conversions: countConversions(rows, event), reach: sum(rows, r => r.reach), linkClicks: sum(rows, r => r.linkClicks), landingPageViews: sum(rows, r => r.landingPageViews) });
-const googleComp = (rows: GoogleRow[], action: string): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: sum(rows, r => r.conversionsValue), conversions: countGoogleConversions(rows, action), reach: 0, linkClicks: 0, landingPageViews: 0 });
-const tiktokComp = (rows: TiktokRow[]): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: 0, conversions: sum(rows, r => r.conversions), reach: 0, linkClicks: 0, landingPageViews: 0 });
+const metaComp = (rows: MetaRow[], event: string): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: sum(rows, r => r.purchaseValue), conversions: countConversions(rows, event), reach: sum(rows, r => r.reach), linkClicks: sum(rows, r => r.linkClicks), landingPageViews: sum(rows, r => r.landingPageViews), leads: sum(rows, r => r.leads) });
+const googleComp = (rows: GoogleRow[], action: string): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: sum(rows, r => r.conversionsValue), conversions: countGoogleConversions(rows, action), reach: 0, linkClicks: 0, landingPageViews: 0, leads: 0 });
+const tiktokComp = (rows: TiktokRow[]): Components => ({ spend: sum(rows, r => r.spend), impressions: sum(rows, r => r.impressions), clicks: sum(rows, r => r.clicks), purchaseValue: 0, conversions: sum(rows, r => r.conversions), reach: 0, linkClicks: 0, landingPageViews: 0, leads: 0 });
 
 // ---------- caches משותפים לבקשה ----------
 interface AdRows { meta: MetaRow[]; google: GoogleRow[]; tiktok: TiktokRow[] }
@@ -120,7 +124,11 @@ const isText = (w: WidgetConfig) => w.displayType === "heading" || w.displayType
 const wantsCompare = (w: WidgetConfig) => w.compare && (w.displayType === "kpi" || w.dimension === "none") && !isText(w);
 
 const SEGMENT_DIMS = new Set(["age", "gender", "device"]);
-const isSegment = (w: WidgetConfig) => w.platform === "google_ads" && SEGMENT_DIMS.has(w.dimension);
+const isSegment = (w: WidgetConfig) => (w.platform === "google_ads" || w.platform === "meta") && SEGMENT_DIMS.has(w.dimension);
+// טבלת קהלים (adset) / מודעות (ad) — Meta בלבד, טבלה
+const isMetaSublevel = (w: WidgetConfig) => w.platform === "meta" && (w.dimension === "adset" || w.dimension === "ad");
+// מפתח cache לפילוח: פלטפורמה|ממד|סינון-קמפיין (מטא תומך פר-מוצר; גוגל ברמת חשבון)
+const segKey = (w: WidgetConfig) => `${w.platform}|${w.dimension}|${w.platform === "meta" ? (w.campaignFilter ?? "") : ""}`;
 const isSearchTerm = (w: WidgetConfig) => (w.platform === "google_ads" || w.platform === "all") && w.dimension === "searchTerm";
 
 // ---------- מונחי חיפוש (Google Ads) ----------
@@ -157,9 +165,16 @@ function searchTermToData(w: WidgetConfig, rows: SearchTermAgg[]): WidgetData {
   };
 }
 
-function segmentToData(w: WidgetConfig, rows: SegmentRow[]): WidgetData {
-  const metricId = w.metrics.find((m) => ["spend", "clicks", "conversions"].includes(m)) ?? "conversions";
-  const val = (r: SegmentRow) => (metricId === "spend" ? r.spend : metricId === "clicks" ? r.clicks : r.conversions);
+// שורת פילוח משותפת לגוגל (SegmentRow) ולמטא (MetaSegmentRow)
+type AnySegRow = SegmentRow & Partial<MetaSegmentRow>;
+function segmentToData(w: WidgetConfig, rows: AnySegRow[]): WidgetData {
+  const metricId = w.metrics.find((m) => ["spend", "clicks", "conversions", "leads", "purchases"].includes(m)) ?? "conversions";
+  const val = (r: AnySegRow) =>
+    metricId === "spend" ? r.spend
+      : metricId === "clicks" ? r.clicks
+        : metricId === "leads" ? (r.leads ?? r.conversions)
+          : metricId === "purchases" ? (r.purchases ?? r.conversions)
+            : r.conversions;
   const slices = rows.map((r) => ({ label: r.label, value: Math.round(val(r) * 100) / 100 })).filter((s) => s.value > 0);
   if (slices.length === 0) return { type: "empty", reason: "אין נתונים דמוגרפיים בתקופה" };
   const label = METRIC_BY_ID[metricId]?.label ?? "";
@@ -293,6 +308,72 @@ function filterAdRows(ad: AdRows, filter: string): AdRows {
     meta: ad.meta.filter((r) => normalizeName(r.name).includes(f)),
     google: ad.google.filter((r) => normalizeName(r.campaignName).includes(f)),
     tiktok: ad.tiktok.filter((r) => normalizeName(r.campaignName).includes(f)),
+  };
+}
+
+// ---------- טבלאות קהלים (adset) / מודעות (ad) — Meta ----------
+// הנתונים מסונכרנים ב-MetaInsightDaily ברמות adset/ad עם parentId (היררכיה).
+interface MetaSubRow extends MetaRow { externalId: string; parentId: string }
+
+interface MetaSubCtx {
+  adset: MetaSubRow[];
+  ad: MetaSubRow[];
+  campIdToName: Map<string, string>; // campaign_id → name (לסינון פר-מוצר)
+  adsetIdToParent: Map<string, string>; // adset_id → campaign_id
+}
+
+/** שליפת שורות adset+ad + מיפוי היררכיה, פעם אחת לכל בקשה (רק אם יש ווידג'ט כזה) */
+async function getMetaSubCtx(clientId: string, range: DateRange): Promise<MetaSubCtx> {
+  const date = { gte: range.since, lte: range.until };
+  const [camps, adset, ad] = await Promise.all([
+    prisma.metaInsightDaily.findMany({ where: { clientId, level: "campaign", date }, select: { externalId: true, name: true } }),
+    prisma.metaInsightDaily.findMany({ where: { clientId, level: "adset", date } }),
+    prisma.metaInsightDaily.findMany({ where: { clientId, level: "ad", date } }),
+  ]);
+  const campIdToName = new Map<string, string>();
+  for (const c of camps) if (c.externalId) campIdToName.set(c.externalId, c.name || "");
+  const adsetIdToParent = new Map<string, string>();
+  for (const a of adset as MetaSubRow[]) if (a.externalId) adsetIdToParent.set(a.externalId, a.parentId || "");
+  return { adset: adset as MetaSubRow[], ad: ad as MetaSubRow[], campIdToName, adsetIdToParent };
+}
+
+function metaSublevelTable(w: WidgetConfig, ctx: ClientCtx, sub: MetaSubCtx): WidgetData {
+  const level = w.dimension as "adset" | "ad";
+  const rows = level === "adset" ? sub.adset : sub.ad;
+  const metrics = w.metrics.filter((m) => METRIC_BY_ID[m]?.platforms.includes("meta"));
+  if (metrics.length === 0) return { type: "empty", reason: "לא נבחרו מטריקות" };
+
+  // סינון פר-מוצר: מוצאים את הקמפיינים ששמם תואם, ודרך ההיררכיה מסננים adset/ad
+  let allowedParents: Set<string> | null = null;
+  if (w.campaignFilter) {
+    const f = normalizeName(w.campaignFilter);
+    const matchCampaigns = new Set([...sub.campIdToName].filter(([, name]) => normalizeName(name).includes(f)).map(([id]) => id));
+    if (level === "adset") {
+      allowedParents = matchCampaigns; // adset.parentId = campaign_id
+    } else {
+      // ad.parentId = adset_id → מותרים רק adsets שהקמפיין-אב שלהם תואם
+      allowedParents = new Set([...sub.adsetIdToParent].filter(([, cid]) => matchCampaigns.has(cid)).map(([aid]) => aid));
+    }
+  }
+  const filtered = allowedParents ? rows.filter((r) => allowedParents!.has(r.parentId)) : rows;
+  if (filtered.length === 0) return { type: "empty", reason: level === "adset" ? "אין נתוני קהלים בתקופה" : "אין נתוני מודעות בתקופה" };
+
+  // קיבוץ לפי המזהה (externalId) — שם לתצוגה. מונע מיזוג ישויות שונות בעלות אותו שם.
+  const byId = new Map<string, { label: string; rows: MetaSubRow[] }>();
+  for (const r of filtered) {
+    const key = r.externalId || r.name || "(ללא שם)";
+    const e = byId.get(key) ?? { label: r.name || "(ללא שם)", rows: [] };
+    e.rows.push(r); byId.set(key, e);
+  }
+  const sortMetric = metrics[0];
+  const entries = [...byId.values()]
+    .map((e) => ({ label: e.label, comp: metaComp(e.rows, ctx.metaConversionEvent) }))
+    .sort((a, b) => metricValue(sortMetric, b.comp) - metricValue(sortMetric, a.comp))
+    .slice(0, 20);
+  return {
+    type: "table",
+    columns: [{ id: "name", label: level === "adset" ? "קהל" : "מודעה" }, ...metrics.map((id) => ({ id, label: METRIC_BY_ID[id].label }))],
+    rows: entries.map((e) => [e.label, ...metrics.map((id) => Math.round(metricValue(id, e.comp) * 100) / 100)]),
   };
 }
 
@@ -490,16 +571,18 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
   const prevAdCache: AdCache = {};
   const prevGa4Cache: Ga4Cache = { loaded: false, data: null };
 
-  const dataWidgets = widgets.filter((w) => !isText(w) && !isSegment(w) && !isSearchTerm(w));
+  const dataWidgets = widgets.filter((w) => !isText(w) && !isSegment(w) && !isSearchTerm(w) && !isMetaSublevel(w));
   const needsAd = dataWidgets.some((w) => w.platform !== "ga4");
   const needsGa4 = dataWidgets.some((w) => w.platform === "ga4");
   const needsCompare = dataWidgets.some(wantsCompare);
   const prev = needsCompare ? previousRange(range) : null;
   const emptyAd: AdRows = { meta: [], google: [], tiktok: [] };
 
-  // פילוחים דמוגרפיים — שליפה חיה מ-Google Ads (קריאה אחת לכל פילוח)
-  const segCache = new Map<string, SegmentRow[]>();
-  const segDims = [...new Set(widgets.filter(isSegment).map((w) => w.dimension))];
+  // פילוחים דמוגרפיים — שליפה חיה (גוגל ברמת חשבון, מטא פר-מוצר). קריאה אחת לכל צירוף.
+  const segCache = new Map<string, AnySegRow[]>();
+  const segWidgets = widgets.filter(isSegment);
+  const segJobs = new Map<string, WidgetConfig>();
+  for (const w of segWidgets) if (!segJobs.has(segKey(w))) segJobs.set(segKey(w), w);
 
   // מונחי חיפוש — שליפה מה-DB לכל צירוף (campaignFilter). מפתח ריק = כל הקמפיינים.
   const stCache = new Map<string, SearchTermAgg[]>();
@@ -513,22 +596,33 @@ export async function computeDashboard(widgets: WidgetConfig[], ctx: ClientCtx, 
   const needsReach = dataWidgets.some((w) => (w.platform === "meta" || w.platform === "all") && (w.displayType === "kpi" || w.dimension === "none") && !w.campaignFilter && w.metrics.includes("reach"));
   let liveReach: number | null = null;
 
+  // טבלאות קהלים/מודעות (Meta) — שליפת שורות adset/ad + היררכיה, פעם אחת
+  const needsSub = widgets.some(isMetaSublevel);
+  let metaSub: MetaSubCtx | null = null;
+
   const [ad, , prevAd] = await Promise.all([
     needsAd ? getAdRows(ctx, range, adCache) : Promise.resolve(emptyAd),
     needsGa4 ? getGa4(ctx, range, ga4Cache) : Promise.resolve(null),
     needsCompare && needsAd && prev ? getAdRows(ctx, prev, prevAdCache) : Promise.resolve(emptyAd),
     needsCompare && needsGa4 && prev ? getGa4(ctx, prev, prevGa4Cache) : Promise.resolve(null),
-    ...segDims.map(async (d) => { segCache.set(d, await fetchGoogleSegment(ctx.clientId, range.since, range.until, d as GoogleSegment)); }),
+    ...[...segJobs.entries()].map(async ([key, w]) => {
+      const rows = w.platform === "meta"
+        ? await fetchMetaSegment(ctx.clientId, range.since, range.until, w.dimension as MetaSegment, w.campaignFilter || undefined)
+        : await fetchGoogleSegment(ctx.clientId, range.since, range.until, w.dimension as GoogleSegment);
+      segCache.set(key, rows);
+    }),
     ...stKeys.map(async (k) => { stCache.set(k, await fetchSearchTerms(ctx, range, k || undefined)); }),
     ...(needsActionNames ? [resolveMetaCustomNames(ctx.clientId).then((m) => { customNames = m; })] : []),
     ...(needsReach ? [fetchAccountReach(ctx.clientId, range).then((v) => { liveReach = v; })] : []),
+    ...(needsSub ? [getMetaSubCtx(ctx.clientId, range).then((v) => { metaSub = v; })] : []),
   ]);
 
   return widgets.map((w) => {
     let data: WidgetData;
     if (isText(w)) data = { type: "text", heading: w.displayType === "heading", body: w.textBody };
-    else if (isSegment(w)) data = segmentToData(w, segCache.get(w.dimension) ?? []);
+    else if (isSegment(w)) data = segmentToData(w, segCache.get(segKey(w)) ?? []);
     else if (isSearchTerm(w)) data = searchTermToData(w, stCache.get(w.campaignFilter ?? "") ?? []);
+    else if (isMetaSublevel(w)) data = metaSub ? metaSublevelTable(w, ctx, metaSub) : { type: "empty", reason: "אין נתונים" };
     else if (w.platform === "ga4") data = computeGa4Widget(w, ga4Cache.data, prevGa4Cache.data);
     else data = computeAdWidget(w, ctx, ad, prevAd, customNames, liveReach);
     return { widgetId: w.id, data };

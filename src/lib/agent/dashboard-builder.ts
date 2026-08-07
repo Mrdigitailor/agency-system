@@ -37,6 +37,50 @@ async function getActivePlatforms(clientId: string): Promise<Array<"meta" | "goo
   return active;
 }
 
+// ---------- חילוץ מוצרים משמות קמפיינים (כשאין מוצרים בפרופיל) ----------
+// גנרי לכל לקוח: מפצל שם-קמפיין לסגמנטים (לפי "|"), מזהה את הסגמנט הכי
+// ייחודי (התדירות הנמוכה ביותר על-פני הקמפיינים) — זהו המוצר. סגמנטים חוזרים
+// (Nova / Lead Gen / B2B / שם-הסוכנות) הם boilerplate בתדירות גבוהה ומסוננים.
+const DATE_SEG = /^\d{1,2}[./-]\d{1,2}([./-]\d{2,4})?$/;
+function splitSegments(name: string): string[] {
+  return name.split("|").map((s) => s.trim()).filter((s) => s && !DATE_SEG.test(s));
+}
+
+/** מחלץ שמות מוצר מובחנים מרשימת שמות-קמפיינים (מבוסס-תדירות, ללא hardcode) */
+export function extractProductsFromNames(names: string[]): string[] {
+  const clean = names.filter(Boolean);
+  if (clean.length < 2) return [];
+  // תדירות כל סגמנט (מנורמל) על-פני הקמפיינים
+  const freq = new Map<string, number>();
+  const parsed = clean.map((n) => {
+    const seen = new Map<string, string>(); // norm → raw (ייצוג אחד לכל סגמנט בקמפיין)
+    for (const raw of splitSegments(n)) { const norm = normalizeName(raw); if (norm && !seen.has(norm)) seen.set(norm, raw); }
+    for (const norm of seen.keys()) freq.set(norm, (freq.get(norm) ?? 0) + 1);
+    return [...seen.entries()].map(([norm, raw]) => ({ norm, raw }));
+  });
+  const products = new Set<string>();
+  for (const segs of parsed) {
+    if (!segs.length) continue;
+    // המובחן ביותר: תדירות מינימלית; שובר-שוויון = הסגמנט הארוך יותר
+    const best = segs.slice().sort((a, b) => (freq.get(a.norm)! - freq.get(b.norm)!) || (b.raw.length - a.raw.length))[0];
+    // מתעלמים מסגמנט שמופיע כמעט בכל הקמפיינים (boilerplate טהור, לא מוצר)
+    if (best && freq.get(best.norm)! <= Math.max(2, Math.ceil(clean.length * 0.6))) products.add(best.raw);
+  }
+  return [...products].slice(0, 20);
+}
+
+/** מוצרים פעילים ללקוח — קודם מהפרופיל, ואם ריק: חילוץ משמות הקמפיינים */
+async function getDeepProducts(clientId: string): Promise<string[]> {
+  const fromProfile = await getActiveProducts(clientId);
+  if (fromProfile.length > 0) return fromProfile;
+  const since = shiftYmd(todayIL(), -30);
+  const camps = await prisma.metaInsightDaily.findMany({
+    where: { clientId, level: "campaign", date: { gte: since }, spend: { gt: 0 } },
+    select: { name: true }, distinct: ["name"],
+  });
+  return extractProductsFromNames(camps.map((c) => c.name));
+}
+
 /**
  * מוצרים מהפרופיל שיש להם קמפיין תואם ב-30 הימים האחרונים (התאמת שם-מכיל,
  * כמו בדוח השבועי). רק להם נבנה סקשן — בלי סקשנים ריקים.
@@ -154,23 +198,87 @@ function buildRecipe(type: BusinessType, clientName: string, platforms: string[]
 }
 
 /**
+ * מתכון "עמוק" בסגנון הכלים הישנים (Alma/Oviond): סקשן FB עשיר + סקשן מפורט
+ * לכל מוצר (7 KPI + לידים לפי גיל/מכשיר + מגמת לידים ועלות + טבלאות
+ * קמפיינים/קהלים/מודעות) + סיכום Google. מבוסס על אבני-הבניין: פילוח דמוגרפי
+ * מטא, טבלאות adset/ad, ומטריקות leads/cpl/cplc. גנרי לכל לקוח.
+ */
+function buildDeepRecipe(type: BusinessType, clientName: string, platforms: string[], products: string[]): WidgetSpec[] {
+  const specs: WidgetSpec[] = [];
+  const isEcom = type === "ecommerce";
+  const hasMeta = platforms.includes("meta");
+  const hasGoogle = platforms.includes("google_ads");
+  // מדד ה"תוצאה" הדמוגרפי: לידים לעסק-לידים, המרות (=רכישות) לאיקומרס
+  const resultMetric = isEcom ? "conversions" : "leads";
+  const resultWord = isEcom ? "המרות" : "לידים";
+
+  specs.push({ platform: "all", metrics: [], displayType: "heading", dimension: "none", size: "full", title: `תמונת מצב — ${clientName}` });
+
+  // ===== סקשן Meta (פייסבוק) — סיכום עשיר =====
+  if (hasMeta) {
+    specs.push({ platform: "meta", metrics: [], displayType: "platform_header", dimension: "none", size: "full", title: "" });
+    const summaryKpi = isEcom
+      ? ["spend", "purchaseValue", "roas", "conversions", "cpa", "impressions", "ctr", "reach"]
+      : ["cplc", "linkClicks", "reach", "impressions", "spend", "leads", "cpl", "ctr"];
+    specs.push({ platform: "meta", metrics: summaryKpi, displayType: "kpi", dimension: "none", size: "full", title: "סיכום פייסבוק", compare: true });
+    specs.push({ platform: "meta", metrics: [resultMetric], displayType: "line", dimension: "date", size: "full", title: `${resultWord} לפי יום` });
+    specs.push({ platform: "meta", metrics: ["impressions", "clicks", "ctr"], displayType: "table", dimension: "campaign", size: "full", title: "ביצועים לפי קמפיין" });
+  }
+
+  // ===== סקשן מפורט לכל מוצר (Meta) =====
+  const productKpi = isEcom
+    ? ["spend", "purchaseValue", "roas", "conversions", "cpa", "ctr", "clicks"]
+    : ["cpc", "ctr", "clicks", "impressions", "spend", "cpl", "leads"];
+  const creativeCols = isEcom ? ["spend", "conversions", "cpa"] : ["spend", "leads", "cpl"];
+  if (hasMeta) {
+    for (const product of products) {
+      specs.push({ platform: "all", metrics: [], displayType: "heading", dimension: "none", size: "full", title: product });
+      specs.push({ platform: "meta", metrics: productKpi, displayType: "kpi", dimension: "none", size: "full", title: "", compare: true, campaignFilter: product });
+      specs.push({ platform: "meta", metrics: [resultMetric], displayType: "pie", dimension: "age", size: "half", title: `${resultWord} לפי גיל`, campaignFilter: product });
+      specs.push({ platform: "meta", metrics: [resultMetric], displayType: "pie", dimension: "device", size: "half", title: `${resultWord} לפי מכשיר`, campaignFilter: product });
+      // שני גרפים נפרדים (סקאלות שונות): מגמת התוצאה + מגמת העלות-לתוצאה
+      specs.push({ platform: "meta", metrics: [resultMetric], displayType: "line", dimension: "date", size: "half", title: `${resultWord} לאורך זמן`, campaignFilter: product });
+      specs.push({ platform: "meta", metrics: isEcom ? ["cpa"] : ["cpl"], displayType: "line", dimension: "date", size: "half", title: `עלות ל${isEcom ? "המרה" : "ליד"} לאורך זמן`, campaignFilter: product });
+      specs.push({ platform: "meta", metrics: ["impressions", "clicks", "ctr"], displayType: "table", dimension: "campaign", size: "full", title: "קמפיינים", campaignFilter: product });
+      specs.push({ platform: "meta", metrics: ["impressions", "clicks", "ctr"], displayType: "table", dimension: "adset", size: "full", title: "קהלים", campaignFilter: product });
+      specs.push({ platform: "meta", metrics: creativeCols, displayType: "table", dimension: "ad", size: "full", title: "מודעות", campaignFilter: product });
+    }
+  }
+
+  // ===== סקשן Google — סיכום =====
+  if (hasGoogle) {
+    specs.push({ platform: "google_ads", metrics: [], displayType: "platform_header", dimension: "none", size: "full", title: "" });
+    specs.push({ platform: "google_ads", metrics: ["spend", "conversions", "cpa"], displayType: "kpi", dimension: "none", size: "full", title: "סיכום Google", compare: true });
+    specs.push({ platform: "google_ads", metrics: ["conversions"], displayType: "pie", dimension: "action", size: "half", title: "סוגי המרות" });
+    specs.push({ platform: "google_ads", metrics: ["conversions"], displayType: "line", dimension: "date", size: "half", title: "המרות לאורך זמן" });
+    specs.push({ platform: "google_ads", metrics: ["spend", "conversions", "cpa"], displayType: "table", dimension: "campaign", size: "full", title: "קמפיינים (Google)" });
+  }
+
+  return specs;
+}
+
+/**
  * בונה דשבורד חכם ללקוח: ClientReport חדש + סט ווידג'טים שנגזר מפרופיל העסק.
+ * variant "deep" — מבנה עשיר בסגנון הכלים הישנים (פר-מוצר עם דמוגרפיה+קהלים+מודעות).
  * מחזיר את הדוח שנוצר.
  */
-export async function buildSmartDashboard(clientId: string) {
+export async function buildSmartDashboard(clientId: string, opts: { variant?: "standard" | "deep" } = {}) {
+  const variant = opts.variant ?? "standard";
   const [client, platforms, products] = await Promise.all([
     prisma.client.findUnique({ where: { id: clientId }, select: { name: true, clientType: true } }),
     getActivePlatforms(clientId),
-    getActiveProducts(clientId),
+    variant === "deep" ? getDeepProducts(clientId) : getActiveProducts(clientId),
   ]);
   if (!client) throw new Error("לקוח לא נמצא");
 
   const type = classifyBusinessType(client.clientType);
-  const specs = buildRecipe(type, client.name, platforms, products);
+  const specs = variant === "deep"
+    ? buildDeepRecipe(type, client.name, platforms, products)
+    : buildRecipe(type, client.name, platforms, products);
 
   const count = await prisma.clientReport.count({ where: { clientId } });
   const report = await prisma.clientReport.create({
-    data: { clientId, name: "דשבורד חכם", sortOrder: count },
+    data: { clientId, name: variant === "deep" ? "דשבורד מפורט" : "דשבורד חכם", sortOrder: count },
   });
 
   await prisma.dashboardWidget.createMany({
@@ -191,5 +299,5 @@ export async function buildSmartDashboard(clientId: string) {
     })),
   });
 
-  return { report, widgetCount: specs.length, businessType: type, platforms };
+  return { report, widgetCount: specs.length, businessType: type, platforms, products, variant };
 }

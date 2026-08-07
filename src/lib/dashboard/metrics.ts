@@ -3,7 +3,7 @@ import { getCurrencySymbol } from "@/lib/utils/currency";
 
 export type Platform = "meta" | "google_ads" | "tiktok" | "ga4" | "all";
 export type DisplayType = "kpi" | "line" | "area" | "bar" | "pie" | "table" | "heading" | "text" | "platform_header";
-export type Dimension = "none" | "date" | "week" | "month" | "platform" | "campaign" | "channel" | "action" | "searchTerm" | "age" | "gender" | "device";
+export type Dimension = "none" | "date" | "week" | "month" | "platform" | "campaign" | "adset" | "ad" | "channel" | "action" | "searchTerm" | "age" | "gender" | "device";
 
 export interface MetricDef {
   id: string;
@@ -30,7 +30,10 @@ export const METRICS: MetricDef[] = [
   // reach = משתמשים ייחודיים; לא ניתן לסכימה יומית ולכן נשלף חי ברמת החשבון לטווח.
   { id: "reach", label: "משתמשים ייחודיים (Reach)", platforms: META_ALL, unit: "number", kind: "additive" },
   { id: "linkClicks", label: "קליקים למעבר לאתר", platforms: META_ALL, unit: "number", kind: "additive" },
+  { id: "cplc", label: "עלות לקליק-קישור", platforms: META_ALL, unit: "currency", kind: "derived" },
   { id: "landingPageViews", label: "צפיות בדף נחיתה", platforms: META_ALL, unit: "number", kind: "additive" },
+  { id: "leads", label: "לידים", platforms: META_ALL, unit: "number", kind: "additive" },
+  { id: "cpl", label: "עלות לליד", platforms: META_ALL, unit: "currency", kind: "derived" },
   { id: "purchaseValue", label: "ערך רכישות", platforms: ["meta", "all"], unit: "currency", kind: "additive" },
   { id: "roas", label: "ROAS", platforms: ["meta", "all"], unit: "ratio", kind: "derived" },
   // GA4
@@ -75,12 +78,14 @@ export const DIMENSION_LABELS: Record<Dimension, string> = {
   month: "לפי חודש",
   platform: "לפי פלטפורמה",
   campaign: "לפי קמפיין",
+  adset: "לפי קהל (Meta)",
+  ad: "לפי מודעה (Meta)",
   channel: "לפי ערוץ",
   action: "לפי סוג המרה",
   searchTerm: "לפי מונח חיפוש (Google)",
-  age: "לפי גיל (Google)",
-  gender: "לפי מגדר (Google)",
-  device: "לפי מכשיר (Google)",
+  age: "לפי גיל",
+  gender: "לפי מגדר",
+  device: "לפי מכשיר",
 };
 
 /** הפילוחים החוקיים לכל סוג תצוגה (ופלטפורמה — פילוחים דמוגרפיים זמינים ל-Google Ads) */
@@ -106,8 +111,12 @@ export function validDimensions(displayType: DisplayType, platform?: Platform): 
   if ((platform === "google_ads" || platform === "all") && displayType === "table") {
     dims = [...dims, "searchTerm"];
   }
-  // פילוחים דמוגרפיים — רק ל-Google Ads, בתצוגות pie/bar
-  if (platform === "google_ads" && (displayType === "pie" || displayType === "bar")) {
+  // קהלים (adset) + מודעות (ad) — טבלה בלבד, ל-Meta (הנתונים מסונכרנים ברמות אלו)
+  if (platform === "meta" && displayType === "table") {
+    dims = [...dims, "adset", "ad"];
+  }
+  // פילוחים דמוגרפיים — Meta ו-Google Ads, בתצוגות pie/bar
+  if ((platform === "google_ads" || platform === "meta") && (displayType === "pie" || displayType === "bar")) {
     dims = [...dims.filter((d) => d !== "campaign"), "age", "gender", "device"];
   }
   return dims;
