@@ -81,8 +81,8 @@ export default function PublicDashboardView({ token }: { token: string }) {
   if (unavailable) {
     return (
       <div className="py-20 text-center">
-        <p className="text-lg font-semibold text-brand-dark">הדשבורד אינו זמין</p>
-        <p className="mt-2 text-sm text-brand-muted">ייתכן שהקישור בוטל או שגוי. פנה לסוכנות לקבלת קישור מעודכן.</p>
+        <p className="text-lg font-semibold text-white">הדשבורד אינו זמין</p>
+        <p className="mt-2 text-sm text-white/50">ייתכן שהקישור בוטל או שגוי. פנה לסוכנות לקבלת קישור מעודכן.</p>
       </div>
     );
   }
@@ -91,55 +91,55 @@ export default function PublicDashboardView({ token }: { token: string }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-brand-dark">{dto?.client.name ?? ""}</h1>
-          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-brand-muted">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand-success" />
+          <h1 className="text-2xl font-bold tracking-tight text-white">{dto?.client.name ?? ""}</h1>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-white/50">
+            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-brand-gold" />
             נתונים לתקופה {new Date(since).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })} – {new Date(until).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })} · מתעדכן אוטומטית
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 rounded-lg border border-brand-border bg-brand-light p-0.5">
+          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] p-0.5 backdrop-blur-sm">
             {RANGES.map((r) => (
-              <button key={r.key} onClick={() => setRange(r.key)} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === r.key ? "bg-brand-gold text-brand-dark" : "text-brand-muted hover:text-brand-dark"}`}>{r.label}</button>
+              <button key={r.key} onClick={() => setRange(r.key)} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === r.key ? "bg-brand-gold text-brand-dark" : "text-white/60 hover:text-white"}`}>{r.label}</button>
             ))}
           </div>
           {range === "custom" && (
-            <div className="flex items-center gap-1.5 rounded-lg border border-brand-border bg-brand-light px-2 py-1" dir="ltr">
-              <input type="date" value={customSince} max={customUntil} onChange={(e) => setCustomSince(e.target.value)} className="bg-transparent text-xs text-brand-dark focus:outline-none" />
-              <span className="text-brand-muted">–</span>
-              <input type="date" value={customUntil} min={customSince} max={rangeDates("month").until} onChange={(e) => setCustomUntil(e.target.value)} className="bg-transparent text-xs text-brand-dark focus:outline-none" />
+            <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1" dir="ltr">
+              <input type="date" value={customSince} max={customUntil} onChange={(e) => setCustomSince(e.target.value)} className="bg-transparent text-xs text-white/90 focus:outline-none [color-scheme:dark]" />
+              <span className="text-white/40">–</span>
+              <input type="date" value={customUntil} min={customSince} max={rangeDates("month").until} onChange={(e) => setCustomUntil(e.target.value)} className="bg-transparent text-xs text-white/90 focus:outline-none [color-scheme:dark]" />
             </div>
           )}
         </div>
       </div>
 
       {loading && !dto ? (
-        <div className="flex items-center justify-center py-20 text-brand-muted"><Loader2 className="h-6 w-6 animate-spin" /></div>
+        <div className="flex items-center justify-center py-20 text-white/50"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : dto ? (
         <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"}>
-          <WidgetGrid widgets={dto.widgets} currency={dto.client.currency} />
+          <WidgetGrid widgets={dto.widgets} currency={dto.client.currency} dark />
         </div>
       ) : null}
 
       {/* שאל את ה-AI על המספרים */}
       {dto && (
-        <div className="rounded-lg border border-brand-border bg-brand-light p-5 shadow-sm">
-          <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand-gold" /><h3 className="text-sm font-semibold text-brand-dark">שאל את ה-AI על הנתונים</h3></div>
-          <p className="mt-1 text-xs text-brand-muted">שאל כל שאלה על הביצועים שלך — לדוגמה אם מדד השתפר, או מה משמעות מספר.</p>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_0_0_1px_rgba(238,216,155,0.04)] backdrop-blur-sm">
+          <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand-gold" /><h3 className="text-sm font-semibold text-white">שאל את ה-AI על הנתונים</h3></div>
+          <p className="mt-1 text-xs text-white/50">שאל כל שאלה על הביצועים שלך — לדוגמה אם מדד השתפר, או מה משמעות מספר.</p>
 
           {chat.length > 0 && (
             <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">
               {chat.map((m, i) => (
-                <div key={i} className={`rounded-lg px-3 py-2 text-sm ${m.role === "user" ? "bg-brand-gold/10 text-brand-dark" : "whitespace-pre-wrap bg-brand-bg text-brand-dark"}`}>{m.text}</div>
+                <div key={i} className={`rounded-lg px-3 py-2 text-sm ${m.role === "user" ? "bg-brand-gold/15 text-white" : "whitespace-pre-wrap bg-white/[0.04] text-white/90"}`}>{m.text}</div>
               ))}
-              {asking && <div className="flex items-center gap-2 px-3 py-2 text-sm text-brand-muted"><Loader2 className="h-4 w-4 animate-spin" /> מנתח...</div>}
+              {asking && <div className="flex items-center gap-2 px-3 py-2 text-sm text-white/50"><Loader2 className="h-4 w-4 animate-spin" /> מנתח...</div>}
             </div>
           )}
 
           {chat.length === 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {SUGGESTIONS.map((s) => (
-                <button key={s} onClick={() => ask(s)} className="rounded-full border border-brand-border bg-brand-bg px-3 py-1.5 text-xs text-brand-muted hover:bg-brand-gold/10 hover:text-brand-dark">{s}</button>
+                <button key={s} onClick={() => ask(s)} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/60 hover:bg-brand-gold/10 hover:text-white">{s}</button>
               ))}
             </div>
           )}
@@ -152,7 +152,7 @@ export default function PublicDashboardView({ token }: { token: string }) {
               rows={1}
               dir="rtl"
               placeholder="כתוב שאלה..."
-              className="w-full resize-none rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-sm focus:border-brand-gold focus:outline-none"
+              className="w-full resize-none rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-brand-gold focus:outline-none"
             />
             <button onClick={() => ask(question)} disabled={asking || !question.trim()} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-gold text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50">
               {asking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
