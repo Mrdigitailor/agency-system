@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Pencil, Trash2, GripVertical, Loader2, Link2, Copy, ExternalLink, ArrowRight, FileText, Share2, ChevronLeft, Sparkles } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, Loader2, Link2, Copy, ExternalLink, ArrowRight, FileText, Share2, ChevronLeft, Sparkles, Palette } from "lucide-react";
 import { WidgetRenderer, type WidgetDTO } from "@/components/dashboard/DashboardWidgets";
 import { getMetricsForPlatform, PLATFORM_LABELS, DISPLAY_LABELS, DIMENSION_LABELS, validDimensions, type Platform, type DisplayType, type Dimension } from "@/lib/dashboard/metrics";
 
@@ -79,6 +79,62 @@ function CanvasCard({ w, currency, selected, onSelect, onDelete }: { w: WidgetDT
         <button {...attributes} {...listeners} className="cursor-grab rounded bg-white/90 p-1 text-brand-muted shadow-sm hover:text-brand-dark"><GripVertical className="h-3.5 w-3.5" /></button>
         <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="rounded bg-white/90 p-1 text-brand-muted shadow-sm hover:text-brand-danger"><Trash2 className="h-3.5 w-3.5" /></button>
       </div>
+    </div>
+  );
+}
+
+const isHexColor = (s: string) => /^#[0-9a-fA-F]{6}$/.test(s);
+
+/** בורר צבעי מותג ללקוח — נשמר ב-ClientProfile.brandColors. הצבע הראשון = accent הדוח */
+function BrandColorsCard({ clientId }: { clientId: string }) {
+  const [colors, setColors] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/clients/${clientId}/profile`)
+      .then((r) => r.json())
+      .then((p) => { if (alive) { const c = Array.isArray(p?.brandColors) ? p.brandColors.filter((x: unknown) => typeof x === "string") : []; setColors(c); } })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, [clientId]);
+
+  const persist = async (next: string[]) => {
+    setColors(next); setSaving(true); setSaved(false);
+    try {
+      await fetch(`/api/clients/${clientId}/profile`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandColors: next }) });
+      setSaved(true); setTimeout(() => setSaved(false), 1500);
+    } finally { setSaving(false); }
+  };
+
+  if (!loaded) return null;
+  return (
+    <div className="rounded-lg border border-brand-border bg-brand-light p-4 shadow-sm">
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <Palette className="h-4 w-4 text-brand-gold" />
+        <h3 className="text-sm font-semibold text-brand-dark">צבעי מותג הלקוח</h3>
+      </div>
+      <p className="mb-2.5 text-[11px] leading-relaxed text-brand-muted">הצבע הראשון = צבע ההדגשה של הדוח הציבורי (קווים, כותרות, ניווט). השאר משמשים לעוגות ולגרפים. ריק = זהב ברירת מחדל.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        {colors.map((c, i) => (
+          <div key={i} className="group relative">
+            <input
+              type="color"
+              value={isHexColor(c) ? c : "#000000"}
+              onChange={(e) => persist(colors.map((x, j) => (j === i ? e.target.value : x)))}
+              className="h-9 w-9 cursor-pointer rounded-md border border-brand-border bg-transparent p-0"
+              title={i === 0 ? "צבע ראשי" : `צבע ${i + 1}`}
+            />
+            {i === 0 && <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-sm bg-brand-dark px-1 text-[8px] leading-tight text-white">ראשי</span>}
+            <button onClick={() => persist(colors.filter((_, j) => j !== i))} className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-brand-danger text-[11px] leading-none text-white group-hover:flex" title="הסר">×</button>
+          </div>
+        ))}
+        <button onClick={() => persist([...colors, "#3b82f6"])} className="flex h-9 w-9 items-center justify-center rounded-md border border-dashed border-brand-border text-brand-muted transition-colors hover:border-brand-gold hover:text-brand-gold" title="הוסף צבע"><Plus className="h-4 w-4" /></button>
+      </div>
+      <div className="mt-2 h-4 text-[11px] text-brand-muted">{saving ? "שומר…" : saved ? "נשמר ✓" : colors.length === 0 ? "אין צבעים — הדוח משתמש בזהב" : ""}</div>
     </div>
   );
 }
@@ -335,6 +391,9 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
             )}
           </div>
 
+          {/* צבעי מותג הלקוח — משפיעים על הדוח הציבורי */}
+          <BrandColorsCard clientId={clientId} />
+
           <div className="rounded-lg border border-brand-border bg-brand-light shadow-sm">
             <div className="flex items-center justify-between border-b border-brand-border px-4 py-3">
               <h3 className="text-sm font-semibold text-brand-dark">מאפייני נתונים</h3>
@@ -432,7 +491,9 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
                         </div>
                       )}
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-brand-muted">מדדים</label>
+                        <label className="mb-1 block text-xs font-medium text-brand-muted">
+                          {form.displayType === "table" ? "מדדים (כל מדד = עמודה — אפשר לבחור כמה)" : "מדדים (אפשר לבחור כמה)"}
+                        </label>
                         <div className="flex flex-wrap gap-1.5">
                           {getMetricsForPlatform(form.platform).map((m) => (
                             <button key={m.id} type="button" onClick={() => toggleMetric(m.id)} className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${form.metrics.includes(m.id) ? "border-brand-gold bg-brand-gold/15 text-brand-dark" : "border-brand-border bg-brand-bg text-brand-muted hover:bg-brand-light"}`}>{m.label}</button>

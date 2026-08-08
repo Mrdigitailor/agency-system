@@ -8,7 +8,27 @@ export interface DashboardDTO {
   client: { name: string; currency: string; clientType: string };
   range: DateRange;
   widgets: Array<{ id: string; title: string; displayType: string; size: string; platforms: string[]; data: unknown }>;
+  /** ערכת צבעים של הלקוח — accent ראשי (ברירת מחדל זהב המותג) + פלטת עוגה */
+  theme: { accent: string; palette: string[] };
   generatedAt: string;
+}
+
+const GOLD = "#eed89b";
+const isHex = (s: unknown): s is string => typeof s === "string" && /^#[0-9a-fA-F]{6}$/.test(s);
+
+/** קורא את brandColors של הלקוח (ClientProfile) → accent + פלטה. ברירת מחדל: זהב המותג */
+async function loadClientTheme(clientId: string): Promise<{ accent: string; palette: string[] }> {
+  try {
+    const profile = await prisma.clientProfile.findUnique({ where: { clientId }, select: { brandColors: true } });
+    const parsed = JSON.parse(profile?.brandColors || "[]");
+    const colors: string[] = Array.isArray(parsed) ? parsed.filter(isHex) : [];
+    if (colors.length === 0) return { accent: GOLD, palette: [GOLD, "#7dd3fc", "#34d399", "#fbbf24", "#f87171", "#a78bfa"] };
+    // צבע ה-accent = הראשון; הפלטה = צבעי המותג ואז השלמות ניגודיות
+    const fill = ["#7dd3fc", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#2dd4bf"];
+    return { accent: colors[0], palette: [...colors, ...fill].slice(0, 8) };
+  } catch {
+    return { accent: GOLD, palette: [GOLD, "#7dd3fc", "#34d399", "#fbbf24", "#f87171", "#a78bfa"] };
+  }
 }
 
 /** הפלטפורמות שמרכיבות ווידג'ט — לתצוגת לוגואים. טקסט/כותרת → ללא לוגו. */
@@ -115,13 +135,17 @@ export async function buildDashboardDTO(
     orderBy: { sortOrder: "asc" },
   });
   const configs = rawWidgets.map((w) => toConfig(w as RawWidget));
-  const computed = await computeDashboard(configs, client, range);
+  const [computed, theme] = await Promise.all([
+    computeDashboard(configs, client, range),
+    loadClientTheme(client.clientId),
+  ]);
   const dataById = new Map(computed.map((c) => [c.widgetId, c.data]));
 
   return {
     client: { name: client.name, currency: client.currency, clientType: client.clientType },
     range,
     widgets: configs.map((w) => ({ id: w.id, title: w.title, displayType: w.displayType, size: w.size, platforms: widgetPlatforms(w.displayType, w.platform), data: dataById.get(w.id) ?? { type: "empty", reason: "אין נתונים" } })),
+    theme,
     generatedAt,
   };
 }

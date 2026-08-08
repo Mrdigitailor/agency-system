@@ -1,13 +1,22 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Loader2, Sparkles, Send } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { Loader2, Sparkles, Send, List } from "lucide-react";
 import { WidgetGrid, type WidgetDTO } from "@/components/dashboard/DashboardWidgets";
+import { PLATFORM_DISPLAY_NAMES } from "@/components/dashboard/PlatformLogo";
 
 interface Dto {
   client: { name: string; currency: string; clientType: string };
   range: { since: string; until: string };
   widgets: WidgetDTO[];
+  theme?: { accent: string; palette: string[] };
+}
+
+/** מקטעי הדוח לניווט — כותרות (heading) וכותרות-פלטפורמה */
+function sectionLabel(w: WidgetDTO): string {
+  if (w.title) return w.title;
+  const names = (w.platforms ?? []).map((p) => PLATFORM_DISPLAY_NAMES[p] ?? p).join(" + ");
+  return names || "מקטע";
 }
 
 const RANGES = [
@@ -78,6 +87,43 @@ export default function PublicDashboardView({ token }: { token: string }) {
 
   useEffect(() => { load(since, until); }, [load, since, until]);
 
+  // ערכת צבעים של הלקוח
+  const accent = dto?.theme?.accent ?? "#eed89b";
+  const palette = dto?.theme?.palette;
+
+  // מקטעי ניווט — כותרות + כותרות-פלטפורמה
+  const sections = useMemo(
+    () => (dto?.widgets ?? [])
+      .filter((w) => w.displayType === "heading" || w.displayType === "platform_header")
+      .map((w) => ({ id: `sec-${w.id}`, label: sectionLabel(w), platform: w.displayType === "platform_header" })),
+    [dto?.widgets],
+  );
+
+  // מעקב אחר המקטע הפעיל (להדגשה בניווט)
+  const [activeId, setActiveId] = useState<string>("");
+  const navRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (sections.length === 0) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveId(visible[0].target.id);
+      },
+      { rootMargin: "-10% 0px -75% 0px", threshold: 0 },
+    );
+    for (const s of sections) { const el = document.getElementById(s.id); if (el) obs.observe(el); }
+    return () => obs.disconnect();
+  }, [sections]);
+
+  // גלילת הפריט הפעיל לתוך תצוגת הניווט
+  useEffect(() => {
+    if (!activeId || !navRef.current) return;
+    const btn = navRef.current.querySelector(`[data-sec="${activeId}"]`);
+    btn?.scrollIntoView({ block: "nearest" });
+  }, [activeId]);
+
+  const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+
   if (unavailable) {
     return (
       <div className="py-20 text-center">
@@ -93,14 +139,14 @@ export default function PublicDashboardView({ token }: { token: string }) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">{dto?.client.name ?? ""}</h1>
           <p className="mt-0.5 flex items-center gap-1.5 text-xs text-white/50">
-            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-brand-gold" />
+            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full" style={{ backgroundColor: accent }} />
             נתונים לתקופה {new Date(since).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })} – {new Date(until).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })} · מתעדכן אוטומטית
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] p-0.5 backdrop-blur-sm">
             {RANGES.map((r) => (
-              <button key={r.key} onClick={() => setRange(r.key)} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === r.key ? "bg-brand-gold text-brand-dark" : "text-white/60 hover:text-white"}`}>{r.label}</button>
+              <button key={r.key} onClick={() => setRange(r.key)} className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === r.key ? "text-brand-dark" : "text-white/60 hover:text-white"}`} style={range === r.key ? { backgroundColor: accent } : undefined}>{r.label}</button>
             ))}
           </div>
           {range === "custom" && (
@@ -116,9 +162,39 @@ export default function PublicDashboardView({ token }: { token: string }) {
       {loading && !dto ? (
         <div className="flex items-center justify-center py-20 text-white/50"><Loader2 className="h-6 w-6 animate-spin" /></div>
       ) : dto ? (
-        <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"}>
-          <WidgetGrid widgets={dto.widgets} currency={dto.client.currency} dark />
-        </div>
+        <>
+          {/* ניווט מובייל — קפיצה למקטע */}
+          {sections.length > 1 && (
+            <select value="" onChange={(e) => { if (e.target.value) goTo(e.target.value); }} className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white [color-scheme:dark] lg:hidden">
+              <option value="">קפיצה למקטע בדוח…</option>
+              {sections.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          )}
+          <div className="lg:flex lg:items-start lg:gap-6">
+            {/* ניווט צדדי — דסקטופ */}
+            {sections.length > 1 && (
+              <aside className="hidden lg:sticky lg:top-4 lg:block lg:w-52 lg:shrink-0 lg:self-start">
+                <div ref={navRef} className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.03] p-2 backdrop-blur-sm">
+                  <p className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold text-white/40"><List className="h-3.5 w-3.5" /> ניווט בדוח</p>
+                  {sections.map((s) => (
+                    <button
+                      key={s.id}
+                      data-sec={s.id}
+                      onClick={() => goTo(s.id)}
+                      className={`block w-full truncate rounded-lg px-2.5 py-1.5 text-right text-xs transition-colors ${activeId === s.id ? "font-semibold" : `text-white/55 hover:bg-white/5 hover:text-white ${s.platform ? "" : "pr-4"}`}`}
+                      style={activeId === s.id ? { backgroundColor: `${accent}22`, color: accent, borderRight: `2px solid ${accent}` } : undefined}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </aside>
+            )}
+            <div className={`min-w-0 flex-1 ${loading ? "opacity-60 transition-opacity" : "transition-opacity"}`}>
+              <WidgetGrid widgets={dto.widgets} currency={dto.client.currency} dark accent={accent} palette={palette} />
+            </div>
+          </div>
+        </>
       ) : null}
 
       {/* שאל את ה-AI על המספרים */}

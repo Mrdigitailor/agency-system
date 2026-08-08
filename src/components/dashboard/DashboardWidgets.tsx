@@ -98,7 +98,7 @@ function KpiView({ data, currency, dark }: { data: KpiResult; currency: string; 
   );
 }
 
-function SeriesView({ data, dark }: { data: SeriesResult; dark?: boolean }) {
+function SeriesView({ data, dark, accent = "#eed89b" }: { data: SeriesResult; dark?: boolean; accent?: string }) {
   if (!seriesHasData(data)) return <NoData dark={dark} />;
   const chartData = data.buckets.map((b, i) => {
     const row: Record<string, string | number> = { bucket: b };
@@ -110,10 +110,10 @@ function SeriesView({ data, dark }: { data: SeriesResult; dark?: boolean }) {
   const tip = dark
     ? { borderRadius: 10, border: "1px solid #2a2a2a", background: "#161616", color: "#fff", fontSize: 12 }
     : { borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 12 };
-  // בכהה זהב בולט; בבהיר קו כהה (זהב נעלם על לבן). עמודות תמיד זהב.
+  // צבע ראשי = accent המותג; בבהיר קו כהה (accent בהיר נעלם על לבן). עמודות תמיד accent.
   const colors = data.display === "bar"
-    ? ["#eed89b", "#7dd3fc", "#34d399"]
-    : dark ? ["#eed89b", "#7dd3fc", "#fbbf24"] : ["#111111", "#3b82f6", "#f59e0b"];
+    ? [accent, "#7dd3fc", "#34d399"]
+    : dark ? [accent, "#7dd3fc", "#fbbf24"] : ["#111111", "#3b82f6", "#f59e0b"];
   if (data.display === "bar") {
     return (
       <ResponsiveContainer width="100%" height={220}>
@@ -131,7 +131,7 @@ function SeriesView({ data, dark }: { data: SeriesResult; dark?: boolean }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <Chart data={chartData} margin={{ top: 5, right: 8, left: -12, bottom: 0 }}>
-        <defs><linearGradient id="wgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#eed89b" stopOpacity={dark ? 0.35 : 0.5} /><stop offset="100%" stopColor="#eed89b" stopOpacity={0} /></linearGradient></defs>
+        <defs><linearGradient id="wgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={accent} stopOpacity={dark ? 0.35 : 0.5} /><stop offset="100%" stopColor={accent} stopOpacity={0} /></linearGradient></defs>
         <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
         <XAxis dataKey="bucket" tickFormatter={fmtDate} tick={{ fontSize: 11, fill: axis }} interval="preserveStartEnd" />
         <YAxis tick={{ fontSize: 11, fill: axis }} width={44} />
@@ -146,10 +146,10 @@ function SeriesView({ data, dark }: { data: SeriesResult; dark?: boolean }) {
   );
 }
 
-function PieView({ data, dark }: { data: PieResult; dark?: boolean }) {
+function PieView({ data, dark, palette: customPalette }: { data: PieResult; dark?: boolean; palette?: string[] }) {
   const total = data.slices.reduce((s, x) => s + x.value, 0);
   if (data.slices.length === 0 || total === 0) return <NoData dark={dark} />;
-  const palette = dark ? PIE_COLORS_DARK : PIE_COLORS;
+  const palette = customPalette && customPalette.length > 0 ? customPalette : (dark ? PIE_COLORS_DARK : PIE_COLORS);
   const tip = dark
     ? { borderRadius: 10, border: "1px solid #2a2a2a", background: "#161616", color: "#fff", fontSize: 12 }
     : { borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 12 };
@@ -210,7 +210,7 @@ function TableView({ data, dark }: { data: TableResult; dark?: boolean }) {
   );
 }
 
-export function WidgetRenderer({ widget, currency, dark }: { widget: WidgetDTO; currency: string; dark?: boolean }) {
+export function WidgetRenderer({ widget, currency, dark, accent = "#eed89b", palette }: { widget: WidgetDTO; currency: string; dark?: boolean; accent?: string; palette?: string[] }) {
   const { data } = widget;
   const platforms = widget.platforms ?? [];
 
@@ -218,7 +218,7 @@ export function WidgetRenderer({ widget, currency, dark }: { widget: WidgetDTO; 
   if (widget.displayType === "platform_header") {
     const names = platforms.map((p) => PLATFORM_DISPLAY_NAMES[p] ?? p).join(" + ");
     return (
-      <div className="flex items-center gap-3 border-b-2 border-brand-gold pb-3 pt-4">
+      <div className="flex items-center gap-3 border-b-2 pb-3 pt-4" style={{ borderColor: accent }}>
         <PlatformLogos platforms={platforms} className="h-8 w-8" />
         <h2 className={`text-xl font-bold ${dark ? "text-white" : "text-brand-dark"}`}>{widget.title || names}</h2>
       </div>
@@ -227,7 +227,7 @@ export function WidgetRenderer({ widget, currency, dark }: { widget: WidgetDTO; 
 
   // כותרת / מפריד — בלי תיבת כרטיס
   if (data.type === "text" && data.heading) {
-    return <div className="border-b-2 border-brand-gold pb-2 pt-4"><h2 className={`text-xl font-bold ${dark ? "text-white" : "text-brand-dark"}`}>{widget.title}</h2></div>;
+    return <div className="border-b-2 pb-2 pt-4" style={{ borderColor: accent }}><h2 className={`text-xl font-bold ${dark ? "text-white" : "text-brand-dark"}`}>{widget.title}</h2></div>;
   }
   if (data.type === "text") {
     return (
@@ -249,9 +249,9 @@ export function WidgetRenderer({ widget, currency, dark }: { widget: WidgetDTO; 
       ) : data.type === "kpi" ? (
         <KpiView data={data} currency={currency} dark={dark} />
       ) : data.type === "series" ? (
-        <div className="mt-3"><SeriesView data={data} dark={dark} /></div>
+        <div className="mt-3"><SeriesView data={data} dark={dark} accent={accent} /></div>
       ) : data.type === "pie" ? (
-        <div className="mt-3"><PieView data={data} dark={dark} /></div>
+        <div className="mt-3"><PieView data={data} dark={dark} palette={palette} /></div>
       ) : (
         <TableView data={data} dark={dark} />
       )}
@@ -268,15 +268,16 @@ function cardCls(dark?: boolean): string {
 
 const SPAN: Record<string, string> = { full: "md:col-span-12", half: "md:col-span-6", third: "md:col-span-4" };
 
-export function WidgetGrid({ widgets, currency, dark }: { widgets: WidgetDTO[]; currency: string; dark?: boolean }) {
+export function WidgetGrid({ widgets, currency, dark, accent, palette }: { widgets: WidgetDTO[]; currency: string; dark?: boolean; accent?: string; palette?: string[] }) {
   if (widgets.length === 0) {
     return <p className={`py-12 text-center text-sm ${dark ? "text-white/40" : "text-brand-muted"}`}>אין ווידג&apos;טים בדשבורד עדיין.</p>;
   }
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
       {widgets.map((w) => (
-        <div key={w.id} className={SPAN[w.size] ?? SPAN.full}>
-          <WidgetRenderer widget={w} currency={currency} dark={dark} />
+        // id לעוגן ניווט (scroll-mt כדי שהכותרת לא תיחתך) — לכל ווידג'ט
+        <div key={w.id} id={`sec-${w.id}`} className={`scroll-mt-6 ${SPAN[w.size] ?? SPAN.full}`}>
+          <WidgetRenderer widget={w} currency={currency} dark={dark} accent={accent} palette={palette} />
         </div>
       ))}
     </div>
