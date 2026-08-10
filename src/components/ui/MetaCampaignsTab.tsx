@@ -88,7 +88,7 @@ const COLUMNS: ColumnDef[] = [
   { key: "ctr", label: "CTR הכל (ctr)", type: "percent" },
   { key: "cpc", label: "CPC הכל (cpc)", type: "money" },
   { key: "cpm", label: "CPM (cpm)", type: "money" },
-  { key: "conversions", label: "המרות (actions)", type: "number" },
+  { key: "conversions", label: "המרות (Result פר-קמפיין)", type: "number" },
   { key: "costPerConversion", label: "CPA (cost_per_action)", type: "money" },
   { key: "roas", label: "ROAS", type: "roas" },
   { key: "purchases", label: "רכישות (purchase)", type: "number" },

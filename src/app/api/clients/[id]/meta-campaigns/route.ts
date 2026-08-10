@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { countConversions } from "@/lib/utils/metaMetrics";
+import { countMetaCampaignResults } from "@/lib/utils/campaignResults";
 import { monthStartIL, todayIL } from "@/lib/utils/ildate";
 
 /**
@@ -27,6 +28,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const rows = await prisma.metaInsightDaily.findMany({
     where: { clientId, date: { gte: since, lte: until }, level: "campaign" },
   });
+
+  // ספירת המרות פר-קמפיין לפי ה-Result (כמו בסקירה) — במקום סכום סוגי-אירוע
+  // שמנפח (למשל lead + complete_registration). מכבד את החרגות הקמפיינים.
+  let excludedCampaigns: string[] = [];
+  try {
+    const ec = await prisma.client.findUnique({ where: { id: clientId }, select: { excludedCampaigns: true } });
+    const p = JSON.parse(ec?.excludedCampaigns ?? "[]");
+    if (Array.isArray(p)) excludedCampaigns = p.filter((x) => typeof x === "string");
+  } catch { /* עמודה עדיין לא קיימת */ }
+  const resultByCampaign = new Map<string, number>();
+  for (const r of countMetaCampaignResults(rows, excludedCampaigns).perCampaign) {
+    resultByCampaign.set(r.campaignId, r.excluded ? 0 : r.count);
+  }
 
   // קבץ לפי externalId (campaign id)
   const byCampaign = new Map<string, typeof rows>();
@@ -71,7 +85,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       } catch {}
     }
 
-    const conversions = countConversions(items, selectedEvent);
+    // conversions = ה-Result פר-קמפיין (לידים/רכישות/הרשמות לפי מה שהקמפיין
+    // עושה אופטימיזציה), לא סכום כל האירועים הנבחרים. legacy נשמר להשוואה בלבד.
+    const conversions = resultByCampaign.get(externalId) ?? 0;
+    const conversionsLegacy = countConversions(items, selectedEvent);
     const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
     const cpc = clicks > 0 ? spend / clicks : 0;
     const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
@@ -86,7 +103,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       spend, socialSpend, impressions, clicks, uniqueClicks, reach, frequency, ctr, cpc, cpm,
       inlineLinkClicks, outboundClicks,
       linkClicks, landingPageViews, videoViews, videoThruplay, engagement,
-      conversions, costPerConversion, purchases, purchaseValue, leads, costPerLead, roas,
+      conversions, conversionsLegacy, costPerConversion, purchases, purchaseValue, leads, costPerLead, roas,
       qualityRanking, engagementRanking, conversionRanking,
     };
   }).sort((a, b) => b.spend - a.spend);

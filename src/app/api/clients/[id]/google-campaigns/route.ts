@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
+import { countGoogleCampaignResults } from "@/lib/utils/campaignResults";
+import { parseGoogleActions } from "@/lib/utils/googleMetrics";
 
 /**
  * GET /api/clients/[id]/google-campaigns?since=...&until=...
@@ -21,12 +23,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const client = await prisma.client.findUnique({
     where: { id: clientId },
-    select: { currency: true },
+    select: { currency: true, googleConversionAction: true },
   });
 
   const insights = await prisma.googleAdsInsightDaily.findMany({
     where: { clientId, date: { gte: since, lte: until } },
   });
+
+  // המרות פר-קמפיין לפי הפעולות שנבחרו (כמו בסקירה) — לא סכום כל ההמרות.
+  // בלי בחירה — נופל חזרה לכל ההמרות (זהה להתנהגות הקודמת).
+  let excludedCampaigns: string[] = [];
+  try {
+    const ec = await prisma.client.findUnique({ where: { id: clientId }, select: { excludedCampaigns: true } });
+    const p = JSON.parse(ec?.excludedCampaigns ?? "[]");
+    if (Array.isArray(p)) excludedCampaigns = p.filter((x) => typeof x === "string");
+  } catch { /* עמודה עדיין לא קיימת */ }
+  const gResults = countGoogleCampaignResults(insights, parseGoogleActions(client?.googleConversionAction ?? ""), excludedCampaigns);
+  const resultByCampaign = new Map<string, number>();
+  for (const r of gResults.perCampaign) resultByCampaign.set(r.campaignId, r.excluded ? 0 : r.count);
 
   // Aggregate by campaign
   const campaignMap = new Map<string, {
@@ -83,14 +97,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
-  const campaigns = Array.from(campaignMap.values()).map((c) => ({
+  const campaigns = Array.from(campaignMap.values()).map((c) => {
+    const conversions = resultByCampaign.get(c.id) ?? c.conversions;
+    return {
     ...c,
-    costPerConversion: c.conversions > 0 ? c.spend / c.conversions : 0,
+    conversions,
+    costPerConversion: conversions > 0 ? c.spend / conversions : 0,
     ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
     averageCpc: c.clicks > 0 ? c.spend / c.clicks : 0,
     averageCpm: c.impressions > 0 ? (c.spend / c.impressions) * 1000 : 0,
     roas: c.spend > 0 ? c.conversionsValue / c.spend : 0,
-  }));
+    };
+  });
 
   campaigns.sort((a, b) => b.spend - a.spend);
 

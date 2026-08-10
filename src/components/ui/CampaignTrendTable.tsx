@@ -12,10 +12,13 @@ const WINDOWS = [3, 7, 14, 21] as const;
 function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+// חלון של N ימים שלמים המסתיים אתמול — היום עדיין חלקי (הסנכרון לא הושלם)
+// ומעוות את המספרים. כך "3 ימים" = 3 הימים המלאים האחרונים, כמצופה.
 function lastNDays(n: number): { since: string; until: string } {
   const now = new Date();
-  const since = new Date(now.getTime() - (n - 1) * 86400000);
-  return { since: toDateStr(since), until: toDateStr(now) };
+  const until = new Date(now.getTime() - 86400000); // אתמול
+  const since = new Date(until.getTime() - (n - 1) * 86400000);
+  return { since: toDateStr(since), until: toDateStr(until) };
 }
 
 interface Cell { conv: number; cpa: number; spend: number }
@@ -76,7 +79,7 @@ export default function CampaignTrendTable({ clientId, endpoint, currency }: { c
       <div className="flex items-center justify-between border-b border-brand-border px-5 py-4">
         <div>
           <h3 className="text-sm font-semibold text-brand-dark">מגמת קמפיינים — המרות ועלות להמרה</h3>
-          <p className="mt-0.5 text-xs text-brand-muted">חלונות מתגלגלים של 3 / 7 / 14 / 21 ימים אחרונים — לזיהוי לאן להסתכל</p>
+          <p className="mt-0.5 text-xs text-brand-muted">חלונות מתגלגלים של 3 / 7 / 14 / 21 ימים שלמים (עד אתמול) — לזיהוי לאן להסתכל</p>
         </div>
         {loading && <Loader2 className="h-4 w-4 animate-spin text-brand-muted" />}
       </div>
