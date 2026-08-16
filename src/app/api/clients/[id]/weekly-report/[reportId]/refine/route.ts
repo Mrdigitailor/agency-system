@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { getWeeklyClientData, getWeeklyBreakdowns } from "@/lib/reports/weekly-data";
-import { buildWeeklyDataText } from "@/lib/reports/generate";
+import { buildWeeklyDataText, stripLongDashes, clientRulesBlock } from "@/lib/reports/generate";
 import { detectClientFunnel } from "@/lib/agent/funnel-detect";
 import { classifyBusinessType } from "@/lib/agent/business-knowledge";
 import { shiftYmd } from "@/lib/utils/ildate";
@@ -26,10 +26,15 @@ async function maybePersistInstruction(clientId: string, note: string): Promise<
     model: MODEL,
     max_tokens: 200,
     system:
-      "מקבלים הערה שמשתמש כתב על טיוטת דוח שבועי. החלט אם זו הנחיה קבועה על אופן כתיבת הדוחות " +
-      "(טון, פורמט, מבנה, מה לכלול/להשמיט, אורך, סגנון) — שרלוונטית לכל דוח עתידי — או תיקון חד-פעמי " +
-      "שקשור רק לדוח/לשבוע הספציפי הזה (מספר, פסקה, טעות נקודתית). " +
+      "מקבלים הערה שמשתמש (מנהל בסוכנות) כתב על טיוטת דוח שבועי ללקוח. החלט אם זו הנחיה קבועה על אופן כתיבת הדוחות " +
+      "(טון, פורמט, מבנה, אורך, סגנון, ובמיוחד מה לכלול או להשמיט — פלטפורמה, מוצר, סקשן, מדד) — שרלוונטית לכל דוח עתידי של הלקוח הזה — " +
+      "או תיקון חד-פעמי שקשור רק לדוח/לשבוע הספציפי הזה (מספר שגוי, פסקה מסוימת, טעות נקודתית). " +
+      "בספק — הטה לכיוון שמירה כהנחיה קבועה. " +
       "אם זו הנחיה קבועה: החזר משפט הנחיה כללי אחד בעברית, בציווי, בלי התייחסות לשבוע הספציפי. " +
+      "דוגמאות: 'אל תכלול את Google Ads בדוח' → 'אל תכלול נתוני Google Ads בדוח'; " +
+      "'תעשה את זה יותר קצר' → 'כתוב דוחות קצרים ותמציתיים'; " +
+      "'תפצל לפי מוצר' → 'הצג את הביצועים בפילוח לפי מוצר'; " +
+      "'תקן את מספר הלידים ל-12' → NONE (תיקון חד-פעמי). " +
       "אם זה תיקון חד-פעמי: החזר בדיוק את המילה NONE.",
     messages: [{ role: "user", content: note }],
   }, { timeout: 30_000, maxRetries: 1 });
@@ -84,11 +89,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // בשליפה (ולא רק ב-AI) יחזיר משוב ברור במקום 500 שקט.
   let dataText: string;
   let currency = "ILS";
+  let savedInstructions = "";
   try {
     const [profile, client] = await Promise.all([
       prisma.clientProfile.findUnique({ where: { clientId } }),
       prisma.client.findUnique({ where: { id: clientId }, select: { currency: true, clientType: true } }),
     ]);
+    savedInstructions = profile?.weeklyReportInstructions ?? "";
     const format = profile?.weeklyReportFormat ?? "standard";
     const products: Array<{ name: string }> = profile ? JSON.parse(profile.products ?? "[]") : [];
     currency = client?.currency || "ILS";
@@ -123,7 +130,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         "קמפיינים בלי תוצאות — שורה מאוחדת אחת; סכומים מעוגלים לשלמים. " +
         "לעולם אל תכתוב שחסרים נתונים או 'יש לספק נתונים' — זה דוח ללקוח; אם נתון חסר, השמט אותו בשקט. " +
         "רכישות הן נתון נפרד מלידים — השתמש אך ורק במספר הרכישות שסופק, אל תנחש ואל תערבב עם לידים. " +
-        "שפה: עברית טבעית ושיחתית כמו הסבר בטלפון, בלי ניסוחים מתורגמים/מוזרים. על הוצאה כתוב 'ניצלנו X בתקציב הפרסום' — לעולם לא 'הכנסנו X לעבודה'.",
+        "שפה: עברית טבעית ושיחתית כמו הסבר בטלפון, בלי ניסוחים מתורגמים/מוזרים. על הוצאה כתוב 'ניצלנו X בתקציב הפרסום' — לעולם לא 'הכנסנו X לעבודה'. " +
+        "אסור להשתמש במקף ארוך (— או –) בשום מקום — השתמש בנקודתיים/פסיק/נקודה במקום." +
+        clientRulesBlock(savedInstructions),
       messages: [
         {
           role: "user",
@@ -135,7 +144,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }, { timeout: 240_000, maxRetries: 0 }); // בתוך תקציב ה-maxDuration (300ש'), בלי retries שמכפילים זמן
 
     const block = response.content.find((b) => b.type === "text");
-    const revised = block && "text" in block ? block.text.trim() : "";
+    const revised = block && "text" in block ? stripLongDashes(block.text.trim()) : "";
     if (!revised) return respondWith("❌ לא הצלחתי לעדכן את הדוח — נסה לשלוח את ההערה שוב.", null, false);
 
     // אם ההערה היא הנחיה קבועה על אופן כתיבת הדוח — לשמור אותה כך שתחול על כל הדוחות
