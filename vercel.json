@@ -23,6 +23,14 @@
     {
       "path": "/api/cron/overdue-tasks?mode=email",
       "schedule": "30 5 * * 0"
+    },
+    {
+      "path": "/api/cron/report-reminders",
+      "schedule": "0 9 * * 1"
+    },
+    {
+      "path": "/api/cron/owner-digest",
+      "schedule": "0 7 * * 2"
     }
   ]
 }

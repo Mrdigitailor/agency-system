@@ -3,7 +3,7 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/db/prisma";
 import { sendTelegramMessage } from "@/lib/api/telegram/client";
 import { ownerChatId } from "@/lib/performance/approval";
-import { todayIL } from "@/lib/utils/ildate";
+import { getOverdueTasks, daysLate, type OverdueTask } from "@/lib/reports/ops-digest";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -14,51 +14,6 @@ export const dynamic = "force-dynamic";
  * - mode=email (ראשון בבוקר): מייל לכל מנהל עם המשימות הפתוחות-באיחור שלו + בקשה לטפל/לעדכן את מנהל התיק.
  * - dryRun=1: מחזיר את מה שהיה נשלח, בלי לשלוח.
  */
-
-interface OverdueTask {
-  id: string;
-  title: string;
-  dueDate: string;
-  priority: string;
-  clientName: string | null;
-  assigneeId: string | null;
-  assigneeName: string;
-  assigneeEmail: string;
-  assigneeRole: string;
-}
-
-async function getOverdueTasks(): Promise<OverdueTask[]> {
-  const today = todayIL();
-  const tasks = await prisma.task.findMany({
-    where: {
-      deletedAt: null,
-      status: { not: "done" },
-      dueDate: { not: "", lt: today },
-    },
-    include: {
-      client: { select: { name: true } },
-      assigneeUser: { select: { id: true, name: true, email: true, role: true, isActive: true } },
-    },
-    orderBy: { dueDate: "asc" },
-  });
-  return tasks
-    .filter((t) => t.assigneeUser?.isActive !== false)
-    .map((t) => ({
-      id: t.id,
-      title: t.title,
-      dueDate: t.dueDate,
-      priority: t.priority,
-      clientName: t.client?.name ?? null,
-      assigneeId: t.assigneeUser?.id ?? null,
-      assigneeName: t.assigneeUser?.name ?? t.assignee ?? "ללא שיוך",
-      assigneeEmail: t.assigneeUser?.email ?? "",
-      assigneeRole: t.assigneeUser?.role ?? "",
-    }));
-}
-
-function daysLate(dueDate: string): number {
-  return Math.max(1, Math.round((new Date(todayIL()).getTime() - new Date(dueDate).getTime()) / 86400000));
-}
 
 const PRIORITY_HE: Record<string, string> = { urgent: "דחוף", high: "גבוהה", medium: "בינונית", low: "נמוכה" };
 
