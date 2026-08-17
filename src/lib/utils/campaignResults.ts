@@ -6,7 +6,6 @@
 interface MetaRow { name: string; externalId: string; purchases: number; actionsJson: string }
 
 // action types לכל קטגוריית תוצאה
-const LEAD_ACTION = "lead"; // הסכום הכולל של מטא ללידים (= ה-Result לקמפייני לידים)
 const FORM_LEAD_ACTIONS = ["onsite_conversion.lead_grouped", "onsite_conversion.leadgen_grouped"];
 const WEB_LEAD_ACTIONS = ["offsite_conversion.fb_pixel_lead", "onsite_web_lead"];
 const REG_ACTIONS = ["offsite_conversion.fb_pixel_complete_registration", "onsite_conversion.complete_registration"];
@@ -33,7 +32,10 @@ function actionsOf(json: string): Record<string, number> {
 function objectiveOf(json: string): string {
   try { return String(JSON.parse(json).objective ?? "").toUpperCase(); } catch { return ""; }
 }
-const sumActions = (acts: Record<string, number>, keys: string[]) => keys.reduce((s, k) => s + (acts[k] ?? 0), 0);
+// מקס בתוך קטגוריה — מטא מדווחת את אותה המרה תחת כמה action_type (לדוגמה
+// onsite_web_lead ו-offsite_conversion.fb_pixel_lead = אותם לידים). סכום היה מנפח פי-2;
+// מקסימום מחזיר את הספירה האמיתית של האירוע.
+const maxActions = (acts: Record<string, number>, keys: string[]) => keys.reduce((m, k) => Math.max(m, acts[k] ?? 0), 0);
 
 /** התוצאה של קמפיין בודד — הסוג והכמות שאליהם הוא עושה אופטימיזציה */
 function classifyOne(rows: MetaRow[]): { resultType: CampaignResultType; count: number } {
@@ -46,10 +48,12 @@ function classifyOne(rows: MetaRow[]): { resultType: CampaignResultType; count: 
     const a = actionsOf(r.actionsJson);
     for (const [k, v] of Object.entries(a)) acts[k] = (acts[k] ?? 0) + v;
   }
-  // "lead" אגרגטיבי אם קיים, אחרת הגבוה מבין טופס/אתר (מונע ספירה כפולה)
-  const leads = acts[LEAD_ACTION] ?? Math.max(sumActions(acts, FORM_LEAD_ACTIONS), sumActions(acts, WEB_LEAD_ACTIONS));
-  const registrations = sumActions(acts, REG_ACTIONS);
-  const messages = sumActions(acts, MSG_ACTIONS);
+  // הליד הדומיננטי — הגבוה מבין טופס (lead_grouped) לאתר (fb_pixel_lead). לא סכום
+  // ולא ה-"lead" האגרגטיבי (שכולל את שניהם) — כדי לספור את אירוע-התוצאה המדויק
+  // שמטא מציגה בעמודת Results (Leads Form / Website Leads), בלי ניפוח.
+  const leads = Math.max(maxActions(acts, FORM_LEAD_ACTIONS), maxActions(acts, WEB_LEAD_ACTIONS));
+  const registrations = maxActions(acts, REG_ACTIONS);
+  const messages = maxActions(acts, MSG_ACTIONS);
 
   // מכירות → רכישות
   if (objective.includes("SALES") || objective.includes("PURCHASE")) {
@@ -59,10 +63,20 @@ function classifyOne(rows: MetaRow[]): { resultType: CampaignResultType; count: 
   if (objective.includes("ENGAGEMENT") || objective.includes("AWARENESS") || objective.includes("TRAFFIC")) {
     return messages > 0 ? { resultType: "messages", count: Math.round(messages) } : { resultType: "none", count: 0 };
   }
-  // לידים (וברירת מחדל): לידים; ואם הקמפיין בפועל מייצר הרשמות ולא לידים — הרשמות
-  if (leads > 0) return { resultType: "leads", count: Math.round(leads) };
-  if (registrations > 0) return { resultType: "registrations", count: Math.round(registrations) };
-  if (messages > 0) return { resultType: "messages", count: Math.round(messages) };
+  // לידים (וברירת מחדל): התוצאה היא הליד הדומיננטי של הקמפיין. אירוע אחר (הרשמה/
+  // הודעה) נחשב לתוצאת-הקמפיין רק אם אין לידים ממשיים, או אם הוא מכריע בבירור על
+  // הלידים (פי 2+) — כלומר הקמפיין ממוקד בו. כך קמפיין-הרשמות עם ליד מקרי בודד
+  // נספר כהרשמותיו המלאות, וקמפיין-לידים לא מנופח ע"י אירועים משניים.
+  if (leads > 0 && registrations <= leads * 2 && messages <= leads * 2) {
+    return { resultType: "leads", count: Math.round(leads) };
+  }
+  const opts: Array<{ t: CampaignResultType; n: number }> = [
+    { t: "leads", n: leads },
+    { t: "registrations", n: registrations },
+    { t: "messages", n: messages },
+  ];
+  const best = opts.reduce((a, b) => (b.n > a.n ? b : a));
+  if (best.n > 0) return { resultType: best.t, count: Math.round(best.n) };
   if (purchases > 0) return { resultType: "purchases", count: Math.round(purchases) };
   return { resultType: "none", count: 0 };
 }
