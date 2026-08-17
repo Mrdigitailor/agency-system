@@ -5,7 +5,8 @@ import { safeParseArray } from "@/lib/utils/safeJson";
 import { monthStartIL, todayIL } from "@/lib/utils/ildate";
 import { stripAgencyPayment } from "@/lib/utils/clientPrivacy";
 import { syncClientManagers } from "@/lib/utils/syncManagers";
-import { countConversions } from "@/lib/utils/metaMetrics";
+import { countMetaCampaignResults, countGoogleCampaignResults, countTiktokCampaignResults } from "@/lib/utils/campaignResults";
+import { parseGoogleActions } from "@/lib/utils/googleMetrics";
 
 export async function GET(req: Request) {
   const result = await requireAuth();
@@ -58,15 +59,15 @@ export async function GET(req: Request) {
     prisma.metaInsightDaily.findMany({
       // level="campaign" בלבד — אחרת מסכמים גם adset+ad = ספירה משולשת
       where: { clientId: { in: clientIds }, level: "campaign", date: { gte: since, lte: until } },
-      select: { clientId: true, spend: true, conversions: true, purchases: true, leads: true, actionsJson: true },
+      select: { clientId: true, spend: true, conversions: true, purchases: true, leads: true, actionsJson: true, name: true, externalId: true },
     }),
     prisma.googleAdsInsightDaily.findMany({
       where: { clientId: { in: clientIds }, date: { gte: since, lte: until } },
-      select: { clientId: true, spend: true, conversions: true },
+      select: { clientId: true, spend: true, conversions: true, campaignId: true, campaignName: true, conversionsByAction: true },
     }),
     prisma.tikTokInsightDaily.findMany({
       where: { clientId: { in: clientIds }, date: { gte: since, lte: until } },
-      select: { clientId: true, spend: true, conversions: true },
+      select: { clientId: true, spend: true, conversions: true, campaignId: true, campaignName: true },
     }),
   ]) : [[], [], []];
 
@@ -89,28 +90,33 @@ export async function GET(req: Request) {
     metaByClient.get(ins.clientId)!.push(ins);
   }
 
+  const gadsByClient = new Map<string, typeof gadsInsights>();
   const gadsSpendByClient = new Map<string, number>();
-  const gadsConvByClient = new Map<string, number>();
   for (const ins of gadsInsights) {
+    (gadsByClient.get(ins.clientId) ?? gadsByClient.set(ins.clientId, []).get(ins.clientId)!).push(ins);
     gadsSpendByClient.set(ins.clientId, (gadsSpendByClient.get(ins.clientId) ?? 0) + ins.spend);
-    gadsConvByClient.set(ins.clientId, (gadsConvByClient.get(ins.clientId) ?? 0) + ins.conversions);
   }
 
+  const ttByClient = new Map<string, typeof ttInsights>();
   const ttSpendByClient = new Map<string, number>();
-  const ttConvByClient = new Map<string, number>();
   for (const ins of ttInsights) {
+    (ttByClient.get(ins.clientId) ?? ttByClient.set(ins.clientId, []).get(ins.clientId)!).push(ins);
     ttSpendByClient.set(ins.clientId, (ttSpendByClient.get(ins.clientId) ?? 0) + ins.spend);
-    ttConvByClient.set(ins.clientId, (ttConvByClient.get(ins.clientId) ?? 0) + ins.conversions);
   }
 
   const parsed = clients.map((c) => {
+    // ספירת המרות פר-קמפיין לפי ה-Result (כמו בסקירה הכללית) — מכבד בחירת אירועי
+    // מטא/גוגל והחרגות קמפיינים, כדי שהקוביה בטאב הלקוחות תהיה עקבית עם הסקירה.
+    const excluded = safeParseArray(c.excludedCampaigns).filter((x): x is string => typeof x === "string");
     const clientMetaInsights = metaByClient.get(c.id) ?? [];
     const metaSpend = clientMetaInsights.reduce((s, i) => s + i.spend, 0);
-    const metaConv = clientMetaInsights.length > 0 ? countConversions(clientMetaInsights, c.metaConversionEvent ?? "") : 0;
+    const metaConv = clientMetaInsights.length > 0 ? countMetaCampaignResults(clientMetaInsights, excluded).total : 0;
+    const gadsRows = gadsByClient.get(c.id) ?? [];
     const gadsSpend = gadsSpendByClient.get(c.id) ?? 0;
-    const gadsConv = gadsConvByClient.get(c.id) ?? 0;
+    const gadsConv = gadsRows.length > 0 ? countGoogleCampaignResults(gadsRows, parseGoogleActions(c.googleConversionAction ?? ""), excluded).total : 0;
+    const ttRows = ttByClient.get(c.id) ?? [];
     const ttSpend = ttSpendByClient.get(c.id) ?? 0;
-    const ttConv = ttConvByClient.get(c.id) ?? 0;
+    const ttConv = ttRows.length > 0 ? countTiktokCampaignResults(ttRows, excluded).total : 0;
     const totalSpend = metaSpend + gadsSpend + ttSpend;
     const totalConv = metaConv + gadsConv + ttConv;
     const costPerConv = totalConv > 0 ? totalSpend / totalConv : 0;

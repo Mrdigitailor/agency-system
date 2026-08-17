@@ -174,7 +174,7 @@ export default function ClientsPage() {
     if (!form.name.trim()) return;
     addClient({
       name: form.name, manager: form.campaignManager || form.accountManager, campaignManager: form.campaignManager, accountManager: form.accountManager, platforms: form.platforms,
-      monthlyBudget: Number(form.monthlyBudget) || 0, currency: form.currency, metaConversionEvent: "", clientType: form.clientType,
+      monthlyBudget: Number(form.monthlyBudget) || 0, currency: form.currency, metaConversionEvent: "", googleConversionAction: "", clientType: form.clientType,
       status: form.status, contactEmail: form.contactEmail, contactPhone: form.contactPhone, notes: form.notes,
       digitalAssets: { metaAdAccount: form.metaAdAccount, googleAdAccount: form.googleAdAccount, tiktokAdAccount: form.tiktokAdAccount, facebookPage: form.facebookPage, instagram: form.instagram, linkedin: form.linkedin, website: form.website },
       performance: { budgetUsed: 0, avgCostPerConversion: 0, targetCostPerConversion: Number(form.targetCostPerConversion) || 0, conversionsThisMonth: 0, targetConversions: Number(form.targetConversions) || 0, lastOptimization: "" },

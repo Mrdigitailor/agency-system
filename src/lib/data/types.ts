@@ -41,6 +41,7 @@ export interface Client {
   monthlyBudget: number;
   currency: string;
   metaConversionEvent: string;
+  googleConversionAction: string;
   clientType: string;
   status: "active" | "at_risk" | "upsell" | "inactive";
   contactEmail: string;

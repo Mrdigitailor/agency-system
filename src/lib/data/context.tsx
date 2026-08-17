@@ -64,6 +64,7 @@ function mapClient(c: Record<string, unknown>): Client {
     monthlyBudget: c.monthlyBudget as number,
     currency: (c.currency as string) ?? "ILS",
     metaConversionEvent: (c.metaConversionEvent as string) ?? "",
+    googleConversionAction: (c.googleConversionAction as string) ?? "",
     clientType: c.clientType as string,
     status: c.status as Client["status"],
     contactEmail: c.contactEmail as string,
