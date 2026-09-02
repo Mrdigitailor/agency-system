@@ -211,6 +211,8 @@ async function createTask(input: {
   client_name?: string;
   priority?: string;
   due_date?: string;
+  /** ההודעה המקורית של המשתמש — נכנסת כלשונה לתיאור המשימה */
+  originalMessage?: string;
 }) {
   // התאמת לקוח — אם הוזכר שם אך לא נמצאה התאמה בטוחה, לא פותחים משימה
   // על לקוח שגוי; מחזירים הצעות כדי שהמשתמש יתקן.
@@ -249,18 +251,41 @@ async function createTask(input: {
       if (u) { assigneeId = u.id; assigneeName = u.name; }
     }
   }
+  // רשומת הלקוח ריקה? חיפוש הפוך — מי מהמנהלים מחזיק את הלקוח ב-assignedClientIds
+  // (מונע נפילה שקטה לאדמין כשהשיוך קיים רק בצד העובד; בדרך גם מתקן את רשומת הלקוח)
+  if (!assigneeId && client) {
+    const managers = await prisma.user.findMany({
+      where: { isActive: true, role: "campaignManager" },
+      select: { id: true, name: true, assignedClientIds: true },
+    });
+    const owner = managers.find((m) => {
+      try { return (JSON.parse(m.assignedClientIds || "[]") as string[]).includes(client!.id); } catch { return false; }
+    });
+    if (owner) {
+      assigneeId = owner.id;
+      assigneeName = owner.name;
+      await prisma.client.update({ where: { id: client.id }, data: { campaignManagerId: owner.id, campaignManager: owner.name } }).catch(() => {});
+    }
+  }
+  let fellBackToAdmin = false;
   if (!assigneeId) {
     const admin = await prisma.user.findFirst({ where: { role: "admin", isActive: true } });
     if (admin) {
       assigneeId = admin.id;
       assigneeName = admin.name;
+      fellBackToAdmin = Boolean(client); // הוזכר לקוח אבל אין לו מנהל בשום מקום
     }
   }
+
+  // התיאור: קודם ההודעה המקורית של סער כלשונה, ואז סיכום ה-AI
+  const description = input.originalMessage
+    ? `📩 ההודעה המקורית:\n${input.originalMessage}\n\n📋 סיכום:\n${input.description ?? input.title}`
+    : (input.description ?? "");
 
   const task = await prisma.task.create({
     data: {
       title: input.title,
-      description: input.description ?? "",
+      description,
       clientId: client?.id ?? null,
       assigneeId,
       assignee: assigneeName,
@@ -301,6 +326,9 @@ async function createTask(input: {
     priority: task.priority,
     due_date: task.dueDate || null,
     employee_notified: Boolean(assigneeId),
+    warning: fellBackToAdmin
+      ? `ללקוח "${client?.name}" אין מנהל קמפיינים מוגדר במערכת — המשימה שויכה לאדמין. כדאי להגדיר מנהל ללקוח.`
+      : undefined,
   };
 }
 
@@ -486,7 +514,8 @@ const SYSTEM_PROMPT = `אתה עוזר טלגרם של סוכנות שיווק �
 כללים:
 - **זיהוי לקוח:** אפשר לפנות ללקוח לפי שם העסק או לפי שם איש הקשר — הכלים מתאימים את שניהם. אם המשתמש שואל אם אתה מזהה לקוח, קרא ל-find_client. שים לב: find_tasks שמחזיר 0 משימות **לא** אומר שהלקוח לא קיים — לאימות קיום לקוח השתמש רק ב-find_client.
 - **אין לך כלי לשנות שם/פרטים של לקוח.** אם מבקשים לשנות שם לקוח, אמור שזה נעשה בממשק (טאב לקוחות → עריכת לקוח), ולא נסה לעשות זאת דרך הכלים.
-- כשפותחים משימה — אשר בקצרה למי היא שויכה ולאיזה לקוח.
+- כשפותחים משימה — אשר בקצרה למי היא שויכה ולאיזה לקוח. שדה description = סיכום תמציתי שלך (ההודעה המקורית של המשתמש מצורפת לתיאור אוטומטית — אל תעתיק אותה בעצמך).
+- אם כלי החזיר warning — הצג אותה למשתמש במלואה (למשל: לקוח בלי מנהל קמפיינים מוגדר).
 - כשמציגים נתוני קמפיין — סכם את העיקר (הוצאה, המרות, עלות להמרה) בנקודות קצרות, בלי טבלאות ענקיות.
 - אם כלי החזיר client_not_found — אל תפתח את המשימה ואל תנחש לקוח. אמור למשתמש שלא נמצא לקוח מתאים, הצג את השמות הקרובים (suggestions) ובקש שיכתוב את השם המדויק מהרשימה. אם המשתמש מאשר במפורש שאין לקוח — אפשר לפתוח את המשימה בלי שם לקוח (בלי הפרמטר client_name).
 - **סימון/עדכון משימה:** קרא תמיד קודם ל-find_tasks כדי לאתר את המשימה, ואז ל-update_task עם ה-task_id שהוחזר. לעולם אל תנחש task_id.
@@ -526,7 +555,8 @@ export async function runCampaignAssistant(text: string): Promise<string> {
       let result: unknown;
       try {
         if (block.name === "create_task") {
-          result = await createTask(block.input as Parameters<typeof createTask>[0]);
+          // מצרפים את ההודעה המקורית של המשתמש — נכנסת כלשונה לתיאור המשימה
+          result = await createTask({ ...(block.input as Parameters<typeof createTask>[0]), originalMessage: text });
         } else if (block.name === "get_campaign_data") {
           result = await getCampaignData(block.input as Parameters<typeof getCampaignData>[0]);
         } else if (block.name === "find_client") {
