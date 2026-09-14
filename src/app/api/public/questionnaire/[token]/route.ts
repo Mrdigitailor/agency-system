@@ -2,7 +2,7 @@
 // GET — פרטי הטופס + טיוטה שמורה · PATCH — שמירת טיוטה · POST — שליחה סופית.
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { parseAnswers, applyAnswersToProfile, EMPTY_ANSWERS, type QuestionnaireAnswers } from "@/lib/onboarding/questionnaire";
+import { parseAnswersV2, sanitizeAnswersV2, applyV2ToProfile } from "@/lib/onboarding/questions";
 import { sendTelegramMessage } from "@/lib/api/telegram/client";
 import { ownerChatId } from "@/lib/performance/approval";
 
@@ -24,41 +24,24 @@ async function resolveToken(token: string) {
   return q;
 }
 
-/** מסנן קלט לצורת התשובות המוכרת בלבד — מתעלם משדות זרים, קוטם אורכים */
-function sanitizeAnswers(body: unknown): QuestionnaireAnswers {
-  const b = (body ?? {}) as Record<string, unknown>;
-  const str = (v: unknown, max = 4000) => String(v ?? "").slice(0, max);
-  const rows = <T>(v: unknown, map: (r: Record<string, unknown>) => T, maxRows = 20): T[] =>
-    Array.isArray(v) ? v.slice(0, maxRows).map((r) => map((r ?? {}) as Record<string, unknown>)) : [];
-
-  return {
-    ...EMPTY_ANSWERS,
-    businessDescription: str(b.businessDescription),
-    serviceArea: ["local", "national", "international"].includes(String(b.serviceArea)) ? String(b.serviceArea) : "",
-    serviceAreaDetails: str(b.serviceAreaDetails, 500),
-    products: rows(b.products, (r) => ({ name: str(r.name, 200), description: str(r.description, 1000), priceRange: str(r.priceRange, 200), promotions: str(r.promotions, 500) })),
-    usp: str(b.usp, 500),
-    whyChooseUs: str(b.whyChooseUs),
-    socialProof: str(b.socialProof),
-    idealCustomer: str(b.idealCustomer),
-    objections: str(b.objections),
-    competitors: rows(b.competitors, (r) => ({ name: str(r.name, 200), website: str(r.website, 300) })),
-    toneOfVoice: str(b.toneOfVoice, 50),
-    addressStyle: str(b.addressStyle, 50),
-    forbiddenWords: str(b.forbiddenWords, 1000),
-    assetBankUrl: str(b.assetBankUrl, 500),
-    existingAssets: str(b.existingAssets),
-  };
-}
-
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const q = await resolveToken(token);
   if (!q) return notFound();
+  // נתונים שהלקוח כבר מסר בשלב המכירה — מוצגים לאישור, לא נשאלים שוב
+  const lead = await prisma.lead.findFirst({
+    where: { clientId: q.client.id },
+    orderBy: { updatedAt: "desc" },
+    select: { dealValue: true, estimatedBudget: true },
+  });
   return NextResponse.json({
     clientName: q.client.name,
     status: q.status,
-    answers: parseAnswers(q.answers),
+    answers: parseAnswersV2(q.answers),
+    prefill: {
+      dealValue: lead?.dealValue ? String(lead.dealValue) : "",
+      budget: lead?.estimatedBudget ?? "",
+    },
   });
 }
 
@@ -71,7 +54,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ token:
 
   let body: unknown;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "bad request" }, { status: 400 }); }
-  const answers = sanitizeAnswers(body);
+  const answers = sanitizeAnswersV2(body);
 
   await prisma.clientQuestionnaire.update({ where: { id: q.id }, data: { answers: JSON.stringify(answers) } });
   return NextResponse.json({ saved: true });
@@ -86,14 +69,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
 
   let body: unknown;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "bad request" }, { status: 400 }); }
-  const answers = sanitizeAnswers(body);
+  const answers = sanitizeAnswersV2(body);
 
   await prisma.clientQuestionnaire.update({
     where: { id: q.id },
     data: { answers: JSON.stringify(answers), status: "completed", completedAt: new Date() },
   });
 
-  const updatedFields = await applyAnswersToProfile(q.client.id, answers);
+  const updatedFields = await applyV2ToProfile(q.client.id, answers);
 
   // סגירת משימת המעקב "לוודא שהלקוח מילא שאלון" (אם קיימת)
   await prisma.task.updateMany({

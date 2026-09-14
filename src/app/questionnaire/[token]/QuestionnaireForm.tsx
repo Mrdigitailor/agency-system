@@ -1,266 +1,418 @@
 "use client";
 
-// טופס שאלון אונבורדינג ציבורי — הלקוח ממלא, שומר טיוטה וחוזר, ובסוף שולח.
-import { useEffect, useState } from "react";
+// שאלון כניסה v2 — שאלה אחת על המסך, בר התקדמות מעודד, "למה אנחנו שואלים"
+// ודוגמה לתשובה טובה בכל שאלה. שמירה אוטומטית בכל התקדמות — אפשר לעצור ולחזור.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  QUESTIONS, CHAPTERS,
+  type Question, type Field, type AnswersV2, type AnswerValue,
+} from "@/lib/onboarding/questions";
 
-interface ProductRow { name: string; description: string; priceRange: string; promotions: string }
-interface CompetitorRow { name: string; website: string }
-
-interface Answers {
-  businessDescription: string;
-  serviceArea: string;
-  serviceAreaDetails: string;
-  products: ProductRow[];
-  usp: string;
-  whyChooseUs: string;
-  socialProof: string;
-  idealCustomer: string;
-  objections: string;
-  competitors: CompetitorRow[];
-  toneOfVoice: string;
-  addressStyle: string;
-  forbiddenWords: string;
-  assetBankUrl: string;
-  existingAssets: string;
-}
+const TOTAL = QUESTIONS.length; // 24
+const CONFIRM_STEP = TOTAL;     // מסך "מה שכבר סיפרת לנו"
 
 const inputClass =
-  "w-full rounded-lg border border-brand-border bg-brand-light px-3 py-2.5 text-sm text-brand-dark placeholder:text-brand-muted focus:border-brand-gold focus:outline-none focus:ring-1 focus:ring-brand-gold";
-const cardClass = "rounded-lg border border-brand-border bg-brand-light p-5 shadow-sm sm:p-6";
+  "w-full rounded-lg border border-brand-border bg-brand-light px-3.5 py-3 text-[15px] text-brand-dark placeholder:text-brand-muted/70 focus:border-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-gold/40 transition-colors";
 
-function Section({ num, title, subtitle, children }: { num: number; title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <section className={cardClass}>
-      <div className="mb-4 flex items-start gap-3">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-gold text-sm font-semibold text-brand-dark">{num}</span>
-        <div>
-          <h2 className="text-base font-semibold text-brand-dark">{title}</h2>
-          {subtitle && <p className="mt-0.5 text-xs text-brand-muted">{subtitle}</p>}
-        </div>
+// ---------- עזרי תשובות ----------
+const asFields = (v?: AnswerValue): Record<string, string> =>
+  v && !Array.isArray(v) && !("choice" in v) ? (v as Record<string, string>) : {};
+const asRows = (v?: AnswerValue): Array<Record<string, string>> => (Array.isArray(v) ? v : []);
+const asChoice = (v?: AnswerValue): { choice: string; detail?: string } =>
+  v && !Array.isArray(v) && "choice" in v ? (v as { choice: string; detail?: string }) : { choice: "" };
+
+function emptyRow(fields: Field[]): Record<string, string> {
+  return Object.fromEntries(fields.map((f) => [f.key, ""]));
+}
+
+/** האם ענו על השאלה מספיק כדי להמשיך (שאלות optional תמיד עבירות) */
+function isAnswered(q: Question, v?: AnswerValue): boolean {
+  if (q.optional) return true;
+  if (!v) return false;
+  if (q.input.kind === "fields") {
+    const required = q.input.fields.filter((f) => !f.optional);
+    const vals = asFields(v);
+    return required.length === 0
+      ? Object.values(vals).some((s) => s.trim())
+      : required.every((f) => (vals[f.key] ?? "").trim());
+  }
+  if (q.input.kind === "repeater") {
+    const first = q.input.fields[0];
+    return asRows(v).some((r) => (r[first.key] ?? "").trim());
+  }
+  return Boolean(asChoice(v).choice);
+}
+
+// ---------- שדה בודד ----------
+function FieldInput({ field, value, onChange, autoFocus, onEnter }: {
+  field: Field; value: string; onChange: (v: string) => void; autoFocus?: boolean; onEnter?: () => void;
+}) {
+  if (field.type === "textarea") {
+    return (
+      <textarea
+        className={`${inputClass} min-h-32 resize-y leading-relaxed`}
+        value={value} autoFocus={autoFocus}
+        placeholder={field.placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+  if (field.type === "select") {
+    return (
+      <div className="flex flex-wrap gap-2">
+        {(field.options ?? []).map((opt) => (
+          <button key={opt} type="button" onClick={() => onChange(value === opt ? "" : opt)}
+            className={`rounded-lg border px-3.5 py-2 text-sm transition-colors duration-200 ${
+              value === opt
+                ? "border-brand-gold bg-brand-gold font-semibold text-brand-dark"
+                : "border-brand-border bg-brand-light text-brand-dark hover:border-brand-gold"
+            }`}>
+            {opt}
+          </button>
+        ))}
       </div>
-      <div className="space-y-4">{children}</div>
-    </section>
+    );
+  }
+  return (
+    <input
+      type={field.type === "url" ? "url" : "text"}
+      dir={field.type === "url" ? "ltr" : "rtl"}
+      className={`${inputClass} ${field.type === "url" ? "text-left" : ""}`}
+      value={value} autoFocus={autoFocus}
+      placeholder={field.placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => { if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); } }}
+    />
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+// ---------- גוף שאלה לפי סוג ----------
+function QuestionBody({ q, value, onChange, onEnter }: {
+  q: Question; value?: AnswerValue; onChange: (v: AnswerValue) => void; onEnter: () => void;
+}) {
+  if (q.input.kind === "fields") {
+    const { fields } = q.input;
+    const vals = asFields(value);
+    const single = fields.length === 1;
+    return (
+      <div className="space-y-3.5">
+        {fields.map((f, i) => (
+          <div key={f.key}>
+            {f.label && (
+              <label className="mb-1 block text-sm font-medium text-brand-dark">
+                {f.label}{f.optional && <span className="mr-1 text-xs text-brand-muted">(לא חובה)</span>}
+              </label>
+            )}
+            <FieldInput field={f} value={vals[f.key] ?? ""} autoFocus={i === 0}
+              onChange={(v) => onChange({ ...emptyRow(fields), ...vals, [f.key]: v })}
+              onEnter={single ? onEnter : undefined} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (q.input.kind === "repeater") {
+    const { fields, itemLabel, addLabel, maxRows } = q.input;
+    const rows = asRows(value);
+    const shown = rows.length ? rows : [emptyRow(fields)];
+    const setRow = (i: number, key: string, v: string) => {
+      const next = shown.map((r, j) => (j === i ? { ...r, [key]: v } : r));
+      onChange(next);
+    };
+    return (
+      <div className="space-y-3">
+        {shown.map((row, i) => (
+          <div key={i} className="rounded-lg border border-brand-border bg-brand-bg p-3.5">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-semibold text-brand-muted">{itemLabel} {i + 1}</span>
+              {shown.length > 1 && (
+                <button type="button" className="text-xs text-brand-danger hover:underline"
+                  onClick={() => onChange(shown.filter((_, j) => j !== i))}>הסר</button>
+              )}
+            </div>
+            <div className="space-y-2.5">
+              {fields.map((f) => (
+                <div key={f.key}>
+                  {f.label && <label className="mb-0.5 block text-xs font-medium text-brand-dark">{f.label}</label>}
+                  <FieldInput field={f} value={row[f.key] ?? ""} onChange={(v) => setRow(i, f.key, v)} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {(!maxRows || shown.length < maxRows) && (
+          <button type="button" onClick={() => onChange([...shown, emptyRow(fields)])}
+            className="w-full rounded-lg border border-dashed border-brand-gold/60 py-2.5 text-sm font-medium text-brand-dark transition-colors hover:bg-brand-gold/10">
+            {addLabel}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // choice
+  const { options, detail } = q.input;
+  const cur = asChoice(value);
+  const showDetail = detail && cur.choice && detail.showFor.includes(cur.choice);
   return (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-brand-dark">{label}</label>
-      {hint && <p className="mb-1.5 text-xs text-brand-muted">{hint}</p>}
-      {children}
+    <div className="space-y-3">
+      <div className="flex flex-col gap-2">
+        {options.map((opt) => (
+          <button key={opt} type="button"
+            onClick={() => onChange({ choice: opt, detail: cur.detail })}
+            className={`rounded-lg border px-4 py-3 text-right text-[15px] transition-all duration-200 ${
+              cur.choice === opt
+                ? "border-brand-gold bg-brand-gold font-semibold text-brand-dark shadow-sm"
+                : "border-brand-border bg-brand-light text-brand-dark hover:border-brand-gold hover:bg-brand-gold/5"
+            }`}>
+            {opt}
+          </button>
+        ))}
+      </div>
+      {showDetail && (
+        <div className="pt-1">
+          {detail.field.label && <label className="mb-1 block text-sm font-medium text-brand-dark">{detail.field.label}</label>}
+          <FieldInput field={detail.field} value={cur.detail ?? ""} autoFocus
+            onChange={(v) => onChange({ choice: cur.choice, detail: v })} onEnter={onEnter} />
+        </div>
+      )}
     </div>
   );
 }
 
+// ---------- הקומפוננטה הראשית ----------
 export default function QuestionnaireForm({ token }: { token: string }) {
-  const [state, setState] = useState<"loading" | "notFound" | "form" | "submitting" | "done">("loading");
+  const [state, setState] = useState<"loading" | "notFound" | "intro" | "form" | "submitting" | "done">("loading");
   const [clientName, setClientName] = useState("");
-  const [savedFlash, setSavedFlash] = useState(false);
-  const [a, setA] = useState<Answers | null>(null);
+  const [prefill, setPrefill] = useState({ dealValue: "", budget: "" });
+  const [answers, setAnswers] = useState<AnswersV2>({ step: 0, data: {} });
+  const [step, setStep] = useState(0); // 0..23 שאלות · 24 אישור
+  const [confirm, setConfirm] = useState({ dealValue: "", budget: "", note: "" });
+  const [shake, setShake] = useState(false);
+  const [anim, setAnim] = useState(0); // מפתח אנימציית כניסה
+  const [error, setError] = useState("");
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const q = step < TOTAL ? QUESTIONS[step] : null;
+  const chapter = q ? CHAPTERS.find((c) => c.num === q.chapter) : null;
+  const isChapterStart = q ? QUESTIONS.findIndex((x) => x.chapter === q.chapter) === step : false;
+  const progress = Math.round(((step + (state === "done" ? 1 : 0)) / (TOTAL + 1)) * 100);
+
+  // טעינה ראשונית
   useEffect(() => {
-    fetch(`/api/public/questionnaire/${token}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => {
-        setClientName(data.clientName);
-        if (data.status === "completed") { setState("done"); return; }
-        const ans: Answers = data.answers;
-        if (!ans.products.length) ans.products = [{ name: "", description: "", priceRange: "", promotions: "" }];
-        if (!ans.competitors.length) ans.competitors = [{ name: "", website: "" }];
-        setA(ans);
-        setState("form");
-      })
-      .catch(() => setState("notFound"));
+    (async () => {
+      try {
+        const res = await fetch(`/api/public/questionnaire/${token}`);
+        if (!res.ok) { setState("notFound"); return; }
+        const json = await res.json();
+        if (json.status === "completed") { setState("done"); return; }
+        setClientName(json.clientName ?? "");
+        setPrefill(json.prefill ?? { dealValue: "", budget: "" });
+        const saved: AnswersV2 = json.answers ?? { step: 0, data: {} };
+        setAnswers(saved);
+        if (saved.confirm) setConfirm(saved.confirm);
+        else setConfirm({ dealValue: json.prefill?.dealValue ?? "", budget: json.prefill?.budget ?? "", note: "" });
+        // חוזרים לאותה נקודה אם כבר התחיל
+        const resumeStep = Math.min(saved.step ?? 0, CONFIRM_STEP);
+        if (resumeStep > 0 && Object.keys(saved.data).length > 0) { setStep(resumeStep); setState("form"); }
+        else setState("intro");
+      } catch { setState("notFound"); }
+    })();
   }, [token]);
 
-  function set<K extends keyof Answers>(key: K, value: Answers[K]) {
-    setA((prev) => (prev ? { ...prev, [key]: value } : prev));
-  }
+  // שמירת טיוטה (debounced) — הלקוח יכול לסגור ולחזור
+  const saveDraft = useCallback((next: AnswersV2, nextConfirm: typeof confirm) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      fetch(`/api/public/questionnaire/${token}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...next, confirm: nextConfirm }),
+      }).catch(() => {});
+    }, 600);
+  }, [token]);
 
-  async function saveDraft() {
-    if (!a) return;
-    try {
-      const res = await fetch(`/api/public/questionnaire/${token}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(a),
-      });
-      if (res.ok) { setSavedFlash(true); setTimeout(() => setSavedFlash(false), 2500); }
-    } catch {}
-  }
+  const setAnswer = (id: string, v: AnswerValue) => {
+    setAnswers((prev) => {
+      const next = { ...prev, data: { ...prev.data, [id]: v } };
+      saveDraft(next, confirm);
+      return next;
+    });
+  };
 
-  async function submit() {
-    if (!a) return;
+  const goTo = (nextStep: number) => {
+    setError("");
+    setStep(nextStep);
+    setAnim((n) => n + 1);
+    setAnswers((prev) => {
+      const next = { ...prev, step: nextStep };
+      saveDraft(next, confirm);
+      return next;
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const next = () => {
+    if (q && !isAnswered(q, answers.data[q.id])) {
+      setShake(true); setTimeout(() => setShake(false), 450);
+      setError("רק שנייה — צריך לענות כאן לפני שממשיכים 🙂");
+      return;
+    }
+    goTo(step + 1);
+  };
+  const back = () => { if (step > 0) goTo(step - 1); };
+  const skip = () => goTo(step + 1);
+
+  const submit = async () => {
     setState("submitting");
     try {
       const res = await fetch(`/api/public/questionnaire/${token}`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(a),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...answers, step: CONFIRM_STEP, confirm }),
       });
-      if (!res.ok) throw new Error();
-      setState("done");
-      window.scrollTo({ top: 0 });
-    } catch {
-      setState("form");
-      alert("השליחה נכשלה — נסו שוב בעוד רגע");
-    }
-  }
+      if (res.ok) setState("done");
+      else { setState("form"); setError("משהו השתבש בשליחה — נסה שוב"); }
+    } catch { setState("form"); setError("משהו השתבש בשליחה — נסה שוב"); }
+  };
 
-  if (state === "loading") return <p className="py-20 text-center text-sm text-brand-muted">טוען...</p>;
+  const primaryBtn = "rounded-lg bg-brand-gold px-7 py-3 text-[15px] font-bold text-brand-dark shadow-sm transition-all duration-200 hover:brightness-95 active:scale-[.98]";
+  const ghostBtn = "rounded-lg px-4 py-3 text-sm text-brand-muted transition-colors hover:text-brand-dark";
 
+  // ---------- מצבים ----------
+  if (state === "loading") return <div className="py-24 text-center text-brand-muted">רק רגע…</div>;
   if (state === "notFound") return (
-    <div className={`${cardClass} text-center`}>
+    <div className="mx-auto max-w-md py-24 text-center">
       <p className="text-lg font-semibold text-brand-dark">הקישור לא נמצא</p>
-      <p className="mt-2 text-sm text-brand-muted">ייתכן שהקישור שגוי. פנו אלינו ונשלח לכם קישור חדש.</p>
+      <p className="mt-2 text-sm text-brand-muted">יכול להיות שפג תוקפו — דברו איתנו ונשלח קישור חדש.</p>
     </div>
   );
-
   if (state === "done") return (
-    <div className={`${cardClass} py-12 text-center`}>
-      <p className="text-3xl">🎉</p>
-      <h1 className="mt-3 text-xl font-semibold text-brand-dark">תודה רבה{clientName ? `, ${clientName}` : ""}!</h1>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-brand-muted">
-        התשובות נקלטו אצלנו. הצוות כבר מתחיל לעבוד על האסטרטגיה שלכם — נהיה בקשר בקרוב.
+    <div className="mx-auto max-w-lg py-20 text-center">
+      <div className="text-5xl">👏</div>
+      <h1 className="mt-4 text-2xl font-semibold text-brand-dark">זהו! נתת לנו בדיוק את מה שצריך.</h1>
+      <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-brand-muted">
+        מהרגע הזה אנחנו על זה: מחקר ← קופי ← עיצוב ← הדף שלך באוויר.
+        נעדכן אותך בכל אבן דרך, והדבר הבא שתראה מאיתנו זה טיוטת הדף לאישור שלך.
       </p>
     </div>
   );
-
-  if (!a) return null;
-
-  return (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h1 className="text-2xl font-semibold text-brand-dark">נעים להכיר, {clientName} 👋</h1>
-        <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-brand-muted">
-          כמה שאלות קצרות שיעזרו לנו לבנות לכם אסטרטגיית פרסום מדויקת.
-          ענו על מה שאתם יודעים — אפשר לדלג על שאלות, ולשמור טיוטה ולחזור בהמשך.
+  if (state === "intro") return (
+    <div className="mx-auto max-w-lg py-14">
+      <div className="rounded-xl border border-brand-border bg-brand-light p-8 shadow-sm">
+        <div className="text-4xl">🎉</div>
+        <h1 className="mt-3 text-2xl font-semibold leading-snug text-brand-dark">
+          {clientName ? `${clientName}, ברוכים הבאים למשפחה!` : "ברוכים הבאים למשפחה!"}
+        </h1>
+        <p className="mt-3 text-[15px] leading-relaxed text-brand-muted">
+          ב-15 הדקות הקרובות אתה הולך לתת לנו את חומר הגלם הכי חשוב שיש — ההיכרות עם העסק שלך.
+          כל תשובה כאן מתורגמת ישירות לדף הנחיתה, למודעות ולסוכן שיעבוד בשבילך.
+          ככל שתפרט יותר, המכונה שלך תהיה מדויקת יותר.
         </p>
+        <p className="mt-2 text-sm text-brand-muted">אפשר לעצור באמצע — הכל נשמר, וחוזרים בדיוק לאותה נקודה.</p>
+        <button className={`${primaryBtn} mt-6 w-full`} onClick={() => { setState("form"); setAnim((n) => n + 1); }}>
+          יאללה, מתחילים ←
+        </button>
+      </div>
+    </div>
+  );
+
+  // ---------- form ----------
+  return (
+    <div className="mx-auto max-w-xl pb-16">
+      <style>{`
+        @keyframes qSlideIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+        @keyframes qShake { 20%,60% { transform: translateX(5px); } 40%,80% { transform: translateX(-5px); } }
+        .q-enter { animation: qSlideIn .35s ease both; }
+        .q-shake { animation: qShake .4s ease; }
+        @media (prefers-reduced-motion: reduce) { .q-enter, .q-shake { animation: none; } }
+      `}</style>
+
+      {/* בר התקדמות */}
+      <div className="sticky top-0 z-10 -mx-4 bg-brand-bg/95 px-4 pb-3 pt-4 backdrop-blur sm:-mx-6 sm:px-6">
+        <div className="mb-1.5 flex items-center justify-between text-xs text-brand-muted">
+          <span>{step < TOTAL ? `שאלה ${step + 1} מתוך ${TOTAL}` : "צעד אחרון"}</span>
+          <span className="font-semibold text-brand-dark">{progress}%</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-brand-border">
+          <div className="h-full rounded-full bg-brand-gold transition-all duration-500" style={{ width: `${Math.max(progress, 3)}%` }} />
+        </div>
+        {isChapterStart && chapter?.milestone && (
+          <p className="mt-2 text-[13px] font-semibold text-brand-dark">{chapter.milestone}</p>
+        )}
       </div>
 
-      <Section num={1} title="על העסק" subtitle="במילים שלכם — בלי ניסוחים שיווקיים">
-        <Field label="ספרו על העסק בכמה משפטים" hint="מה אתם עושים, למי, וכמה זמן אתם פעילים">
-          <textarea className={inputClass} rows={4} value={a.businessDescription} onChange={(e) => set("businessDescription", e.target.value)} />
-        </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="אזור פעילות">
-            <select className={inputClass} value={a.serviceArea} onChange={(e) => set("serviceArea", e.target.value)}>
-              <option value="">בחרו</option>
-              <option value="local">מקומי / אזורי</option>
-              <option value="national">כל הארץ</option>
-              <option value="international">בינלאומי</option>
-            </select>
-          </Field>
-          <Field label="ערים / אזורים עיקריים">
-            <input className={inputClass} value={a.serviceAreaDetails} onChange={(e) => set("serviceAreaDetails", e.target.value)} placeholder="למשל: גוש דן והשרון" />
-          </Field>
-        </div>
-      </Section>
+      {/* מסך שאלה */}
+      {q ? (
+        <div key={anim} className={`q-enter mt-6 ${shake ? "q-shake" : ""}`}>
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-brand-muted">
+            פרק {chapter?.num} · {chapter?.title}
+          </div>
+          <h1 className="text-xl font-semibold leading-snug text-brand-dark sm:text-[22px]">{q.title}</h1>
 
-      <Section num={2} title="מוצרים ושירותים" subtitle="המוצרים או השירותים המרכזיים שתרצו לקדם">
-        {a.products.map((p, i) => (
-          <div key={i} className="space-y-3 rounded-lg border border-brand-border/60 bg-brand-bg p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-brand-muted">מוצר / שירות {i + 1}</span>
-              {a.products.length > 1 && (
-                <button type="button" onClick={() => set("products", a.products.filter((_, j) => j !== i))} className="text-xs text-brand-danger hover:underline">הסרה</button>
+          <div className="mt-3 rounded-lg border-r-[3px] border-brand-info bg-brand-info/5 px-3.5 py-2.5 text-[13.5px] leading-relaxed text-brand-muted">
+            <span className="font-semibold text-brand-info">למה אנחנו שואלים? </span>{q.why}
+          </div>
+          {q.example && (
+            <div className="mt-2 rounded-lg border-r-[3px] border-brand-success bg-brand-success/5 px-3.5 py-2.5 text-[13.5px] leading-relaxed text-brand-muted">
+              <span className="font-semibold text-brand-success">דוגמה לתשובה טובה: </span>{q.example}
+            </div>
+          )}
+
+          <div className="mt-5">
+            <QuestionBody q={q} value={answers.data[q.id]} onChange={(v) => setAnswer(q.id, v)} onEnter={next} />
+          </div>
+
+          {error && <p className="mt-3 text-sm font-medium text-brand-danger">{error}</p>}
+
+          <div className="mt-6 flex items-center justify-between">
+            <button type="button" className={ghostBtn} onClick={back} disabled={step === 0}
+              style={step === 0 ? { visibility: "hidden" } : undefined}>→ חזור</button>
+            <div className="flex items-center gap-2">
+              {q.optional && (
+                <button type="button" className={ghostBtn} onClick={skip}>דלג</button>
               )}
+              <button type="button" className={primaryBtn} onClick={next}>המשך ←</button>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <input className={inputClass} placeholder="שם המוצר / השירות" value={p.name}
-                onChange={(e) => set("products", a.products.map((r, j) => (j === i ? { ...r, name: e.target.value } : r)))} />
-              <input className={inputClass} placeholder="טווח מחירים (למשל: 500-1,500 ₪)" value={p.priceRange}
-                onChange={(e) => set("products", a.products.map((r, j) => (j === i ? { ...r, priceRange: e.target.value } : r)))} />
+          </div>
+        </div>
+      ) : (
+        /* מסך אישור — "מה שכבר סיפרת לנו" */
+        <div key={anim} className="q-enter mt-6">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-brand-muted">צעד אחרון</div>
+          <h1 className="text-xl font-semibold leading-snug text-brand-dark sm:text-[22px]">מה שכבר סיפרת לנו — עדיין נכון?</h1>
+          <p className="mt-2 text-sm leading-relaxed text-brand-muted">
+            את הנתונים האלה מסרת לנו לפני שסגרנו — אנחנו לא שואלים שוב, רק נותנים לתקן אם משהו השתנה.
+          </p>
+          <div className="mt-5 space-y-3.5 rounded-xl border border-brand-border bg-brand-light p-5">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brand-dark">עסקה ממוצעת (₪)</label>
+              <input className={inputClass} value={confirm.dealValue}
+                placeholder={prefill.dealValue || "למשל: 6,500"}
+                onChange={(e) => { const c = { ...confirm, dealValue: e.target.value.slice(0, 100) }; setConfirm(c); saveDraft(answers, c); }} />
             </div>
-            <input className={inputClass} placeholder="תיאור קצר" value={p.description}
-              onChange={(e) => set("products", a.products.map((r, j) => (j === i ? { ...r, description: e.target.value } : r)))} />
-            <input className={inputClass} placeholder="מבצעים / הטבות שאתם נוהגים להציע (אופציונלי)" value={p.promotions}
-              onChange={(e) => set("products", a.products.map((r, j) => (j === i ? { ...r, promotions: e.target.value } : r)))} />
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brand-dark">תקציב פרסום חודשי (₪)</label>
+              <input className={inputClass} value={confirm.budget}
+                placeholder={prefill.budget || "למשל: 8,000"}
+                onChange={(e) => { const c = { ...confirm, budget: e.target.value.slice(0, 100) }; setConfirm(c); saveDraft(answers, c); }} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brand-dark">משהו נוסף שחשוב שנדע? <span className="text-xs text-brand-muted">(לא חובה)</span></label>
+              <textarea className={`${inputClass} min-h-20`} value={confirm.note}
+                onChange={(e) => { const c = { ...confirm, note: e.target.value.slice(0, 1000) }; setConfirm(c); saveDraft(answers, c); }} />
+            </div>
           </div>
-        ))}
-        <button type="button" onClick={() => set("products", [...a.products, { name: "", description: "", priceRange: "", promotions: "" }])}
-          className="text-sm font-medium text-brand-dark underline decoration-brand-gold decoration-2 underline-offset-4 hover:opacity-70">
-          + הוספת מוצר / שירות
-        </button>
-      </Section>
-
-      <Section num={3} title="מה מייחד אתכם">
-        <Field label="מה מבדל אתכם מהמתחרים? (משפט אחד)">
-          <input className={inputClass} value={a.usp} onChange={(e) => set("usp", e.target.value)} />
-        </Field>
-        <Field label="למה לקוחות בוחרים דווקא בכם?">
-          <textarea className={inputClass} rows={3} value={a.whyChooseUs} onChange={(e) => set("whyChooseUs", e.target.value)} />
-        </Field>
-        <Field label="הוכחות חברתיות" hint="ביקורות, המלצות, מספרים (כמה לקוחות שירתתם, שנות ותק...)">
-          <textarea className={inputClass} rows={3} value={a.socialProof} onChange={(e) => set("socialProof", e.target.value)} />
-        </Field>
-        <Field label="התנגדויות נפוצות" hint="מה מונע מלקוחות לסגור אתכם, ומה אתם עונים ('יקר לי' → ...)">
-          <textarea className={inputClass} rows={3} value={a.objections} onChange={(e) => set("objections", e.target.value)} />
-        </Field>
-      </Section>
-
-      <Section num={4} title="הלקוחות שלכם">
-        <Field label="מי הלקוח האידיאלי שלכם?" hint="גיל, מגדר, מקום מגורים, מה מטריד אותו, מה הוא מחפש">
-          <textarea className={inputClass} rows={4} value={a.idealCustomer} onChange={(e) => set("idealCustomer", e.target.value)} />
-        </Field>
-      </Section>
-
-      <Section num={5} title="מתחרים" subtitle="מי המתחרים שאתם מכירים? מספיק שם — אם יש אתר, עוד יותר טוב">
-        {a.competitors.map((c, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <input className={inputClass} placeholder="שם המתחרה" value={c.name}
-              onChange={(e) => set("competitors", a.competitors.map((r, j) => (j === i ? { ...r, name: e.target.value } : r)))} />
-            <input className={inputClass} placeholder="אתר (אופציונלי)" value={c.website} dir="ltr"
-              onChange={(e) => set("competitors", a.competitors.map((r, j) => (j === i ? { ...r, website: e.target.value } : r)))} />
-            {a.competitors.length > 1 && (
-              <button type="button" onClick={() => set("competitors", a.competitors.filter((_, j) => j !== i))} className="shrink-0 text-xs text-brand-danger hover:underline">הסרה</button>
-            )}
+          {error && <p className="mt-3 text-sm font-medium text-brand-danger">{error}</p>}
+          <div className="mt-6 flex items-center justify-between">
+            <button type="button" className={ghostBtn} onClick={back}>→ חזור</button>
+            <button type="button" className={primaryBtn} onClick={submit} disabled={state === "submitting"}>
+              {state === "submitting" ? "שולח…" : "סיימתי — שלח 🎉"}
+            </button>
           </div>
-        ))}
-        <button type="button" onClick={() => set("competitors", [...a.competitors, { name: "", website: "" }])}
-          className="text-sm font-medium text-brand-dark underline decoration-brand-gold decoration-2 underline-offset-4 hover:opacity-70">
-          + הוספת מתחרה
-        </button>
-      </Section>
-
-      <Section num={6} title="שפה וסגנון">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="איזה טון דיבור מתאים למותג שלכם?">
-            <select className={inputClass} value={a.toneOfVoice} onChange={(e) => set("toneOfVoice", e.target.value)}>
-              <option value="">בחרו</option>
-              {["רשמי", "ידידותי", "צעיר", "מקצועי", "שנון", "יוקרתי", "פרובוקטיבי"].map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </Field>
-          <Field label="איך פונים לקהל?">
-            <select className={inputClass} value={a.addressStyle} onChange={(e) => set("addressStyle", e.target.value)}>
-              <option value="">בחרו</option>
-              {["אתה", "את", "אתם", "גוף שלישי"].map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </Field>
         </div>
-        <Field label="מילים או נושאים שאסור להשתמש בהם" hint="רגישויות, מגבלות רגולטוריות, דברים שלא מתאימים למותג">
-          <textarea className={inputClass} rows={2} value={a.forbiddenWords} onChange={(e) => set("forbiddenWords", e.target.value)} />
-        </Field>
-      </Section>
-
-      <Section num={7} title="חומרים וגישות">
-        <Field label="קישור לחומרים גרפיים" hint="תיקיית דרייב/דרופבוקס עם לוגו, תמונות, סרטונים">
-          <input className={inputClass} dir="ltr" value={a.assetBankUrl} onChange={(e) => set("assetBankUrl", e.target.value)} placeholder="https://..." />
-        </Field>
-        <Field label="אילו חשבונות פרסום וכלים כבר קיימים?" hint="חשבון מודעות בפייסבוק/גוגל, פיקסל, Google Analytics, מערכת CRM — ומי מנהל אותם היום">
-          <textarea className={inputClass} rows={3} value={a.existingAssets} onChange={(e) => set("existingAssets", e.target.value)} />
-        </Field>
-      </Section>
-
-      <div className="sticky bottom-0 -mx-4 border-t border-brand-border bg-brand-light/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <button type="button" onClick={saveDraft}
-            className="rounded-lg border border-brand-border bg-brand-light px-4 py-2.5 text-sm font-medium text-brand-dark transition-colors duration-200 hover:bg-brand-bg">
-            {savedFlash ? "✓ נשמר" : "שמירת טיוטה"}
-          </button>
-          <button type="button" onClick={submit} disabled={state === "submitting"}
-            className="rounded-lg bg-brand-gold px-8 py-2.5 text-sm font-semibold text-brand-dark transition-colors duration-200 hover:bg-brand-gold/80 disabled:cursor-wait disabled:opacity-60">
-            {state === "submitting" ? "שולח..." : "שליחת השאלון"}
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
