@@ -19,7 +19,8 @@ export interface Field {
 export type QuestionInput =
   | { kind: "fields"; fields: Field[] }
   | { kind: "repeater"; itemLabel: string; addLabel: string; fields: Field[]; maxRows?: number }
-  | { kind: "choice"; options: string[]; detail?: { showFor: string[]; field: Field } };
+  | { kind: "choice"; options: string[]; detail?: { showFor: string[]; field: Field } }
+  | { kind: "upload"; accept: string; maxFiles?: number; hint?: string; extraFields?: Field[] };
 
 export interface Question {
   id: string;
@@ -227,15 +228,43 @@ export const QUESTIONS: Question[] = [
     input: { kind: "choice", options: ["אני יודע לגשת", "יש איש טכני", "לא יודע"], detail: { showFor: ["יש איש טכני"], field: { key: "techContact", label: "פרטי קשר של איש הטכני", type: "text", max: 300 } } },
   },
   {
-    id: "q24", chapter: 7, title: "חומרים ויזואליים — לוגו, תמונות שלך, תמונות עבודות",
-    why: "קובע את הכיוון העיצובי של הדף. וגם \"אין לי כלום\" זו תשובה מצוינת — יש לנו פתרון מעוצב בדיוק למקרה הזה.",
-    input: { kind: "choice", options: ["יש לי חומרים", "יש קצת", "אין לי כמעט כלום"], detail: { showFor: ["יש לי חומרים", "יש קצת"], field: { key: "assetsUrl", label: "קישור לתיקייה (דרייב / דרופבוקס)", type: "url", optional: true } } },
+    id: "q24", chapter: 7, title: "נכסי המותג — לוגו, פונטים, ספר מותג",
+    why: "הדף שלך ייבנה בשפה הוויזואלית של המותג שלך — לוגו, צבעים ופונטים. מה שתעלה כאן נכנס ישירות לעיצוב.",
+    input: { kind: "upload",
+      accept: "image/*,.pdf,.woff,.woff2,.ttf,.otf",
+      maxFiles: 10,
+      hint: "לוגו (רצוי בכמה גרסאות), ספר מותג אם יש, קבצי פונט",
+      extraFields: [
+        { key: "colors", label: "צבעי המותג", type: "text", optional: true, placeholder: "קודים אם ידועים (#eed89b) או תיאור — \"זהב ושחור\"", max: 300 },
+        { key: "fontsNote", label: "שמות הפונטים (אם אין קבצים)", type: "text", optional: true, max: 200 },
+      ],
+    },
+    optional: true,
+  },
+  {
+    id: "q25", chapter: 7, title: "תמונות וסרטונים — שלך, של הצוות, של העבודות",
+    why: "תמונות אמיתיות שלך מנצחות כל תמונת מאגר. וגם \"אין לי כלום\" זו תשובה מצוינת — יש לנו פתרון מעוצב בדיוק למקרה הזה.",
+    input: { kind: "upload",
+      accept: "image/*,video/*",
+      maxFiles: 15,
+      hint: "תמונות שלך, של הצוות, של עבודות · סרטוני תדמית והמלצות",
+      extraFields: [
+        { key: "folderUrl", label: "יש הרבה קבצים? הדבק קישור לתיקייה", type: "url", optional: true, placeholder: "https://drive.google.com/..." },
+      ],
+    },
+    optional: true,
   },
 ];
 
 // ---------- טיפוסי תשובות ----------
 // fields → Record<key,string> · repeater → Array<Record<key,string>> · choice → { choice, detail? }
-export type AnswerValue = Record<string, string> | Array<Record<string, string>> | { choice: string; detail?: string };
+// upload → { files: [{url,name}], fields? }
+export interface UploadedFile { url: string; name: string }
+export type AnswerValue =
+  | Record<string, string>
+  | Array<Record<string, string>>
+  | { choice: string; detail?: string }
+  | { files: UploadedFile[]; fields?: Record<string, string> };
 export interface AnswersV2 {
   step: number; // המסך האחרון שהוצג — להמשך מאותה נקודה
   data: Record<string, AnswerValue>;
@@ -284,6 +313,23 @@ export function sanitizeAnswersV2(body: unknown): AnswersV2 {
         return o;
       }).filter((r) => Object.values(r).some(Boolean));
       if (out.length) data[q.id] = out;
+    } else if (q.input.kind === "upload") {
+      const row = (v ?? {}) as Record<string, unknown>;
+      const rawFiles = Array.isArray(row.files) ? row.files.slice(0, q.input.maxFiles ?? 15) : [];
+      const files = rawFiles.map((f) => {
+        const r = (f ?? {}) as Record<string, unknown>;
+        const url = str(r.url, 600);
+        // רק קבצים מהאחסון שלנו, בתיקיית onboarding
+        try {
+          const u = new URL(url);
+          if (!u.hostname.endsWith(".vercel-storage.com") || !u.pathname.replace(/^\//, "").startsWith("onboarding/")) return null;
+        } catch { return null; }
+        return { url, name: str(r.name, 200) || "קובץ" };
+      }).filter((f): f is { url: string; name: string } => f !== null);
+      const extra: Record<string, string> = {};
+      const rowFields = (row.fields ?? {}) as Record<string, unknown>;
+      for (const f of q.input.extraFields ?? []) extra[f.key] = sanitizeFieldVal(f, rowFields[f.key]);
+      if (files.length || Object.values(extra).some(Boolean)) data[q.id] = { files, fields: extra };
     } else {
       const row = (v ?? {}) as Record<string, unknown>;
       const choice = str(row.choice, 100);
@@ -310,6 +356,14 @@ const rowsOf = (a: AnswersV2, id: string): Array<Record<string, string>> => Arra
 const choiceOf = (a: AnswersV2, id: string): { choice: string; detail?: string } => {
   const v = a.data[id];
   return v && !Array.isArray(v) && "choice" in v ? (v as { choice: string; detail?: string }) : { choice: "" };
+};
+const uploadOf = (a: AnswersV2, id: string): { files: UploadedFile[]; fields: Record<string, string> } => {
+  const v = a.data[id];
+  if (v && !Array.isArray(v) && "files" in v) {
+    const u = v as { files: UploadedFile[]; fields?: Record<string, string> };
+    return { files: u.files ?? [], fields: u.fields ?? {} };
+  }
+  return { files: [], fields: {} };
 };
 
 function isEmptyJsonArray(value: string): boolean {
@@ -367,8 +421,15 @@ export async function applyV2ToProfile(clientId: string, a: AnswersV2): Promise<
     setIfEmpty("socialProof", testimonials.map((t) => `${t.type ?? "המלצה"}: ${t.url}`).join("\n"));
   }
 
-  // תיקיית נכסים
-  setIfEmpty("assetBankUrl", choiceOf(a, "q24").detail ?? "");
+  // נכסי מותג — לוגו, צבעים, תיקיית נכסים
+  const brand = uploadOf(a, "q24");
+  const media = uploadOf(a, "q25");
+  const firstImage = brand.files.find((f) => /\.(png|jpe?g|webp|svg|gif)(\?|$)/i.test(f.url) || /\.(png|jpe?g|webp|svg|gif)$/i.test(f.name));
+  if (firstImage) setIfEmpty("logoUrl", firstImage.url);
+  // חילוץ קודי צבע אם הוזנו
+  const hexes = (brand.fields.colors ?? "").match(/#[0-9a-fA-F]{3,8}/g) ?? [];
+  if (hexes.length && isEmptyJsonArray(profile.brandColors)) data.brandColors = JSON.stringify(hexes);
+  setIfEmpty("assetBankUrl", media.fields.folderUrl ?? "");
 
   // כל מה שאין לו שדה ייעודי — הערה פנימית מסודרת אחת
   const noteParts: string[] = [];
@@ -397,7 +458,11 @@ export async function applyV2ToProfile(clientId: string, a: AnswersV2): Promise<
   push("💳 חשבון גוגל אדס", choiceOf(a, "q22").choice);
   const dom = choiceOf(a, "q23");
   push("🔧 ניהול דומיין", [dom.choice, dom.detail].filter(Boolean).join(" · "));
-  push("🖼️ חומרים ויזואליים", choiceOf(a, "q24").choice);
+  const fileList = (files: UploadedFile[]) => files.map((f) => `${f.name} — ${f.url}`).join("\n");
+  push("🎨 נכסי מותג שהועלו", fileList(brand.files));
+  if (!hexes.length) push("🎨 צבעי המותג (בתיאור)", brand.fields.colors);
+  push("🔤 פונטים", brand.fields.fontsNote);
+  push("🖼️ תמונות וסרטונים שהועלו", fileList(media.files));
   if (a.confirm) push("✅ אישור נתוני מכירה", [a.confirm.dealValue && `עסקה: ${a.confirm.dealValue}`, a.confirm.budget && `תקציב: ${a.confirm.budget}`, a.confirm.note].filter(Boolean).join(" · "));
 
   if (noteParts.length) {

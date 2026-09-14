@@ -2,10 +2,11 @@
 
 // שאלון כניסה v2 — שאלה אחת על המסך, בר התקדמות מעודד, "למה אנחנו שואלים"
 // ודוגמה לתשובה טובה בכל שאלה. שמירה אוטומטית בכל התקדמות — אפשר לעצור ולחזור.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { upload } from "@vercel/blob/client";
 import {
   QUESTIONS, CHAPTERS,
-  type Question, type Field, type AnswersV2, type AnswerValue,
+  type Question, type Field, type AnswersV2, type AnswerValue, type UploadedFile,
 } from "@/lib/onboarding/questions";
 
 const TOTAL = QUESTIONS.length; // 24
@@ -20,6 +21,13 @@ const asFields = (v?: AnswerValue): Record<string, string> =>
 const asRows = (v?: AnswerValue): Array<Record<string, string>> => (Array.isArray(v) ? v : []);
 const asChoice = (v?: AnswerValue): { choice: string; detail?: string } =>
   v && !Array.isArray(v) && "choice" in v ? (v as { choice: string; detail?: string }) : { choice: "" };
+const asUpload = (v?: AnswerValue): { files: UploadedFile[]; fields: Record<string, string> } => {
+  if (v && !Array.isArray(v) && "files" in v) {
+    const u = v as { files: UploadedFile[]; fields?: Record<string, string> };
+    return { files: u.files ?? [], fields: u.fields ?? {} };
+  }
+  return { files: [], fields: {} };
+};
 
 function emptyRow(fields: Field[]): Record<string, string> {
   return Object.fromEntries(fields.map((f) => [f.key, ""]));
@@ -40,6 +48,7 @@ function isAnswered(q: Question, v?: AnswerValue): boolean {
     const first = q.input.fields[0];
     return asRows(v).some((r) => (r[first.key] ?? "").trim());
   }
+  if (q.input.kind === "upload") return asUpload(v).files.length > 0;
   return Boolean(asChoice(v).choice);
 }
 
@@ -86,10 +95,98 @@ function FieldInput({ field, value, onChange, autoFocus, onEnter }: {
   );
 }
 
-// ---------- גוף שאלה לפי סוג ----------
-function QuestionBody({ q, value, onChange, onEnter }: {
-  q: Question; value?: AnswerValue; onChange: (v: AnswerValue) => void; onEnter: () => void;
+// ---------- מרכיב העלאת קבצים ----------
+function UploadBody({ q, token, value, onChange }: {
+  q: Question & { input: Extract<Question["input"], { kind: "upload" }> };
+  token: string; value?: AnswerValue; onChange: (v: AnswerValue) => void;
 }) {
+  const { accept, maxFiles, hint, extraFields } = q.input;
+  const cur = asUpload(value);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [uploadError, setUploadError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = async (list: FileList | null) => {
+    if (!list?.length) return;
+    setUploadError("");
+    const room = (maxFiles ?? 15) - cur.files.length;
+    const files = Array.from(list).slice(0, Math.max(room, 0));
+    if (!files.length) { setUploadError(`אפשר להעלות עד ${maxFiles} קבצים`); return; }
+    setUploading(true);
+    const added: UploadedFile[] = [];
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const blob = await upload(`onboarding/${token}/${Date.now()}_${f.name}`, f, {
+          access: "private" as never,
+          handleUploadUrl: `/api/public/questionnaire/${token}/upload`,
+          contentType: f.type || "application/octet-stream",
+          multipart: true,
+          onUploadProgress: (e) => setProgress(Math.round(((i + e.percentage / 100) / files.length) * 100)),
+        });
+        added.push({ url: blob.url, name: f.name });
+      }
+      onChange({ files: [...cur.files, ...added], fields: cur.fields });
+    } catch {
+      setUploadError("ההעלאה נכשלה — נסה שוב, או דלג והדבק קישור לתיקייה");
+      if (added.length) onChange({ files: [...cur.files, ...added], fields: cur.fields });
+    } finally {
+      setUploading(false); setProgress(0);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <input ref={fileRef} type="file" accept={accept} multiple className="hidden"
+        onChange={(e) => handleFiles(e.target.files)} />
+      <button type="button" disabled={uploading}
+        onClick={() => fileRef.current?.click()}
+        className="w-full rounded-lg border-2 border-dashed border-brand-gold/70 bg-brand-gold/5 px-4 py-6 text-center transition-colors hover:bg-brand-gold/10 disabled:opacity-60">
+        <div className="text-2xl">📁</div>
+        <div className="mt-1 text-sm font-semibold text-brand-dark">{uploading ? `מעלה… ${progress}%` : "לחץ לבחירת קבצים"}</div>
+        {hint && !uploading && <div className="mt-0.5 text-xs text-brand-muted">{hint}</div>}
+      </button>
+      {uploading && (
+        <div className="h-1.5 overflow-hidden rounded-full bg-brand-border">
+          <div className="h-full rounded-full bg-brand-gold transition-all duration-300" style={{ width: `${progress}%` }} />
+        </div>
+      )}
+      {uploadError && <p className="text-sm text-brand-danger">{uploadError}</p>}
+      {cur.files.length > 0 && (
+        <ul className="space-y-1.5">
+          {cur.files.map((f, i) => (
+            <li key={i} className="flex items-center justify-between gap-3 rounded-lg border border-brand-border bg-brand-light px-3 py-2 text-sm">
+              <span className="truncate text-brand-dark">✓ {f.name}</span>
+              <button type="button" className="shrink-0 text-xs text-brand-danger hover:underline"
+                onClick={() => onChange({ files: cur.files.filter((_, j) => j !== i), fields: cur.fields })}>הסר</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(extraFields ?? []).map((f) => (
+        <div key={f.key}>
+          {f.label && (
+            <label className="mb-1 block text-sm font-medium text-brand-dark">
+              {f.label}{f.optional && <span className="mr-1 text-xs text-brand-muted">(לא חובה)</span>}
+            </label>
+          )}
+          <FieldInput field={f} value={cur.fields[f.key] ?? ""}
+            onChange={(v) => onChange({ files: cur.files, fields: { ...cur.fields, [f.key]: v } })} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------- גוף שאלה לפי סוג ----------
+function QuestionBody({ q, token, value, onChange, onEnter }: {
+  q: Question; token: string; value?: AnswerValue; onChange: (v: AnswerValue) => void; onEnter: () => void;
+}) {
+  if (q.input.kind === "upload") {
+    return <UploadBody q={q as Question & { input: Extract<Question["input"], { kind: "upload" }> }} token={token} value={value} onChange={onChange} />;
+  }
   if (q.input.kind === "fields") {
     const { fields } = q.input;
     const vals = asFields(value);
@@ -361,7 +458,7 @@ export default function QuestionnaireForm({ token }: { token: string }) {
           )}
 
           <div className="mt-5">
-            <QuestionBody q={q} value={answers.data[q.id]} onChange={(v) => setAnswer(q.id, v)} onEnter={next} />
+            <QuestionBody q={q} token={token} value={answers.data[q.id]} onChange={(v) => setAnswer(q.id, v)} onEnter={next} />
           </div>
 
           {error && <p className="mt-3 text-sm font-medium text-brand-danger">{error}</p>}
