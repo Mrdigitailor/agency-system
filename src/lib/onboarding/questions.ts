@@ -477,3 +477,24 @@ export async function applyV2ToProfile(clientId: string, a: AnswersV2): Promise<
   }
   return Object.keys(data);
 }
+
+// ---------- חילוץ נכסים לתצוגה בכרטיס הלקוח ----------
+export interface OnboardingAssets {
+  brandFiles: UploadedFile[]; // לוגו, ספר מותג, פונטים (q24)
+  mediaFiles: UploadedFile[]; // תמונות וסרטונים (q25)
+  colors: string;             // צבעי המותג כפי שנכתבו
+  fontsNote: string;
+  folderUrl: string;          // קישור לתיקייה חיצונית
+}
+
+export function extractAssets(a: AnswersV2): OnboardingAssets {
+  const brand = uploadOf(a, "q24");
+  const media = uploadOf(a, "q25");
+  return {
+    brandFiles: brand.files,
+    mediaFiles: media.files,
+    colors: brand.fields.colors ?? "",
+    fontsNote: brand.fields.fontsNote ?? "",
+    folderUrl: media.fields.folderUrl ?? "",
+  };
+}

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireRole } from "@/lib/auth/api-guard";
 import { sendQuestionnaireEmail } from "@/lib/onboarding/questionnaire-email";
+import { parseAnswersV2, extractAssets } from "@/lib/onboarding/questions";
 
 export const maxDuration = 30;
 
@@ -24,6 +25,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     link: questionnaireLink(req, q.token),
     sentAt: q.sentAt,
     completedAt: q.completedAt,
+    assets: extractAssets(parseAnswersV2(q.answers)),
   });
 }
 

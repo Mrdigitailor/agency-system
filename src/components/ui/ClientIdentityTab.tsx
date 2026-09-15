@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import OnboardingAssets from "@/components/ui/OnboardingAssets";
 import {
   Building2, ShoppingBag, Award, Users, Globe, Target, Palette,
   DollarSign, FileText, MessageSquare, ChevronDown, Plus, Trash2, Save,
@@ -401,6 +402,7 @@ export default function ClientIdentityTab({ clientId, userRole, clientData }: Pr
 
       {/* 7. נכסים ויזואליים */}
       <Section title="נכסים ויזואליים" icon={<Palette className="h-4 w-4 text-brand-gold" />}>
+        <OnboardingAssets clientId={clientId} />
         <div className="space-y-3">
           <div>
             <Label>צבעי מותג (עד 5)</Label>
