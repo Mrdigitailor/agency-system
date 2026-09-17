@@ -16,6 +16,7 @@ import {
   UserCircle,
   MessageCircle,
   LogOut,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -32,6 +33,7 @@ const iconMap: Record<string, LucideIcon> = {
   Calendar,
   UserCircle,
   MessageCircle,
+  BarChart3,
 };
 
 // מיפוי href → מפתח תרגום
@@ -56,6 +58,7 @@ export default function Sidebar() {
   const { data: session, status } = useSession();
   const { t, lang } = useLanguage();
   const [unreadChat, setUnreadChat] = useState(0);
+  const [hasMediaReport, setHasMediaReport] = useState(false);
 
   const userRole = session?.user?.role ?? "";
   const userName = session?.user?.name ?? "";
@@ -78,10 +81,23 @@ export default function Sidebar() {
     return () => clearInterval(interval);
   }, [fetchUnread]);
 
+  // דוח מדיה קיים רק לחלק מהלקוחות — בודקים פעם אחת, ורק ללקוח קצה
+  useEffect(() => {
+    if (status !== "authenticated" || userRole !== "client") return;
+    fetch("/api/client-portal/media-report?check=1")
+      .then((r) => (r.ok ? r.json() : { available: false }))
+      .then((d) => setHasMediaReport(Boolean(d.available)))
+      .catch(() => {});
+  }, [status, userRole]);
+
   // מחכים לטעינת session לפני הצגת טאבים
   const visibleItems = status === "loading"
     ? []
-    : navigationItems.filter((item) => item.roles.includes(userRole));
+    : navigationItems.filter(
+        (item) =>
+          item.roles.includes(userRole) &&
+          (item.requires !== "mediaReport" || hasMediaReport),
+      );
 
   return (
     <aside className={`fixed top-0 z-40 flex h-screen w-[240px] flex-col bg-brand-dark ${lang === "he" ? "right-0" : "left-0"}`}>

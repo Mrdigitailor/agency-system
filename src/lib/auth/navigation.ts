@@ -95,6 +95,13 @@ export const navigationItems: NavItem[] = [
     roles: ["client"],
   },
   {
+    label: "דוח מדיה",
+    href: "/client-portal/media",
+    icon: "BarChart3",
+    roles: ["client"],
+    requires: "mediaReport", // מוצג רק ללקוח שיש לו דוח מדיה
+  },
+  {
     label: "דוחות",
     href: "/client-portal/reports",
     icon: "FileText",
