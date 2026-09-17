@@ -186,6 +186,16 @@ export default function ClientDetailPage() {
 
   const [activeTab, setActiveTab] = useState<TabId>("overview");
 
+  /* דוח מדיה חיצוני — מוצג רק ללקוח שהועלה לו דוח */
+  const [hasMediaReport, setHasMediaReport] = useState(false);
+  useEffect(() => {
+    if (!client?.id) return;
+    fetch(`/api/client-portal/media-report?check=1&clientId=${client.id}`)
+      .then((r) => (r.ok ? r.json() : { available: false }))
+      .then((d) => setHasMediaReport(Boolean(d.available)))
+      .catch(() => {});
+  }, [client?.id]);
+
   /* קמפיינים — מצב מקומי */
   const [campaigns, setCampaigns] = useState<Campaign[]>(seedCampaigns);
   const [showCampaignModal, setShowCampaignModal] = useState(false);
@@ -527,6 +537,17 @@ export default function ClientDetailPage() {
             </button>
           );
         })}
+        {hasMediaReport && (
+          <a
+            href={`/api/client-portal/media-report?clientId=${client.id}`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-brand-muted transition-colors hover:bg-brand-bg hover:text-brand-dark"
+          >
+            <BarChart3 className="h-4 w-4" />
+            דוח מדיה
+          </a>
+        )}
       </div>
 
       {/* ==================== תוכן טאב ==================== */}
