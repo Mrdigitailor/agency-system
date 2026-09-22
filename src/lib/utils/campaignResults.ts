@@ -9,7 +9,10 @@ interface MetaRow { name: string; externalId: string; purchases: number; actions
 const FORM_LEAD_ACTIONS = ["onsite_conversion.lead_grouped", "onsite_conversion.leadgen_grouped"];
 const WEB_LEAD_ACTIONS = ["offsite_conversion.fb_pixel_lead", "onsite_web_lead"];
 const REG_ACTIONS = ["offsite_conversion.fb_pixel_complete_registration", "onsite_conversion.complete_registration"];
-const MSG_ACTIONS = ["onsite_conversion.messaging_conversation_started_7d", "onsite_conversion.total_messaging_connection"];
+// "שיחות שנפתחו" = מה שמטא מציגה כתוצאה (Results) לקמפייני הודעות. "חיבורי הודעות"
+// (total_messaging_connection) רחב יותר ומנפח — משמש רק כ-fallback אם אין את הראשון.
+const MSG_STARTED = ["onsite_conversion.messaging_conversation_started_7d"];
+const MSG_FALLBACK = ["onsite_conversion.total_messaging_connection"];
 
 export type CampaignResultType = "purchases" | "leads" | "registrations" | "messages" | "conversions" | "none";
 
@@ -53,7 +56,8 @@ function classifyOne(rows: MetaRow[]): { resultType: CampaignResultType; count: 
   // שמטא מציגה בעמודת Results (Leads Form / Website Leads), בלי ניפוח.
   const leads = Math.max(maxActions(acts, FORM_LEAD_ACTIONS), maxActions(acts, WEB_LEAD_ACTIONS));
   const registrations = maxActions(acts, REG_ACTIONS);
-  const messages = maxActions(acts, MSG_ACTIONS);
+  const started = maxActions(acts, MSG_STARTED);
+  const messages = started > 0 ? started : maxActions(acts, MSG_FALLBACK);
 
   // מכירות → רכישות
   if (objective.includes("SALES") || objective.includes("PURCHASE")) {
