@@ -107,6 +107,8 @@ export const QUESTIONS: Question[] = [
       { key: "price", label: "מחיר", type: "text", optional: true, placeholder: "למשל: 6,500 ₪", max: 100 },
       { key: "margin", label: "שולי רווח אחרי הוצאות", type: "text", optional: true, placeholder: "למשל: ~70%", max: 100 },
       { key: "delivery", label: "זמן אספקה", type: "text", optional: true, placeholder: "למשל: 6–8 שבועות", max: 100 },
+      { key: "paymentType", label: "איך משלמים?", type: "select", options: ["תשלום חד פעמי", "ריטיינר חודשי", "משולב"] },
+      { key: "avgLifetime", label: "אם ריטיינר — כמה זמן לקוח נשאר בממוצע?", type: "text", optional: true, placeholder: "למשל: שנה וחצי", max: 100 },
       { key: "followUp", label: "יש המשך שירות אחרי?", type: "text", optional: true, max: 300 },
     ] },
   },
