@@ -6,6 +6,9 @@ import type { Chain } from "./verdict";
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const ils = (n: number) => Math.round(n).toLocaleString("he-IL");
+// כלל בית: בתצוגה מעגלים תמיד למעלה למספר עגול. החישוב הגולמי נשמר כמו שהוא.
+const ceilTo = (n: number, step: number) => Math.ceil(Math.max(n, 0) / step) * step;
+const ilsUp = (n: number) => ceilTo(n, 100).toLocaleString("he-IL"); // הכנסות: מעלה למאה הקרובה
 const dateIL = (d: Date) => d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
 
 export interface ReportInput {
@@ -27,6 +30,23 @@ export function renderReportHtml(input: ReportInput, r: ResearchResult, c: Chain
   const isRetainer = input.paymentType === "retainer" && input.monthlyFee > 0;
   const closeText = c.closeRate === 0.05 ? "פנייה אחת מכל 20" : "פנייה אחת מכל 10";
   const closeTierText = c.closeRate === 0.05 ? "הרף השמרני למוצרים מעל 1,500 ₪" : "הרף השמרני למוצרים עד 1,500 ₪";
+
+  // בסיס המספר הראשי: אם אין דמי הקמה (ריטיינר נקי), עסקה ראשונה שווה 0 ואסור להציג אותה.
+  // הגנת אפס: הדוח לעולם לא מציג הכנסה 0. במקרה כזה הכותרת עוברת לשווי הלקוח המלא.
+  const firstBasis = c.dealValueFirst > 0;
+  const heroLow = firstBasis ? c.revenueFirst.head : c.revenueFull.head;
+  const heroHigh = firstBasis ? c.revenueFirst.best : c.revenueFull.best;
+  const heroSub = firstBasis
+    ? `מעסקאות ראשונות בלבד.${isRetainer ? ` בשווי לקוח מלא, שמביא בחשבון שהשירות הוא ריטיינר מתמשך: <b>עד ${ilsUp(c.revenueFull.best)} ₪ בחודש</b>.` : ""}`
+    : `בשווי לקוח מלא: השירות הוא ריטיינר של ${ils(input.monthlyFee)} ₪ בחודש, ולקוח ממוצע נשאר ${input.lifetimeMonths} חודשים. <b>כל לקוח חדש שווה ${ils(c.dealValueFull)} ₪.</b>`;
+
+  // עסקאות: לעולם לא מציגים שבר או אפס. פחות מעסקה בחודש מוצג כ"עסקה בכל X חודשים".
+  const dealsCeil = { head: Math.max(Math.ceil(c.deals.head), 1), best: Math.max(Math.ceil(c.deals.best), 1) };
+  const dealsText = c.deals.best >= 1
+    ? (dealsCeil.head === dealsCeil.best ? `‎~${dealsCeil.best}` : `‎${dealsCeil.head} עד ${dealsCeil.best}`)
+    : `עסקה בכל ~${Math.max(Math.ceil(c.monthsToFirstDeal), 1)} חודשים`;
+  const dealsUnit = c.deals.best >= 1 ? "בחודש" : "";
+  const totalLabel = firstBasis ? "הכנסה חודשית מעסקאות ראשונות" : "הכנסה חודשית בשווי לקוח מלא";
 
   const bars = top.map((k) => `
     <div class="bar-row"><span class="kw">${esc(k.text)}</span><span class="track"><span class="fill" style="width:${Math.max(Math.round((k.vol / maxVol) * 100), 6)}%"></span></span><span class="vals"><b>${ils(k.vol)}</b> · ‎₪${Math.round(k.mid)} לקליק</span></div>`).join("");
@@ -148,8 +168,8 @@ footer span{font-size:11.5px;color:var(--ink-3);font-weight:300;max-width:60ch;l
 <div class="wrap">
 <div class="hero">
   <div class="lbl">פוטנציאל הכנסה חודשי</div>
-  <div class="num num-font">${ils(c.revenueFirst.head)} עד ${ils(c.revenueFirst.best)} <small>₪</small></div>
-  <p class="sub">מעסקאות ראשונות בלבד.${isRetainer ? ` בשווי לקוח מלא, שמביא בחשבון שהשירות הוא ריטיינר מתמשך: <b>עד ${ils(c.revenueFull.best)} ₪ בחודש</b>.` : ""}</p>
+  <div class="num num-font">${ilsUp(heroLow)} עד ${ilsUp(heroHigh)} <small>₪</small></div>
+  <p class="sub">${heroSub}</p>
 </div>
 <section>
   <div class="sec-head"><span class="no">01</span><h2>הביקוש בשוק</h2></div>
@@ -164,19 +184,19 @@ footer span{font-size:11.5px;color:var(--ink-3);font-weight:300;max-width:60ch;l
   <div class="ledger num-font">
     <div class="lrow head"><span class="l">תקציב פרסום חודשי</span><span class="r">${ils(input.budget)} ₪</span></div>
     <div class="lrow"><span class="l">מחיר ממוצע לקליק<small>ממוצע משוקלל של הצעות המחיר של גוגל</small></span><span class="r">‎${Math.round(c.cpcMid)} ₪</span></div>
-    <div class="lrow"><span class="l">כניסות לדף הנחיתה<small>בתרחיש אופטימי: עד ${ils(c.clicks.best)}</small></span><span class="r">‎~${ils(c.clicks.head)}<small>בחודש</small></span></div>
-    <div class="lrow"><span class="l">פניות של מתעניינים<small>לפי 5% המרה מכניסה לפנייה</small></span><span class="r">‎${Math.round(c.leads.head)} עד ${Math.round(c.leads.best)}<small>בחודש</small></span></div>
-    <div class="lrow"><span class="l">עסקאות חדשות<small>לפי סגירה של ${closeText}</small></span><span class="r">‎${c.deals.head} עד ${c.deals.best}<small>בחודש</small></span></div>
-    <div class="lrow total"><span class="l">הכנסה חודשית מעסקאות ראשונות</span><span class="r">${ils(c.revenueFirst.head)} עד ${ils(c.revenueFirst.best)} ₪</span></div>
+    <div class="lrow"><span class="l">כניסות לדף הנחיתה<small>בתרחיש אופטימי: עד ${ils(ceilTo(c.clicks.best, 10))}</small></span><span class="r">‎~${ils(ceilTo(c.clicks.head, 10))}<small>בחודש</small></span></div>
+    <div class="lrow"><span class="l">פניות של מתעניינים<small>לפי 5% המרה מכניסה לפנייה</small></span><span class="r">‎${Math.max(Math.ceil(c.leads.head), 1)} עד ${Math.max(Math.ceil(c.leads.best), 1)}<small>בחודש</small></span></div>
+    <div class="lrow"><span class="l">עסקאות חדשות<small>לפי סגירה של ${closeText}</small></span><span class="r">${dealsText}<small>${dealsUnit}</small></span></div>
+    <div class="lrow total"><span class="l">${totalLabel}</span><span class="r">${ilsUp(heroLow)} עד ${ilsUp(heroHigh)} ₪</span></div>
   </div>
 </section>
 <section>
   <div class="sec-head"><span class="no">03</span><h2>התמונה המלאה: עסקה מול לקוח</h2></div>
   <div class="duo">
     <div class="card">
-      <div class="t">שווי עסקה ראשונה</div>
-      <div class="big num-font">${ils(c.dealValueFirst)} <small>₪</small></div>
-      <p>התשלום הראשון של כל לקוח חדש שנסגר.</p>
+      <div class="t">${firstBasis ? "שווי עסקה ראשונה" : "הכנסה חודשית מכל לקוח"}</div>
+      <div class="big num-font">${ils(firstBasis ? c.dealValueFirst : input.monthlyFee)} <small>₪</small></div>
+      <p>${firstBasis ? "התשלום הראשון של כל לקוח חדש שנסגר." : "הריטיינר החודשי שכל לקוח חדש מתחיל לשלם."}</p>
     </div>${fullValueCard}
   </div>
 </section>

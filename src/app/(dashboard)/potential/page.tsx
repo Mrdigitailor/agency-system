@@ -47,6 +47,7 @@ export default function PotentialPage() {
     setError(""); setResult(null);
     if (!f.serviceField.trim()) { setError("חסר תחום/שירות"); return; }
     if (!Number(f.budget)) { setError("חסר תקציב פרסום"); return; }
+    if (!Number(f.dealFirst) && !(f.paymentType === "retainer" && Number(f.monthlyFee))) { setError("חסר שווי עסקה (או ריטיינר חודשי)"); return; }
     setRunning(true);
     try {
       const res = await fetch("/api/prospect-reports", {

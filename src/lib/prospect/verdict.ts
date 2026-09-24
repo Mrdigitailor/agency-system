@@ -51,6 +51,7 @@ export function computeChain(r: ResearchResult, input: VerdictInput): Chain {
   if (r.totalVol < 100) return { ...base, ok: false, reason: "נפח חיפוש חודשי נמוך מדי בתחום" };
   if (!r.cpc.mid || !r.cpc.low) return { ...base, ok: false, reason: "אין נתוני מחיר לקליק מגוגל" };
   if (input.budget <= 0) return { ...base, ok: false, reason: "לא הוזן תקציב" };
+  if (input.dealFirst <= 0 && input.monthlyFee <= 0) return { ...base, ok: false, reason: "לא הוזן שווי עסקה או ריטיינר" };
 
   // רף המחיר לקביעת אחוז הסגירה — לפי הסכום המשמעותי שהלקוח משלם
   const priceBasis = Math.max(input.dealFirst, input.monthlyFee);
