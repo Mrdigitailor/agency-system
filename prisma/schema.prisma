@@ -1220,3 +1220,33 @@ model Supplier {
 
   @@map("suppliers")
 }
+
+// דוח פוטנציאל למתעניין — מנוע "מכונת פגישות מגוגל"
+model PotentialReport {
+  id     String @id @default(cuid())
+  token  String @unique @default(cuid()) // קישור שיתוף ציבורי
+  status String @default("pending") // pending | ready | no_data | failed
+
+  // קלט המתעניין
+  businessName   String @default("")
+  serviceField   String // התחום/השירות שהוזן
+  serviceArea    String @default("") // אזור שירות (אופציונלי)
+  budget         Float  @default(0)  // תקציב פרסום חודשי ₪
+  paymentType    String @default("one_time") // one_time | retainer
+  dealFirst      Float  @default(0)  // שווי עסקה ראשונה / דמי הקמה
+  monthlyFee     Float  @default(0)  // ריטיינר חודשי (אם יש)
+  lifetimeMonths Int    @default(12) // אורך חיי לקוח ממוצע בחודשים
+  contactName    String @default("")
+  contactPhone   String @default("")
+
+  // תוצרים (JSON)
+  research String @default("{}") // seeds, מילים שנשארו/סוננו, נפחים, מחירי קליק
+  chain    String @default("{}") // שרשרת החישוב המלאה
+  error    String @default("")
+
+  leadId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("potential_reports")
+}

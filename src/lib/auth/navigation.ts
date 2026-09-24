@@ -21,6 +21,12 @@ export const navigationItems: NavItem[] = [
     roles: ["campaignManager"],
   },
   {
+    label: "דוחות פוטנציאל",
+    href: "/potential",
+    icon: "BarChart3",
+    roles: ["admin", "manager"],
+  },
+  {
     label: "משימות",
     href: "/tasks",
     icon: "CheckSquare",
