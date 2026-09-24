@@ -7,7 +7,7 @@ import { BarChart3, Copy, ExternalLink, Loader2 } from "lucide-react";
 
 interface ReportRow {
   id: string; status: string; businessName: string; serviceField: string;
-  budget: number; headline: string; error: string; link: string; createdAt: string;
+  budget: number; headline: string; error: string; link: string; createdAt: string; meetingAt: string | null;
 }
 
 const inputClass = "w-full rounded-lg border border-brand-border bg-brand-light px-3 py-2.5 text-sm text-brand-dark placeholder:text-brand-muted focus:border-brand-gold focus:outline-none focus:ring-1 focus:ring-brand-gold";
@@ -29,7 +29,7 @@ export default function PotentialPage() {
   const [f, setF] = useState({
     businessName: "", serviceField: "", serviceArea: "", budget: "",
     paymentType: "one_time", dealFirst: "", monthlyFee: "", lifetimeMonths: "12",
-    contactName: "", contactPhone: "",
+    contactName: "", contactPhone: "", contactEmail: "",
   });
 
   const load = useCallback(async () => {
@@ -101,6 +101,7 @@ export default function PotentialPage() {
           )}
           <div><label className={labelClass}>איש קשר</label><input className={inputClass} value={f.contactName} onChange={set("contactName")} placeholder="לא חובה" /></div>
           <div><label className={labelClass}>טלפון</label><input className={inputClass} value={f.contactPhone} onChange={set("contactPhone")} placeholder="לא חובה" /></div>
+          <div><label className={labelClass}>אימייל</label><input className={inputClass} type="email" value={f.contactEmail} onChange={set("contactEmail")} placeholder="מאפשר זיהוי אוטומטי כשהוא קובע פגישה" /></div>
         </div>
 
         {error && <p className="mt-3 text-sm font-medium text-brand-danger">{error}</p>}
@@ -134,6 +135,7 @@ export default function PotentialPage() {
                 <th className="px-4 py-2.5 font-medium">תקציב</th>
                 <th className="px-4 py-2.5 font-medium">פוטנציאל חודשי</th>
                 <th className="px-4 py-2.5 font-medium">סטטוס</th>
+                <th className="px-4 py-2.5 font-medium">פגישה</th>
                 <th className="px-4 py-2.5 font-medium">קישור</th>
               </tr>
             </thead>
@@ -149,6 +151,7 @@ export default function PotentialPage() {
                     <td className="px-4 py-2.5 tabular-nums text-brand-dark">₪{r.budget.toLocaleString("he-IL")}</td>
                     <td className="px-4 py-2.5 tabular-nums font-medium text-brand-dark">{r.headline || "-"}</td>
                     <td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${st.cls}`}>{st.text}</span></td>
+                    <td className="px-4 py-2.5 text-xs text-brand-dark">{r.meetingAt ? `📅 ${new Date(r.meetingAt).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })} ${new Date(r.meetingAt).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}` : <span className="text-brand-muted">-</span>}</td>
                     <td className="px-4 py-2.5">
                       <span className="flex items-center gap-2">
                         <a href={r.link} target="_blank" rel="noreferrer" title="פתח" className="text-brand-muted hover:text-brand-dark"><ExternalLink className="h-4 w-4" /></a>

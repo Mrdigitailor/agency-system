@@ -3,6 +3,7 @@
 // כלל בית: אסור מקפים ארוכים בשום טקסט.
 import type { ResearchResult } from "./research";
 import type { Chain } from "./verdict";
+import { BOOKING_URL } from "./booking";
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const ils = (n: number) => Math.round(n).toLocaleString("he-IL");
@@ -214,7 +215,7 @@ footer span{font-size:11.5px;color:var(--ink-3);font-weight:300;max-width:60ch;l
 <div class="cta">
   <h2>רוצה לראות <b>איך הגענו לכל מספר?</b></h2>
   <p>בפגישה קצרה נעבור על הניתוח המלא של העסק שלך: הביטויים, המחירים, והדרך מהתקציב שלך לעסקאות ביומן.</p>
-  <a class="btn" href="#booking">לתיאום פגישה</a>
+  <a class="btn" href="${BOOKING_URL}" target="_blank" rel="noopener">לתיאום פגישה ביומן</a>
 </div>
 <footer>
   <img src="/images/logo-mrdigitailors.svg" alt="Mr.digitailor">

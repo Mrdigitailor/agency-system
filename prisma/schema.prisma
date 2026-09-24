@@ -1238,6 +1238,11 @@ model PotentialReport {
   lifetimeMonths Int    @default(12) // אורך חיי לקוח ממוצע בחודשים
   contactName    String @default("")
   contactPhone   String @default("")
+  contactEmail   String @default("") // משמש לזיהוי אוטומטי של קביעת פגישה ביומן
+
+  // קביעת פגישה — מזוהה אוטומטית מסריקת היומן של סער
+  bookedAt  DateTime? // מתי זוהתה הקביעה
+  meetingAt DateTime? // מועד הפגישה עצמה
 
   // תוצרים (JSON)
   research String @default("{}") // seeds, מילים שנשארו/סוננו, נפחים, מחירי קליק

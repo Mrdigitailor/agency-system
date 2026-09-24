@@ -7,6 +7,7 @@ import { runResearch } from "@/lib/prospect/research";
 import { computeChain } from "@/lib/prospect/verdict";
 import { sendTelegramMessage } from "@/lib/api/telegram/client";
 import { ownerChatId } from "@/lib/performance/approval";
+import { scanBookings } from "@/lib/prospect/booking";
 
 export const maxDuration = 60; // מחקר חי לוקח 10-25 שניות
 
@@ -18,6 +19,7 @@ export async function GET(req: Request) {
   if (guard instanceof NextResponse) return guard;
 
   const origin = process.env.APP_BASE_URL ?? new URL(req.url).origin;
+  await scanBookings(); // זיהוי קביעות חדשות מהיומן — best-effort
   const rows = await prisma.potentialReport.findMany({ orderBy: { createdAt: "desc" }, take: 30 });
   return NextResponse.json(rows.map((r) => {
     let headline = "";
@@ -28,7 +30,7 @@ export async function GET(req: Request) {
     return {
       id: r.id, status: r.status, businessName: r.businessName, serviceField: r.serviceField,
       budget: r.budget, headline, error: r.error,
-      link: `${origin}/report/${r.token}`, createdAt: r.createdAt,
+      link: `${origin}/report/${r.token}`, createdAt: r.createdAt, meetingAt: r.meetingAt,
     };
   }));
 }
@@ -58,6 +60,7 @@ export async function POST(req: Request) {
       lifetimeMonths: Math.min(Math.max(Math.round(num(body.lifetimeMonths)) || 12, 1), 120),
       contactName: str(body.contactName, 200),
       contactPhone: str(body.contactPhone, 50),
+      contactEmail: str(body.contactEmail, 200).toLowerCase(),
     },
   });
 
