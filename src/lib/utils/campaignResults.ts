@@ -16,6 +16,28 @@ const MSG_FALLBACK = ["onsite_conversion.total_messaging_connection"];
 
 export type CampaignResultType = "purchases" | "leads" | "registrations" | "messages" | "conversions" | "none";
 
+// ממפה אירוע-המרה שנבחר (metaConversionEvent) לסוג-תוצאה. משמש כדי לספור רק את
+// סוגי-התוצאה שהלקוח בחר — לדוגמה לקוח שבחר "רכישה" לא יראה שיחות/לידים כהמרות.
+function eventToResultType(event: string): CampaignResultType | null {
+  const s = event.toLowerCase();
+  if (s.includes("purchase")) return "purchases";
+  if (s.includes("registration") || s.includes("signup") || s.includes("sign_up") || s.includes("subscribe")) return "registrations";
+  if (s.includes("messaging") || s.includes("conversation") || s.includes("message")) return "messages";
+  if (s.includes("lead")) return "leads";
+  return null; // אירוע לא מוכר — לא מגביל
+}
+/** פרסור metaConversionEvent (JSON array של שמות אירועים) למערך מחרוזות */
+export function parseMetaEvents(raw: string | null | undefined): string[] {
+  try { const p = JSON.parse(raw || "[]"); return Array.isArray(p) ? p.filter((x) => typeof x === "string") : []; }
+  catch { return []; }
+}
+/** אוסף סוגי-התוצאה שהלקוח בחר לספור. ריק = בלי הגבלה (סופרים את כל הסוגים). */
+function selectedResultTypes(selectedEvents: string[]): Set<CampaignResultType> {
+  const set = new Set<CampaignResultType>();
+  for (const e of selectedEvents) { const t = eventToResultType(e); if (t) set.add(t); }
+  return set;
+}
+
 export interface CampaignResult {
   campaignId: string;
   campaignName: string;
@@ -92,8 +114,10 @@ function classifyOne(rows: MetaRow[]): { resultType: CampaignResultType; count: 
 export function countMetaCampaignResults(
   rows: MetaRow[],
   excludedCampaignIds: string[] = [],
+  selectedEvents: string[] = [],
 ): { total: number; perCampaign: CampaignResult[] } {
   const excluded = new Set(excludedCampaignIds);
+  const selectedTypes = selectedResultTypes(selectedEvents);
   const groups = new Map<string, MetaRow[]>();
   for (const r of rows) {
     const key = r.externalId || r.name;
@@ -102,7 +126,11 @@ export function countMetaCampaignResults(
   const perCampaign: CampaignResult[] = [];
   let total = 0;
   for (const [id, rs] of groups) {
-    const { resultType, count } = classifyOne(rs);
+    const cls = classifyOne(rs);
+    const resultType = cls.resultType;
+    // אם הלקוח בחר סוגי-המרה ספציפיים (למשל "רכישה") — תוצאה שאינה מהסוג שנבחר
+    // אינה נספרת כהמרה. כך הבחירה של הלקוח נשמרת בכל מקום.
+    const count = selectedTypes.size > 0 && !selectedTypes.has(resultType) ? 0 : cls.count;
     const isExcluded = excluded.has(id);
     perCampaign.push({ campaignId: id, campaignName: rs[0].name || "(ללא שם)", platform: "meta", resultType, count, excluded: isExcluded });
     if (!isExcluded) total += count;

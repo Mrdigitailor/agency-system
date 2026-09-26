@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { countConversions } from "@/lib/utils/metaMetrics";
 import { parseGoogleActions } from "@/lib/utils/googleMetrics";
-import { countMetaCampaignResults, countGoogleCampaignResults, countTiktokCampaignResults } from "@/lib/utils/campaignResults";
+import { countMetaCampaignResults, countGoogleCampaignResults, countTiktokCampaignResults, parseMetaEvents } from "@/lib/utils/campaignResults";
 
 /**
  * GET /api/clients/[id]/performance?since=...&until=...
@@ -48,7 +48,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const totalPurchaseValue = insights.reduce((s, i) => s + i.purchaseValue, 0);
   const totalLeads = insights.reduce((s, i) => s + i.leads, 0);
   // ספירה פר-קמפיין לפי ה-Result של כל קמפיין (מחריג קמפיינים שסומנו), במקום סכום-אירועים על כל החשבון
-  const metaResults = countMetaCampaignResults(insights, excludedCampaigns);
+  const metaResults = countMetaCampaignResults(insights, excludedCampaigns, parseMetaEvents(selectedEventRaw));
   const metaConversions = metaResults.total;
   const metaConversionsLegacy = countConversions(insights, selectedEventRaw); // לצורך לוג/השוואה בלבד
 

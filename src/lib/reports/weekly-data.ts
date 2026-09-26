@@ -30,7 +30,9 @@ export interface CampaignRow {
 function classifyCampaignResult(objective: string, optGoal: string, conversions: number, purchases: number): CampaignResult {
   const obj = objective.toUpperCase();
   const goal = optGoal.toUpperCase();
-  if (obj.includes("SALES") || goal.includes("PURCHASE")) return "purchases";
+  // רכישות — רק אם באמת יש רכישות. קמפיין SALES שמייצר שיחות/לידים (0 רכישות)
+  // אינו "רכישות" — נמשיך לזהות לפי הנתונים בהמשך.
+  if ((obj.includes("SALES") || goal.includes("PURCHASE")) && purchases > 0) return "purchases";
   if (goal.includes("CONVERSATION") || goal.includes("REPL") || goal.includes("MESSAG")) return "messages";
   // מעורבות/עוקבים/תנועה/מודעות — לפי optimization_goal (לא ENGAGEMENT גורף שגורר גם שיחות)
   if (

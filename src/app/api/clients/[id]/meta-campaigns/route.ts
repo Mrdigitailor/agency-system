@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/api-guard";
 import { countConversions } from "@/lib/utils/metaMetrics";
-import { countMetaCampaignResults } from "@/lib/utils/campaignResults";
+import { countMetaCampaignResults, parseMetaEvents } from "@/lib/utils/campaignResults";
 import { monthStartIL, todayIL } from "@/lib/utils/ildate";
 
 /**
@@ -38,7 +38,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (Array.isArray(p)) excludedCampaigns = p.filter((x) => typeof x === "string");
   } catch { /* עמודה עדיין לא קיימת */ }
   const resultByCampaign = new Map<string, number>();
-  for (const r of countMetaCampaignResults(rows, excludedCampaigns).perCampaign) {
+  for (const r of countMetaCampaignResults(rows, excludedCampaigns, parseMetaEvents(selectedEvent)).perCampaign) {
     resultByCampaign.set(r.campaignId, r.excluded ? 0 : r.count);
   }
 

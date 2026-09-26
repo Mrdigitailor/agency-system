@@ -5,7 +5,7 @@ import { safeParseArray } from "@/lib/utils/safeJson";
 import { monthStartIL, todayIL } from "@/lib/utils/ildate";
 import { stripAgencyPayment } from "@/lib/utils/clientPrivacy";
 import { syncClientManagers } from "@/lib/utils/syncManagers";
-import { countMetaCampaignResults, countGoogleCampaignResults, countTiktokCampaignResults } from "@/lib/utils/campaignResults";
+import { countMetaCampaignResults, countGoogleCampaignResults, countTiktokCampaignResults, parseMetaEvents } from "@/lib/utils/campaignResults";
 import { parseGoogleActions } from "@/lib/utils/googleMetrics";
 
 export async function GET(req: Request) {
@@ -110,7 +110,7 @@ export async function GET(req: Request) {
     const excluded = safeParseArray(c.excludedCampaigns).filter((x): x is string => typeof x === "string");
     const clientMetaInsights = metaByClient.get(c.id) ?? [];
     const metaSpend = clientMetaInsights.reduce((s, i) => s + i.spend, 0);
-    const metaConv = clientMetaInsights.length > 0 ? countMetaCampaignResults(clientMetaInsights, excluded).total : 0;
+    const metaConv = clientMetaInsights.length > 0 ? countMetaCampaignResults(clientMetaInsights, excluded, parseMetaEvents(c.metaConversionEvent)).total : 0;
     const gadsRows = gadsByClient.get(c.id) ?? [];
     const gadsSpend = gadsSpendByClient.get(c.id) ?? 0;
     const gadsConv = gadsRows.length > 0 ? countGoogleCampaignResults(gadsRows, parseGoogleActions(c.googleConversionAction ?? ""), excluded).total : 0;
