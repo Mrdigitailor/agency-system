@@ -500,11 +500,11 @@ export default function ClientDetailPage() {
               {statusInfo.label}
             </span>
             <span className="text-sm text-brand-muted">{client.clientType}</span>
-            {getCampaignManagerForClient(client.id, employees) && (
-              <span className="text-sm text-brand-muted">קמפיינים: {getCampaignManagerForClient(client.id, employees)}</span>
+            {getCampaignManagerForClient(client.id, employees, client.campaignManager) && (
+              <span className="text-sm text-brand-muted">קמפיינים: {getCampaignManagerForClient(client.id, employees, client.campaignManager)}</span>
             )}
-            {getAccountManagerForClient(client.id, employees) && (
-              <span className="text-sm text-brand-muted">תיקים: {getAccountManagerForClient(client.id, employees)}</span>
+            {getAccountManagerForClient(client.id, employees, client.accountManager) && (
+              <span className="text-sm text-brand-muted">תיקים: {getAccountManagerForClient(client.id, employees, client.accountManager)}</span>
             )}
           </div>
         </div>

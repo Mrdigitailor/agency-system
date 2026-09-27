@@ -119,7 +119,8 @@ export default function ReportsPage() {
     [employees],
   );
 
-  const getClientCM = (clientId: string) => getCampaignManagerForClient(clientId, employees);
+  const getClientCM = (clientId: string) =>
+    getCampaignManagerForClient(clientId, employees, clients.find((c) => c.id === clientId)?.campaignManager);
 
   const roleFilteredTrackers = useMemo(() => {
     // לקוחות לא-פעילים לא צריכים מעקב דוחות — מסתירים מכולם (כולל KPI/התראות)

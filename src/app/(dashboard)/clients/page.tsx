@@ -73,7 +73,7 @@ export default function ClientsPage() {
 
     // סינון מנהל קמפיינים
     if (filterCM !== "all") {
-      result = result.filter((c) => getCampaignManagerForClient(c.id, employees) === filterCM);
+      result = result.filter((c) => getCampaignManagerForClient(c.id, employees, c.campaignManager) === filterCM);
     }
 
     // סינון סטטוס
@@ -88,7 +88,7 @@ export default function ClientsPage() {
         let vb: number | string = 0;
         switch (sortCol) {
           case "name": va = a.name; vb = b.name; break;
-          case "cm": va = getCampaignManagerForClient(a.id, employees) ?? ""; vb = getCampaignManagerForClient(b.id, employees) ?? ""; break;
+          case "cm": va = getCampaignManagerForClient(a.id, employees, a.campaignManager) ?? ""; vb = getCampaignManagerForClient(b.id, employees, b.campaignManager) ?? ""; break;
           case "budget": va = a.monthlyBudget; vb = b.monthlyBudget; break;
           case "spend": va = a.currentMonthSpend ?? a.performance.budgetUsed ?? 0; vb = b.currentMonthSpend ?? b.performance.budgetUsed ?? 0; break;
           case "conversions": va = a.currentMonthConversions ?? a.performance.conversionsThisMonth ?? 0; vb = b.currentMonthConversions ?? b.performance.conversionsThisMonth ?? 0; break;
@@ -292,8 +292,8 @@ export default function ClientsPage() {
                 return (
                   <tr key={client.id} onClick={() => router.push(`/clients/${client.id}`)} className="cursor-pointer border-b border-brand-border transition-colors duration-200 hover:bg-brand-bg/30">
                     <td className="px-4 py-4 font-medium text-brand-dark">{client.name}</td>
-                    <td className="px-4 py-4 text-brand-muted">{getCampaignManagerForClient(client.id, employees) || "—"}</td>
-                    <td className="px-4 py-4 text-brand-muted">{getAccountManagerForClient(client.id, employees) || "—"}</td>
+                    <td className="px-4 py-4 text-brand-muted">{getCampaignManagerForClient(client.id, employees, client.campaignManager) || "—"}</td>
+                    <td className="px-4 py-4 text-brand-muted">{getAccountManagerForClient(client.id, employees, client.accountManager) || "—"}</td>
                     {/* תקציב — צבע לפי צפי סוף-חודש (קצב הוצאה), לא לפי כמה נוצל */}
                     <td className={`px-4 py-4 ${budgetOverpacing ? "bg-brand-danger/5" : ""}`}>
                       <div className="space-y-1">

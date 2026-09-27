@@ -1,35 +1,40 @@
 import type { Employee } from "@/lib/data/types";
 
 /**
- * מוצא את מנהל הקמפיינים של לקוח — העובד עם role=campaignManager
- * שהלקוח נמצא ב-assignedClientIds שלו
+ * מוצא את מנהל הקמפיינים של לקוח.
+ * מקור אמת ראשון: השם השמור על רשומת הלקוח (storedName) — תומך בכל תפקיד, כולל בעלים.
+ * גיבוי לרשומות ישנות: העובד שהלקוח ב-assignedClientIds שלו (מנהל קמפיינים, ואז בעלים).
  */
 export function getCampaignManagerForClient(
   clientId: string,
-  employees: Employee[]
+  employees: Employee[],
+  storedName?: string
 ): string {
-  const emp = employees.find(
-    (e) =>
-      e.role === "campaignManager" &&
-      e.assignedClientIds.includes(clientId)
+  if (storedName?.trim()) return storedName.trim();
+  const cm = employees.find(
+    (e) => e.role === "campaignManager" && e.assignedClientIds.includes(clientId)
   );
-  return emp?.name ?? "";
+  if (cm) return cm.name;
+  const admin = employees.find(
+    (e) => e.role === "admin" && e.assignedClientIds.includes(clientId)
+  );
+  return admin?.name ?? "";
 }
 
 /**
- * מוצא את מנהל התיקים / סמנכ״ל של לקוח — העובד עם role=manager
- * שהלקוח נמצא ב-assignedClientIds שלו
+ * מוצא את מנהל התיקים / סמנכ״ל של לקוח.
+ * מקור אמת ראשון: השם השמור על רשומת הלקוח; גיבוי: עובד עם role=manager שמשויך ללקוח.
  */
 export function getAccountManagerForClient(
   clientId: string,
-  employees: Employee[]
+  employees: Employee[],
+  storedName?: string
 ): string {
-  const emp = employees.find(
-    (e) =>
-      e.role === "manager" &&
-      e.assignedClientIds.includes(clientId)
+  if (storedName?.trim()) return storedName.trim();
+  const mgr = employees.find(
+    (e) => e.role === "manager" && e.assignedClientIds.includes(clientId)
   );
-  return emp?.name ?? "";
+  return mgr?.name ?? "";
 }
 
 /**
