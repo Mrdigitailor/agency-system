@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Sparkles, Loader2, RefreshCw, Send, Settings2, FileText, Mail, Copy, CheckCircle2 } from "lucide-react";
+import { Sparkles, Loader2, RefreshCw, Send, Settings2, FileText, Mail, Copy, CheckCircle2, Pencil } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 
 interface ReportMessage {
@@ -110,6 +110,11 @@ export default function WeeklyReportDraft({
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // עריכה ידנית של תוכן הדוח (טקסטים/מספרים)
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
   // הגדרות פורמט (מוסתרות מאחורי גלגל שיניים)
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [format, setFormat] = useState("standard");
@@ -205,6 +210,36 @@ export default function WeeklyReportDraft({
       }
     } finally {
       setSending(false);
+    }
+  }
+
+  function startEdit() {
+    if (!report) return;
+    setEditContent(report.content);
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    if (!report) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/weekly-report/${report.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editContent }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.content != null) {
+        setReport((r) => (r ? { ...r, content: data.content } : r));
+        setEditing(false);
+        onChanged?.();
+      } else {
+        alert("שמירת העריכה נכשלה — נסה שוב.");
+      }
+    } catch {
+      alert("שגיאה בחיבור — העריכה לא נשמרה.");
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -372,6 +407,12 @@ export default function WeeklyReportDraft({
               <Copy className="h-3.5 w-3.5" />
               {copied ? "הועתק ✓" : "העתק לוואטסאפ"}
             </button>
+            {!editing && (
+              <button onClick={startEdit} className={toolbarBtn} title="ערוך את הדוח ידנית — טקסטים ומספרים">
+                <Pencil className="h-3.5 w-3.5" />
+                ערוך
+              </button>
+            )}
             {canMark && !isSent && (
               <button onClick={openMarkModal} className={toolbarBtn} title="שלחת בוואטסאפ? סמן שהדוח נשלח">
                 <CheckCircle2 className="h-3.5 w-3.5" />
@@ -385,12 +426,44 @@ export default function WeeklyReportDraft({
             </button>
           </div>
 
-          {/* תוכן הדוח (Markdown) */}
-          <div className="rounded-lg border border-brand-border bg-brand-bg p-5" dir="rtl">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-              {report.content}
-            </ReactMarkdown>
-          </div>
+          {/* תוכן הדוח — תצוגה (Markdown) או עריכה ידנית */}
+          {editing ? (
+            <div className="space-y-2">
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                dir="rtl"
+                rows={22}
+                className={`${inputClass} leading-relaxed`}
+                placeholder="תוכן הדוח..."
+              />
+              <p className="text-[11px] text-brand-muted">
+                עריכה חופשית של הטקסטים והמספרים. עיצוב: **טקסט מודגש**, כותרות עם #, רשימות עם - . השינויים נשמרים כפי שהם.
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setEditing(false)}
+                  className="rounded-lg border border-brand-border px-4 py-1.5 text-xs font-medium text-brand-muted hover:bg-brand-bg"
+                >
+                  ביטול
+                </button>
+                <button
+                  onClick={saveEdit}
+                  disabled={savingEdit}
+                  className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-4 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80 disabled:opacity-50"
+                >
+                  {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                  {savingEdit ? "שומר..." : "שמור שינויים"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-brand-border bg-brand-bg p-5" dir="rtl">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                {report.content}
+              </ReactMarkdown>
+            </div>
+          )}
 
           {/* צ'אט תיקון */}
           <div>
