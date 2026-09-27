@@ -1196,7 +1196,7 @@ export default function ClientDetailPage() {
                 >
                   <option value="">ללא</option>
                   {employees
-                    .filter((emp) => emp.role === "campaignManager")
+                    .filter((emp) => emp.role === "campaignManager" || emp.role === "admin")
                     .map((emp) => (
                       <option key={emp.id} value={emp.name}>
                         {emp.name}
