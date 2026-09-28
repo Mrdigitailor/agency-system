@@ -15,8 +15,9 @@ const WORK_DAYS = [0, 1, 2, 3, 4]; // ראשון עד חמישי (getDay בשע�
 const WORK_START = { h: 9, m: 30 };
 const WORK_END = { h: 16, m: 30 };
 
-// קישור הזום הקבוע של סער — נכנס לכל הזמנה. ריק = הפגישה נוצרת בלי קישור.
-export const ZOOM_LINK = process.env.MEETING_ZOOM_LINK ?? "";
+// קישור הזום הקבוע של סער (החדר האישי) — נכנס לכל הזמנה. אפשר לעקוף עם משתנה סביבה.
+export const ZOOM_LINK = process.env.MEETING_ZOOM_LINK ?? "https://us05web.zoom.us/j/3683126102?pwd=Z1d2QVo5NEJvcStRZmlNcVB6eklyZz09";
+const ZOOM_DETAILS = "מזהה פגישה: 368 312 6102 · קוד: 71iuqb";
 
 // ---------- עזרי אזור זמן ----------
 /** מפרק רגע נתון לרכיבי תאריך ושעה בשעון ישראל */
@@ -140,7 +141,7 @@ export async function bookSlot(args: {
   const description = [
     `פגישת ניתוח שיווק עם ${args.name}`,
     args.phone ? `טלפון: ${args.phone}` : "",
-    ZOOM_LINK ? `\nהצטרפות בזום: ${ZOOM_LINK}` : "",
+    ZOOM_LINK ? `\nהצטרפות בזום: ${ZOOM_LINK}\n${ZOOM_DETAILS}` : "",
   ].filter(Boolean).join("\n");
 
   const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all", {
