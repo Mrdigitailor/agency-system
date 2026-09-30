@@ -55,7 +55,13 @@ export async function POST(req: Request) {
     const result = await runChatTurn(chat.id, message);
     return NextResponse.json({ sessionToken, ...result });
   } catch (err) {
-    console.error("[ProspectChat] turn failed:", err instanceof Error ? err.message : err);
-    return NextResponse.json({ reply: "משהו השתבש אצלי לרגע. נסו שוב?", quickReplies: [], researching: false });
+    console.error("[ProspectChat] turn failed, retrying once:", err instanceof Error ? err.message : err);
+    try {
+      const result = await runChatTurn(chat.id, "[מערכת] ההודעה הקודמת של המשתמש לא טופלה בגלל תקלה. המשך את השיחה ממנה.");
+      return NextResponse.json({ sessionToken, ...result });
+    } catch (err2) {
+      console.error("[ProspectChat] retry failed:", err2 instanceof Error ? err2.message : err2);
+      return NextResponse.json({ reply: "סליחה על ההמתנה, הייתה לי תקלה קטנה. אפשר לשלוח שוב את ההודעה האחרונה?", quickReplies: [], researching: false });
+    }
   }
 }

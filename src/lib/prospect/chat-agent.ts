@@ -213,6 +213,24 @@ export const RESEARCH_TRIGGER = "__research__"; // הודעת המשך אוטו�
 export const OPENING_MESSAGE = "היי 👋 אני העוזר הדיגיטלי של Mr.digitailor.\nתוך שתי דקות אני יכול להראות לך, במספרים אמיתיים מגוגל, כמה לקוחות והכנסות העסק שלך יכול להוציא מקמפיין חכם. שנבדוק?";
 export const OPENING_REPLIES = ["יאללה, בוא נבדוק", "רגע, מי אתם בכלל?"];
 
+/** קריאת מודל עם נסיונות חוזרים על עומס/תקלה זמנית — שיחת מכירה לא נופלת על 429 */
+async function createWithRetry(params: Anthropic.MessageCreateParamsNonStreaming): Promise<Anthropic.Message> {
+  let lastErr: unknown;
+  for (let i = 0; i < 3; i++) {
+    try { return await anthropic.messages.create(params); }
+    catch (err) {
+      lastErr = err;
+      const status = (err as { status?: number })?.status ?? 0;
+      if (status === 429 || status >= 500 || status === 0) {
+        await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 export async function runChatTurn(chatId: string, userMessage: string): Promise<TurnResult> {
   const chat = await prisma.prospectChat.findUnique({ where: { id: chatId } });
   if (!chat) throw new Error("chat not found");
@@ -244,17 +262,21 @@ export async function runChatTurn(chatId: string, userMessage: string): Promise<
 
   let researching = false;
   let finalText = "";
+  let provisionalText = ""; // טקסט שהגיע יחד עם קריאת כלים — רשת ביטחון
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const res = await anthropic.messages.create({
+    const res = await createWithRetry({
       model: AI_MODEL, max_tokens: 1000, system, messages: msgs, tools: TOOLS,
     });
 
     const textParts = res.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text);
     const toolUses = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    const textJoined = textParts.join("\n").trim();
+    console.log(`[ChatAgent] turn=${turn} stop=${res.stop_reason} tools=${toolUses.map((t) => t.name).join(",") || "none"} textLen=${textJoined.length}`);
+    if (textJoined) provisionalText = textJoined;
 
     if (toolUses.length === 0) {
-      finalText = textParts.join("\n").trim();
+      finalText = textJoined;
       break;
     }
 
@@ -284,7 +306,25 @@ export async function runChatTurn(chatId: string, userMessage: string): Promise<
     msgs.push({ role: "user", content: results });
   }
 
-  if (!finalText) finalText = "סליחה, משהו השתבש אצלי. אפשר לנסות שוב?";
+  // הסוכן סיים בלי הודעה? קודם כל: הטקסט שהוא כתב יחד עם קריאת הכלי הוא התשובה
+  // (זה הדפוס הנפוץ: המודל כותב את ההודעה ומפעיל כלי באותה תשובה, ואז מסיים ריק)
+  if (!finalText && provisionalText) {
+    console.log("[ChatAgent] using provisional text that accompanied the tool call");
+    finalText = provisionalText;
+  }
+  // עדיין כלום? מכריחים אותו לנסח תשובה, בלי כלים
+  if (!finalText) {
+    console.warn("[ChatAgent] empty final text, forcing text-only reply");
+    try {
+      const forced = await createWithRetry({
+        model: AI_MODEL, max_tokens: 700, system,
+        messages: [...msgs, { role: "user", content: "[מערכת] ענה עכשיו למשתמש בהודעת טקסט אחת לפי מצב השיחה. אל תשתמש בכלים." }],
+        tools: TOOLS, tool_choice: { type: "none" },
+      });
+      finalText = forced.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text).join("\n").trim();
+    } catch { /* ניפול לרשתות הביטחון הבאות */ }
+  }
+  if (!finalText) finalText = "סליחה על ההמתנה! איבדתי את עצמי לרגע. איפה היינו?";
   finalText = finalText.replace(/[—–]/g, "-"); // ביטחון: בלי מקפים ארוכים
 
   const { reply, quickReplies } = splitQuickReplies(finalText);
