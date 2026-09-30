@@ -8,6 +8,8 @@ import { computeChain } from "@/lib/prospect/verdict";
 import { sendTelegramMessage } from "@/lib/api/telegram/client";
 import { ownerChatId } from "@/lib/performance/approval";
 import { scanBookings } from "@/lib/prospect/booking";
+import { maybeSendReportEmail } from "@/lib/prospect/emails";
+import { upsertProspectLead } from "@/lib/prospect/crm-lead";
 
 export const maxDuration = 60; // מחקר חי לוקח 10-25 שניות
 
@@ -94,6 +96,10 @@ export async function POST(req: Request) {
         : `📊 דוח פוטנציאל: ${who}\nאין מספיק נתונים (${chain.reason}). מומלץ מסלול שיחה.\n${link}`;
       sendTelegramMessage(chat, msg).catch(() => {});
     }
+
+    // אם הוזן אימייל: מייל הדוח יוצא מיד + נפתח ליד ב-CRM (ברקע)
+    maybeSendReportEmail(report.id).catch(() => {});
+    upsertProspectLead(report.id).catch(() => {});
 
     return NextResponse.json({ token: report.token, link, status: chain.ok ? "ready" : "no_data", reason: chain.ok ? undefined : chain.reason });
   } catch (err) {

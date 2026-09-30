@@ -161,11 +161,12 @@ export async function bookSlot(args: {
     console.error("[Booking] event create failed:", res.status, (await res.text()).slice(0, 200));
     return { ok: false, error: "יצירת הפגישה נכשלה, נסו שוב" };
   }
+  const created = await res.json();
 
   if (args.reportId) {
     await prisma.potentialReport.update({
       where: { id: args.reportId },
-      data: { bookedAt: new Date(), meetingAt: start },
+      data: { bookedAt: new Date(), meetingAt: start, calendarEventId: String(created.id ?? ""), cancelledAt: null },
     }).catch(() => {});
   }
 

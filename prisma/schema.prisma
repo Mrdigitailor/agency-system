@@ -1243,6 +1243,9 @@ model PotentialReport {
   // קביעת פגישה — מזוהה אוטומטית מסריקת היומן של סער
   bookedAt  DateTime? // מתי זוהתה הקביעה
   meetingAt DateTime? // מועד הפגישה עצמה
+  calendarEventId String @default("") // האירוע שנוצר ביומן — לזיהוי ביטולים
+  cancelledAt DateTime? // הפגישה בוטלה ביומן
+  emailsSent  String @default("[]") // JSON: אילו מיילים כבר נשלחו (report/nurture1/nurture3/nurture7/reminder/cancelled)
 
   // תוצרים (JSON)
   research String @default("{}") // seeds, מילים שנשארו/סוננו, נפחים, מחירי קליק

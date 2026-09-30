@@ -5,6 +5,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db/prisma";
 import { createAndRunReport } from "./create-report";
 import { getFreeSlots, bookSlot } from "./scheduling";
+import { maybeSendReportEmail } from "./emails";
+import { upsertProspectLead } from "./crm-lead";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const AI_MODEL = process.env.CHAT_AI_MODEL ?? "claude-sonnet-4-6";
@@ -120,6 +122,7 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
     // עדכון פרטי קשר גם על הדוח אם כבר נוצר
     const report = await prisma.potentialReport.findFirst({ where: { token: f.reportToken ?? "" } });
     if (report) {
+      const hadEmail = Boolean(report.contactEmail);
       await prisma.potentialReport.update({
         where: { id: report.id },
         data: {
@@ -129,6 +132,11 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
           businessName: f.businessName ?? report.businessName,
         },
       }).catch(() => {});
+      // מייל חדש נקלט: שולחים את הדוח + פותחים ליד ב-CRM (ברקע, לא חוסם את השיחה)
+      if (f.email && !hadEmail) {
+        maybeSendReportEmail(report.id).catch(() => {});
+        upsertProspectLead(report.id).catch(() => {});
+      }
     }
     return { result: JSON.stringify({ saved: true, known: Object.keys(f) }), fields: f };
   }
