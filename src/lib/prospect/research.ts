@@ -10,7 +10,7 @@ const AI_MODEL = process.env.REPORT_AI_MODEL ?? "claude-sonnet-4-6";
 const GOOGLE_ADS_API = `https://googleads.googleapis.com/${process.env.GOOGLE_ADS_API_VERSION ?? "v24"}`;
 
 // רעש אוניברסלי — מה שאף קמפיין לא היה מוכן לשלם עליו
-const NOISE_TERMS = ["דרושים", "משרה", "שכר", "קורס", "לימוד", "ללמוד", "מה זה", "חינם", "בעצמי", "וויקס", "וורדפרס"];
+const NOISE_TERMS = ["דרושים", "משרה", "שכר", "קורס", "לימוד", "ללמוד", "מה זה", "חינם", "בעצמי", "וויקס", "וורדפרס", "מחשבון", "סימולטור"];
 
 export interface KeywordRow {
   text: string;
@@ -111,13 +111,17 @@ async function filterByServiceContext(texts: string[], serviceField: string): Pr
   try {
     const res = await anthropic.messages.create({
       model: AI_MODEL,
-      max_tokens: 800,
+      max_tokens: 2000,
       system: "אתה מסנן מילות מפתח. החזר אך ורק JSON תקין.",
       messages: [{
         role: "user",
-        content: `עסק בתחום: "${serviceField}".
-מתוך רשימת הביטויים הבאה, החזר אך ורק ביטויים שברור לחלוטין שהם עוסקים בשירות אחר שהעסק לא מציע, או בכוונה שאינה חיפוש ספק (למשל חיפוש עבודה או לימודים).
-כלל ברזל: בכל ספק — לא לסנן. עדיף להשאיר ביטוי גבולי מאשר לזרוק ביטוי רלוונטי.
+        content: `עסק בתחום: "${serviceField}". אנחנו בונים הערכת ביקוש לקמפיין שמטרתו למצוא לעסק לקוחות חדשים.
+מתוך הרשימה, החזר את הביטויים שקמפיין כזה לא היה מציע עליו הצעת מחיר. סנן בוודאות את הקטגוריות האלה:
+1. ביטויי מותג של גופים אחרים: שמות בנקים, רשתות, חברות, מוסדות (מי שמקליד אותם מחפש את הגוף עצמו)
+2. כלים ועשה-זאת-בעצמך: מחשבונים, סימולטורים, טפסים להורדה
+3. ביטוי מוצר גנרי בן מילה אחת או שתיים בלי שום כוונת חיפוש ספק (למשל שם המוצר לבדו)
+4. שירות אחר שהעסק לא מציע, חיפוש עבודה או לימודים
+מעבר לקטגוריות האלה, בספק אל תסנן.
 רשימה: ${JSON.stringify(texts)}
 החזר JSON בלבד: {"drop": ["..."]}`,
       }],
@@ -144,9 +148,13 @@ export async function runResearch(serviceField: string, serviceArea: string): Pr
     candidates.push({ ...r, mid: (r.low + r.high) / 2 });
   }
 
-  const dropSet = await filterByServiceContext(candidates.map((c) => c.text), serviceField);
-  const kept = candidates.filter((c) => !dropSet.has(c.text)).sort((a, b) => b.vol - a.vol);
-  const droppedIrrelevant = candidates.filter((c) => dropSet.has(c.text)).map((c) => c.text);
+  // מגבילים ל-150 המובילים בנפח: מספיק לכיסוי הביקוש, ומאפשר סינון איכותי
+  candidates.sort((a, b) => b.vol - a.vol);
+  const trimmed = candidates.slice(0, 150);
+
+  const dropSet = await filterByServiceContext(trimmed.map((c) => c.text), serviceField);
+  const kept = trimmed.filter((c) => !dropSet.has(c.text));
+  const droppedIrrelevant = trimmed.filter((c) => dropSet.has(c.text)).map((c) => c.text);
 
   const totalVol = kept.reduce((s, k) => s + k.vol, 0);
 

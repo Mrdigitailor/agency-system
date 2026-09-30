@@ -1255,3 +1255,19 @@ model PotentialReport {
 
   @@map("potential_reports")
 }
+
+// שיחת צ'אט של מתעניין — הסוכן בדף הנחיתה
+model ProspectChat {
+  id        String   @id @default(cuid())
+  token     String   @unique @default(cuid())
+  status    String   @default("active") // active | done
+  messages  String   @default("[]")     // JSON: [{role, content, at}]
+  fields    String   @default("{}")     // JSON: פרטים שנאספו בהדרגה (גם ליד חלקי נשמר)
+  reportId  String?                     // דוח הפוטנציאל שנוצר בשיחה
+  lastIp    String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lastIp, createdAt])
+  @@map("prospect_chats")
+}
