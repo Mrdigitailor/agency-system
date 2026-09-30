@@ -62,14 +62,30 @@ export default function ProspectChatPage() {
     setResearchStep(-1);
   };
 
+  // שלב ב' של המחקר: נשלח אוטומטית אחרי ההכרזה, בזמן ששורות ההתקדמות מוצגות
+  const continueResearch = useCallback(async () => {
+    startResearchAnim();
+    try {
+      const res = await fetch("/api/public/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionToken: tokenRef.current, message: "__research__" }),
+      });
+      const d = await res.json();
+      setMsgs((m) => [...m, { role: "bot", text: d.reply ?? d.error ?? "משהו השתבש, נסו שוב" }]);
+      setQuick(d.quickReplies ?? []);
+    } catch {
+      setMsgs((m) => [...m, { role: "bot", text: "החיבור נפל באמצע המחקר. כתבו משהו ונמשיך מאיפה שעצרנו." }]);
+    } finally {
+      stopResearchAnim();
+      setBusy(false); scroll();
+    }
+  }, []);
+
   const send = useCallback(async (text: string) => {
     const clean = text.trim();
     if (!clean || busy) return;
     setMsgs((m) => [...m, { role: "user", text: clean }]);
     setQuick([]); setInput(""); setBusy(true); scroll();
-
-    // אם ההודעה האחרונה של הבוט הכריזה על מחקר, או שהתשובה הזאת משלימה את התקציב, ההמתנה תהיה ארוכה
-    const slowHint = setTimeout(() => startResearchAnim(), 3500);
 
     try {
       const res = await fetch("/api/public/chat", {
@@ -79,14 +95,17 @@ export default function ProspectChatPage() {
       const d = await res.json();
       setMsgs((m) => [...m, { role: "bot", text: d.reply ?? d.error ?? "משהו השתבש, נסו שוב" }]);
       setQuick(d.quickReplies ?? []);
+      if (d.researching) {
+        // הסוכן הכריז על המחקר; עכשיו הוא באמת רץ, עם שורות ההתקדמות האמיתיות
+        scroll();
+        await continueResearch();
+        return;
+      }
     } catch {
       setMsgs((m) => [...m, { role: "bot", text: "החיבור נפל לרגע. נסו שוב?" }]);
-    } finally {
-      clearTimeout(slowHint);
-      stopResearchAnim();
-      setBusy(false); scroll();
     }
-  }, [busy]);
+    setBusy(false); scroll();
+  }, [busy, continueResearch]);
 
   // קישורים בתוך הודעות בוט הופכים ללחיצים
   const renderText = (t: string) => {

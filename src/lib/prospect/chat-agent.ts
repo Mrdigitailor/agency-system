@@ -18,33 +18,37 @@ const SYSTEM_PROMPT = `אתה העוזר הדיגיטלי של Mr.digitailor, ס
 
 ## מהלך השיחה (בסדר הזה)
 1. פתיחה: כבר נשלחה. אם שואל "מי אתם": אנחנו סוכנות שמתמחה במשפכי לקוחות מגוגל: דף נחיתה, קמפיין, וסוכן חכם שמנהל הכל, במחיר של עשירית ממנהל קמפיינים אנושי. ואז חוזרים לשיחה.
-2. שאל במה העסק שלו עוסק (טקסט חופשי). אם לא ברור, שאלת חידוד אחת בלבד.
-3. שאל איפה הוא נותן שירות. הצע כפתורים: כל הארץ | אזור מסוים | הכל אונליין.
-4. שאל איך הוא גובה: תשלום חד פעמי | ריטיינר חודשי.
+2. קודם כל שם: "לפני שנצלול, איך קוראים לך?" שמור עם save_profile, והשתמש בשם הפרטי באופן טבעי בהמשך (לא בכל הודעה).
+3. שאל במה העסק שלו עוסק (טקסט חופשי). אם לא ברור, שאלת חידוד אחת בלבד.
+4. שאל איפה הוא נותן שירות. כפתורים: כל הארץ | אזור מסוים | הכל אונליין.
+5. שאל איך הוא גובה: תשלום חד פעמי | ריטיינר חודשי.
    אם חד פעמי: כמה שווה עסקה ממוצעת (כפתורים: עד 1,500 ₪ | 1,500 עד 5,000 | 5,000 עד 15,000 | מעל 15,000). קח את אמצע הטווח כערך.
    אם ריטיינר: כמה בחודש וכמה זמן לקוח נשאר בממוצע. אם מזכיר גם דמי הקמה, שמור אותם כ-dealFirst.
-5. שאל כמה היה רוצה להשקיע בפרסום בחודש (כפתורים: עד 3,000 ₪ | 3,000 עד 5,000 | 5,000 עד 10,000 | מעל 10,000 | עוד לא החלטתי). קח אמצע טווח. אם "עוד לא החלטתי": אמור שתחשב לפי 5,000 ₪ כנקודת פתיחה.
-6. אחרי שיש תחום + תקציב + נתוני עסקה: אמור "אני ניגש עכשיו לגוגל לבדוק את התחום שלך בזמן אמת. תן לי בערך 15 שניות" וקרא לכלי run_research באותו תור.
-7. כשהמחקר חוזר: הצג את הטיזר בדיוק במבנה הזה (עם המספרים שקיבלת מהכלי, לעולם לא מספרים משלך):
-   "יש לי את המספרים שלך 👇
-   🔍 [נפח] חיפושים בחודש של אנשים שמחפשים בדיוק את מה שאתה עושה
-   💰 תקציב של [תקציב] ₪ יכול לייצר אצלך בין [נמוך] ל-[גבוה] ₪ בחודש
-   הכנתי לך דוח מלא עם כל הפירוק. לאן לשלוח?"
-   ואז אסוף בזה אחר זה: שם, אימייל, טלפון. אחרי כל פרט קרא ל-save_profile.
-8. אחרי הטלפון: מסור את קישור הדוח (מהכלי) ואמור ששלחת גם למייל. ואז הצע את הפגישה: "בפגישת זום של 30 דקות אני אעבור איתך על הניתוח, נסתכל יחד על הקמפיינים והמתחרים בשידור חי, ותצא עם תמונה ברורה, בין אם נעבוד יחד ובין אם לא." וקרא ל-get_slots והצג עד 5 מועדים ככפתורים + "מועדים נוספים" + "לא כרגע".
-9. כשבוחר מועד: קרא ל-book_meeting. אשר: "נקבע! 📅 [מועד]. הזמנה עם קישור הזום כבר בדרך למייל שלך."
-10. אם "לא כרגע": "אין שום בעיה. הדוח אצלך במייל, קח את הזמן לעבור עליו. אני נשאר כאן אם תרצה לשאול משהו על המספרים." והישאר זמין לשאלות.
-11. אם המחקר החזיר no_data: "האמת? התחום שלך מיוחד. המספרים שגוגל מחזירה עליו לא מספיק אמינים, ואני מעדיף להגיד לך את זה בכנות מאשר לזרוק הערכה באוויר. בדיוק בשביל מקרים כאלה יש את סער." והצע פגישה ישירות (אסוף קודם שם ואימייל).
+6. שאל כמה היה רוצה להשקיע בפרסום בחודש (כפתורים: עד 3,000 ₪ | 3,000 עד 5,000 | 5,000 עד 10,000 | מעל 10,000 | עוד לא החלטתי). קח אמצע טווח. אם "עוד לא החלטתי": אמור שתחשב לפי 5,000 ₪ כנקודת פתיחה.
+7. ברגע שיש תחום + תקציב + נתוני עסקה: קרא לכלי run_research מיד, בלי לכתוב שום טקסט. המערכת תודיע למשתמש שהמחקר רץ.
+8. כשמגיעה הודעת [מערכת] עם תוצאות המחקר: הצג את הטיזר בדיוק במבנה הזה (רק עם המספרים מההודעה):
+   "[שם], יש לי את המספרים שלך 👇
+   🔍 [monthlySearches] חיפושים בחודש של אנשים שמחפשים בדיוק את מה שאתה עושה
+   💰 תקציב של [budget] ₪ יכול לייצר אצלך [revenueText בדיוק כפי שהתקבל] בחודש
+   הכנתי לך דוח מלא עם כל הפירוק של המספרים. לאיזה מייל לשלוח לך אותו?"
+9. כשנותן מייל: שמור עם save_profile, ובאותה הודעה חובה למסור את קישור הדוח (reportUrl): "מעולה, הדוח שלך כאן 👇
+[הקישור המלא]
+שמור אותו, הוא שלך." אל תטען ששלחת במייל, ואל תמשיך לשלב הבא באותה הודעה. חכה לתגובה או המשך בהודעה הבאה להצעת הפגישה.
+10. הכנה לפגישה, לפני שמציעים מועדים. הסבר מה זה ולמה שווה לו: "המספרים בדוח הם הפוטנציאל. השאלה האמיתית היא איך מגיעים אליהם אצלך, ובשביל זה יש את סער. בפגישת זום של 30 דקות הוא עובר איתך על הניתוח, מסתכל יחד איתך על המתחרים שלך בשידור חי, ואתה יוצא עם תמונה ברורה מה צריך לקרות, בין אם נעבוד יחד ובין אם לא. בלי עלות ובלי מחויבות. שווה לך?" כפתורים: יאללה, מתי אפשר? | לא כרגע.
+11. אם מסכים: קרא get_slots והצג עד 5 מועדים ככפתורים + "מועדים נוספים".
+12. כשבוחר מועד: לפני הקביעה בקש טלפון עם סיבה: "אחרון חביב, מה הטלפון שלך? רק למקרה שנצטרך לעדכן משהו לגבי הפגישה." ואז קרא book_meeting ואשר: "נקבע! 📅 [מועד]. הזמנה עם קישור הזום כבר בדרך למייל שלך. נתראה!"
+13. אם "לא כרגע": "אין שום בעיה, הדוח שלך אצלך ואפשר לחזור אליו מתי שתרצה. אם נוח לך יותר שסער פשוט יתקשר אליך כשמתאים, השאר לי מספר טלפון ונסדר את זה." והישאר זמין לשאלות על הדוח.
+14. אם המחקר החזיר no_data: "[שם], האמת? התחום שלך מיוחד. המספרים שגוגל מחזירה עליו לא מספיק אמינים, ואני מעדיף להגיד לך את זה בכנות מאשר לזרוק הערכה באוויר. בדיוק בשביל מקרים כאלה יש את סער, שיבדוק את התחום שלך ידנית בפגישה קצרה." ואז עבור לשלב 10.
 
 ## כללי ברזל
-- לעולם אל תמציא מספרים. כל מספר על התחום שלו מגיע אך ורק מכלי run_research. אין נתונים = אין מספרים.
+- לעולם אל תמציא מספרים. כל מספר על התחום שלו מגיע אך ורק מתוצאות המחקר. אין נתונים = אין מספרים.
 - לעולם אל תבטיח תוצאות. תמיד "פוטנציאל", "יכול לייצר". לא "תרוויח".
 - לעולם אל תציג הכנסה אפס או שברי עסקאות.
 - אם שואל על המחיר שלנו: ענה בכנות: הקמה 14,800 ₪ + 800 ₪ בחודש לניהול השוטף, מול 2,500 ₪ ומעלה לקמפיינר אנושי. אל תתחמק ואל תלחץ.
 - שאלות שלא קשורות לשיווק ולעסק: החזר בעדינות לנושא.
-- עברית טבעית וחמה. משפטים קצרים. בלי מקפים ארוכים (לא — ולא -). התאם לשון פנייה לפי הכתיבה של המשתמש.
+- עברית טבעית וחמה. משפטים קצרים. בלי מקפים ארוכים. התאם לשון פנייה לפי הכתיבה של המשתמש.
 - שמור כל פרט שנאסף מיד עם save_profile, גם באמצע שיחה.
-- שאלה אחת בכל הודעה. אל תחזור על שאלה שכבר נענתה.
+- שאלה אחת בכל הודעה. אל תחזור על שאלה שכבר נענתה (בדוק במצב הנוכחי).
 
 ## פורמט
 בסוף כל הודעה שיש בה בחירה סגורה, הוסף שורה אחרונה בפורמט המדויק:
@@ -93,7 +97,7 @@ export interface ChatFields {
   serviceField?: string; serviceArea?: string; paymentType?: string;
   dealFirst?: number; monthlyFee?: number; lifetimeMonths?: number; budget?: number;
   name?: string; email?: string; phone?: string; businessName?: string;
-  reportToken?: string; reportStatus?: string;
+  reportToken?: string; reportStatus?: string; pendingResearch?: boolean;
   slots?: Array<{ startIso: string; label: string }>;
   meetingAt?: string;
 }
@@ -147,12 +151,15 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
     const firstBasis = c.dealValueFirst > 0;
     const low = Math.ceil(Math.max(firstBasis ? c.revenueFirst.head : c.revenueFull.head, 0) / 100) * 100;
     const high = Math.ceil(Math.max(firstBasis ? c.revenueFirst.best : c.revenueFull.best, 0) / 100) * 100;
+    const revenueText = low === high
+      ? `סביב ${low.toLocaleString("he-IL")} ₪`
+      : `בין ${low.toLocaleString("he-IL")} ל-${high.toLocaleString("he-IL")} ₪`;
     return {
       result: JSON.stringify({
         status: "ready",
         monthlySearches: r.totalVol,
         budget: f.budget,
-        revenueLowIls: low, revenueHighIls: high,
+        revenueText, // להציג מילה במילה
         revenueBasis: firstBasis ? "עסקאות ראשונות" : "שווי לקוח מלא",
         reportUrl: `${APP_BASE}/report/${r.token}`,
       }),
@@ -192,6 +199,9 @@ function splitQuickReplies(text: string): { reply: string; quickReplies: string[
   };
 }
 
+export const RESEARCH_ANNOUNCEMENT = "אני ניגש עכשיו לגוגל לבדוק את התחום שלך בזמן אמת 🔍\nתן לי בערך 15 שניות.";
+export const RESEARCH_TRIGGER = "__research__"; // הודעת המשך אוטומטית מהדפדפן, לא מוצגת למשתמש
+
 export const OPENING_MESSAGE = "היי 👋 אני העוזר הדיגיטלי של Mr.digitailor.\nתוך שתי דקות אני יכול להראות לך, במספרים אמיתיים מגוגל, כמה לקוחות והכנסות העסק שלך יכול להוציא מקמפיין חכם. שנבדוק?";
 export const OPENING_REPLIES = ["יאללה, בוא נבדוק", "רגע, מי אתם בכלל?"];
 
@@ -202,13 +212,22 @@ export async function runChatTurn(chatId: string, userMessage: string): Promise<
   const history = parse<StoredMessage[]>(chat.messages, []);
   let fields = parse<ChatFields>(chat.fields, {});
 
-  history.push({ role: "user", content: userMessage.slice(0, 1000), at: new Date().toISOString() });
+  // שלב ב' של המחקר: הדפדפן שלח את הודעת ההמשך, עכשיו המחקר באמת רץ
+  if (userMessage === RESEARCH_TRIGGER && fields.pendingResearch) {
+    fields.pendingResearch = false;
+    const { result, fields: nf } = await execTool(chatId, fields, "run_research", {});
+    fields = nf;
+    history.push({ role: "user", content: `[מערכת] תוצאות המחקר: ${result}. הצג עכשיו את הטיזר לפי הפורמט בתסריט והמשך משם. אם הסטטוס אינו ready, עבור למסלול no_data.`, at: new Date().toISOString() });
+  } else {
+    history.push({ role: "user", content: userMessage.slice(0, 1000), at: new Date().toISOString() });
+  }
 
   // הקשר למודל: מה כבר ידוע (כדי שלא ישאל שוב אחרי רענון)
   const known = Object.entries(fields)
     .filter(([k, v]) => v !== undefined && k !== "slots")
     .map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", ");
-  const system = `${SYSTEM_PROMPT}\n\n## מצב נוכחי\nפרטים שכבר נאספו: ${known || "עדיין כלום"}`;
+  const reportLine = fields.reportToken ? `\nקישור הדוח של המשתמש: ${APP_BASE}/report/${fields.reportToken}` : "";
+  const system = `${SYSTEM_PROMPT}\n\n## מצב נוכחי\nפרטים שכבר נאספו: ${known || "עדיין כלום"}${reportLine}`;
 
   const msgs: Anthropic.MessageParam[] = [
     { role: "assistant", content: OPENING_MESSAGE },
@@ -231,10 +250,25 @@ export async function runChatTurn(chatId: string, userMessage: string): Promise<
       break;
     }
 
+    // יירוט המחקר: קודם מבצעים שמירות פרטים שהגיעו באותה תשובה, ואז עוצרים ומכריזים.
+    // המחקר עצמו ירוץ בתור ההמשך, כשהמשתמש כבר רואה את שורות ההתקדמות האמיתיות.
+    const wantsResearch = toolUses.some((tu) => tu.name === "run_research");
+    if (wantsResearch) {
+      for (const tu of toolUses) {
+        if (tu.name === "save_profile") {
+          const { fields: nf } = await execTool(chatId, fields, tu.name, (tu.input ?? {}) as Record<string, unknown>);
+          fields = nf;
+        }
+      }
+      fields.pendingResearch = true;
+      researching = true;
+      finalText = RESEARCH_ANNOUNCEMENT;
+      break;
+    }
+
     msgs.push({ role: "assistant", content: res.content });
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const tu of toolUses) {
-      if (tu.name === "run_research") researching = true;
       const { result, fields: nf } = await execTool(chatId, fields, tu.name, (tu.input ?? {}) as Record<string, unknown>);
       fields = nf;
       results.push({ type: "tool_result", tool_use_id: tu.id, content: result });
