@@ -8,9 +8,14 @@ export const dynamic = "force-dynamic";
  * GET /api/finance/icount/status — בדיקת חיבור ל-iCount (אדמין בלבד, קריאה בלבד).
  * מנסה כמה מתודות "קלות" כדי לגלות מה זמין בחשבון ולהחזיר אבחון ברור.
  */
-export async function GET() {
-  const auth = await requireRole(["admin"]);
-  if (auth instanceof NextResponse) return auth;
+export async function GET(req: Request) {
+  // גישה: אדמין מחובר, או CRON_SECRET (לאבחון מרחוק — הטוקן של iCount קיים רק בסביבת השרת)
+  const provided = req.headers.get("authorization")?.replace("Bearer ", "");
+  const isCron = Boolean(process.env.CRON_SECRET && provided === process.env.CRON_SECRET);
+  if (!isCron) {
+    const auth = await requireRole(["admin"]);
+    if (auth instanceof NextResponse) return auth;
+  }
 
   if (!isIcountConfigured()) {
     return NextResponse.json({
