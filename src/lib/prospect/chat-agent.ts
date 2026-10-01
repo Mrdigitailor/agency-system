@@ -35,10 +35,10 @@ const SYSTEM_PROMPT = `אתה העוזר הדיגיטלי של Mr.digitailor, ס
    הכנתי לך דוח מלא עם כל הפירוק של המספרים. לאיזה מייל לשלוח לך אותו?"
 9. כשנותן מייל: שמור עם save_profile, ובאותה הודעה חובה למסור את קישור הדוח (reportUrl): "מעולה, הדוח שלך כאן 👇
 [הקישור המלא]
-שמור אותו, הוא שלך." אל תטען ששלחת במייל, ואל תמשיך לשלב הבא באותה הודעה. חכה לתגובה או המשך בהודעה הבאה להצעת הפגישה.
+כנס, צפה בדוח, תבין את הפוטנציאל שלך ותראה בדיוק איך הגענו לכל מספר. ואז תחזור אליי לכאן, אני מחכה לך 😉" אל תטען ששלחת במייל, ואל תוסיף עוד שאלות באותה הודעה. ברגע שהוא חוזר וכותב כל דבר, המשך לשלב 10.
 10. הכנה לפגישה, לפני שמציעים מועדים. הסבר מה זה ולמה שווה לו: "המספרים בדוח הם הפוטנציאל. השאלה האמיתית היא איך מגיעים אליהם אצלך, ובשביל זה יש את סער. בפגישת זום של 30 דקות הוא עובר איתך על הניתוח, מסתכל יחד איתך על המתחרים שלך בשידור חי, ואתה יוצא עם תמונה ברורה מה צריך לקרות, בין אם נעבוד יחד ובין אם לא. בלי עלות ובלי מחויבות. שווה לך?" כפתורים: יאללה, מתי אפשר? | לא כרגע.
-11. אם מסכים: קרא get_slots והצג עד 5 מועדים ככפתורים + "מועדים נוספים".
-12. כשבוחר מועד: לפני הקביעה בקש טלפון עם סיבה: "אחרון חביב, מה הטלפון שלך? רק למקרה שנצטרך לעדכן משהו לגבי הפגישה." ואז קרא book_meeting ואשר: "נקבע! 📅 [מועד]. הזמנה עם קישור הזום כבר בדרך למייל שלך. נתראה!"
+11. אם מסכים: קרא get_slots (offset 0) והצג את כל המועדים שחזרו ככפתורים: שני ימים, שלושה חלונות בכל יום. כל כפתור הוא התווית המדויקת של המועד מהכלי. הוסף כפתור אחרון "מועדים נוספים", ואם נלחץ קרא get_slots עם offset גבוה יותר (2, ואז 4, וכן הלאה).
+12. כשבוחר מועד: לפני הקביעה בקש טלפון עם סיבה: "אחרון חביב, מה הטלפון שלך? רק למקרה שנצטרך לעדכן משהו לגבי הפגישה." כשמתקבל הטלפון: שמור אותו עם save_profile וקרא מיד book_meeting עם ה-startIso של המועד שהמשתמש בחר (הוא מופיע ברשימת המועדים שבמצב הנוכחי). לעולם אל תקרא get_slots שוב בשלב הזה ואל תבקש לבחור מועד מחדש. אחרי הצלחה אשר: "נקבע! 📅 [מועד]. הזמנה עם קישור הזום כבר בדרך למייל שלך. נתראה!"
 13. אם "לא כרגע": "אין שום בעיה, הדוח שלך אצלך ואפשר לחזור אליו מתי שתרצה. אם נוח לך יותר שסער פשוט יתקשר אליך כשמתאים, השאר לי מספר טלפון ונסדר את זה." והישאר זמין לשאלות על הדוח.
 14. אם המחקר החזיר no_data: "[שם], האמת? התחום שלך מיוחד. המספרים שגוגל מחזירה עליו לא מספיק אמינים, ואני מעדיף להגיד לך את זה בכנות מאשר לזרוק הערכה באוויר. בדיוק בשביל מקרים כאלה יש את סער, שיבדוק את התחום שלך ידנית בפגישה קצרה." ואז עבור לשלב 10.
 
@@ -84,8 +84,8 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "get_slots",
-    description: "מחזיר מועדי פגישה פנויים מהיומן של סער.",
-    input_schema: { type: "object", properties: { offset: { type: "number", description: "0 לחמשת הראשונים, 5 לבאים" } } },
+    description: "מחזיר מועדי פגישה פנויים מהיומן של סער: שני ימים קרובים, שלושה חלונות בכל יום.",
+    input_schema: { type: "object", properties: { offset: { type: "number", description: "כמה ימים לדלג: 0 בפעם הראשונה, 2 למועדים נוספים, 4 לבאים" } } },
   },
   {
     name: "book_meeting",
@@ -176,10 +176,26 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
   }
 
   if (name === "get_slots") {
-    const offset = typeof input.offset === "number" ? Math.max(0, Math.floor(input.offset)) : 0;
-    const slots = await getFreeSlots();
-    f.slots = slots;
-    return { result: JSON.stringify({ slots: slots.slice(offset, offset + 5) }), fields: f };
+    const dayOffset = typeof input.offset === "number" ? Math.max(0, Math.floor(input.offset)) : 0;
+    const all = await getFreeSlots();
+    f.slots = all;
+    // הצעה של שני ימים, שלושה חלונות מפוזרים בכל יום (בוקר, אמצע, סוף)
+    const dayKeys: string[] = [];
+    const byDay = new Map<string, typeof all>();
+    for (const s of all) {
+      const day = s.label.split("·")[0].trim();
+      if (!byDay.has(day)) { byDay.set(day, []); dayKeys.push(day); }
+      byDay.get(day)!.push(s);
+    }
+    const offered = dayKeys.slice(dayOffset, dayOffset + 2).flatMap((d) => {
+      const list = byDay.get(d)!;
+      const idx = [...new Set([0, Math.floor(list.length / 2), list.length - 1])];
+      return idx.map((i) => list[i]);
+    });
+    return {
+      result: JSON.stringify({ slots: offered, moreDays: dayKeys.length > dayOffset + 2, nextOffset: dayOffset + 2 }),
+      fields: f,
+    };
   }
 
   if (name === "book_meeting") {
@@ -187,7 +203,7 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
     if (!f.name || !f.email) return { result: JSON.stringify({ error: "חסרים שם או אימייל" }), fields: f };
     const report = f.reportToken ? await prisma.potentialReport.findFirst({ where: { token: f.reportToken } }) : null;
     const r = await bookSlot({ startIso, name: f.name, email: f.email, phone: f.phone, reportId: report?.id });
-    if (r.ok) f.meetingAt = r.meetingAt;
+    if (r.ok) { f.meetingAt = r.meetingAt; f.slots = undefined; }
     return { result: JSON.stringify(r), fields: f };
   }
 
@@ -253,7 +269,11 @@ export async function runChatTurn(chatId: string, userMessage: string): Promise<
     .filter(([k, v]) => v !== undefined && k !== "slots")
     .map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", ");
   const reportLine = fields.reportToken ? `\nקישור הדוח של המשתמש: ${APP_BASE}/report/${fields.reportToken}` : "";
-  const system = `${SYSTEM_PROMPT}\n\n## מצב נוכחי\nפרטים שכבר נאספו: ${known || "עדיין כלום"}${reportLine}`;
+  // רשימת המועדים נשארת זמינה לסוכן בין הודעות — ככה הוא זוכר מה המשתמש בחר גם אחרי שביקש טלפון
+  const slotsLine = fields.slots?.length
+    ? `\nהמועדים שהוצגו למשתמש (תווית ← startIso עבור book_meeting):\n${fields.slots.map((s) => `"${s.label}" ← ${s.startIso}`).join("\n")}`
+    : "";
+  const system = `${SYSTEM_PROMPT}\n\n## מצב נוכחי\nפרטים שכבר נאספו: ${known || "עדיין כלום"}${reportLine}${slotsLine}`;
 
   const msgs: Anthropic.MessageParam[] = [
     { role: "assistant", content: OPENING_MESSAGE },
@@ -327,7 +347,11 @@ export async function runChatTurn(chatId: string, userMessage: string): Promise<
   if (!finalText) finalText = "סליחה על ההמתנה! איבדתי את עצמי לרגע. איפה היינו?";
   finalText = finalText.replace(/[—–]/g, "-"); // ביטחון: בלי מקפים ארוכים
 
-  const { reply, quickReplies } = splitQuickReplies(finalText);
+  const split = splitQuickReplies(finalText);
+  const quickReplies = split.quickReplies;
+  // הודעה שכולה כפתורים בלי טקסט נראית כמו תקלה — תמיד יש משפט מלווה
+  const reply = split.reply || (quickReplies.length ? "בחרו אחת מהאפשרויות 👇" : split.reply);
+  if (!split.reply && quickReplies.length) finalText = `${reply}\n[כפתורים: ${quickReplies.join(" | ")}]`;
   history.push({ role: "assistant", content: finalText, at: new Date().toISOString() });
 
   await prisma.prospectChat.update({

@@ -15,8 +15,9 @@ export type EmailKey = "report" | "nurture1" | "nurture3" | "nurture7" | "remind
 
 const parseSent = (raw: string): EmailKey[] => { try { return JSON.parse(raw || "[]"); } catch { return []; } };
 
-// ---------- תבנית עטיפה ממותגת ----------
-// שפת המערכת: רקע בהיר, כרטיס לבן, כותרת שחורה עם הלוגו, זהב להדגשות.
+// ---------- תבנית עטיפה ----------
+// מייל אישי ופשוט, כמו שכותבים לקולגה: רקע לבן, בלי כרטיסים ומסגרות.
+// המיתוג יושב בחתימה בלבד: תמונה על עיגול בצבע המותג + הלוגו לידה.
 // RTL מוצהר על כל רכיב (ג'ימייל מתעלם מהצהרות ברמת העמוד).
 // Ploni נטען איפה שנתמך (Apple Mail); ג'ימייל יציג Arial.
 function shell(inner: string): string {
@@ -25,26 +26,23 @@ function shell(inner: string): string {
 @font-face{font-family:'Ploni';src:url('${APP_BASE}/fonts/ploni-regular-aaa.woff') format('woff');font-weight:400}
 @font-face{font-family:'Ploni';src:url('${APP_BASE}/fonts/ploni-demibold-aaa.woff') format('woff');font-weight:600}
 </style></head>
-<body dir="rtl" style="margin:0;background:#f5f5f5;padding:28px 12px;direction:rtl">
-<div dir="rtl" style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;direction:rtl;font-family:'Ploni',Arial,'Segoe UI',sans-serif">
-  <div dir="rtl" style="background:#000000;padding:16px 24px;text-align:right">
-    <img src="${APP_BASE}/images/logo-mail.png" alt="Mr.digitailor" height="34" style="height:34px;display:inline-block;border:0">
-  </div>
-  <div dir="rtl" style="padding:28px 26px;color:#111111;font-size:16px;line-height:1.75;direction:rtl;text-align:right">${inner}</div>
-  <div dir="rtl" style="padding:20px 26px;border-top:1px solid #e0e0e0;direction:rtl;text-align:right">
+<body dir="rtl" style="margin:0;background:#ffffff;padding:30px 18px;direction:rtl">
+<div dir="rtl" style="max-width:560px;margin:0 auto;direction:rtl;font-family:'Ploni',Arial,'Segoe UI',sans-serif">
+  <div dir="rtl" style="color:#111111;font-size:16px;line-height:1.8;direction:rtl;text-align:right">${inner}</div>
+  <div dir="rtl" style="margin-top:30px;padding-top:18px;border-top:1px solid #f0f0f0;direction:rtl;text-align:right">
     <table dir="rtl" style="direction:rtl;border-collapse:collapse"><tr>
       <td style="vertical-align:middle;padding-left:14px">
-        <img src="${APP_BASE}/images/sig-saar.png" alt="סער אדרי" width="52" height="52" style="width:52px;height:52px;border-radius:50%;border:2px solid #eed89b;display:block">
+        <img src="${APP_BASE}/images/sig-saar.png" alt="סער אדרי" width="60" height="60" style="width:60px;height:60px;border-radius:50%;display:block">
       </td>
       <td dir="rtl" style="vertical-align:middle;text-align:right;direction:rtl">
         <div style="color:#111111;font-size:15px;font-weight:bold">סער אדרי</div>
         <div style="color:#666666;font-size:12.5px">מייסד ובעלים, Mr.digitailor · מלווה עסקים בשיווק דיגיטלי</div>
         <div style="color:#8a6a15;font-size:12.5px;margin-top:2px">054-7974206 · אפשר פשוט להשיב למייל הזה, אני קורא הכל</div>
       </td>
+      <td style="vertical-align:middle;padding-right:18px">
+        <img src="${APP_BASE}/images/logo-mail.png" alt="Mr.digitailor" height="34" style="height:34px;display:block;border:0;border-radius:6px">
+      </td>
     </tr></table>
-  </div>
-  <div dir="rtl" style="padding:10px 26px;border-top:1px solid #eeeeee;color:#999999;font-size:11px;direction:rtl;text-align:right">
-    Mr.digitailor · שיווק דיגיטלי שתפור עליך
   </div>
 </div></body></html>`;
 }
@@ -62,7 +60,7 @@ function teaser(r: PotentialReport): string {
     const low = Math.ceil(Math.max(firstBasis ? c.revenueFirst.head : c.revenueFull.head, 0) / 100) * 100;
     const high = Math.ceil(Math.max(firstBasis ? c.revenueFirst.best : c.revenueFull.best, 0) / 100) * 100;
     const range = low === high ? `סביב ${low.toLocaleString("he-IL")} ₪` : `בין ${low.toLocaleString("he-IL")} ל-${high.toLocaleString("he-IL")} ₪`;
-    return `<div dir="rtl" style="background:#faf6e9;border:1px solid #e0c987;border-radius:10px;padding:16px 18px;margin:18px 0;direction:rtl;text-align:right">
+    return `<div dir="rtl" style="background:#faf6e9;border-radius:10px;padding:16px 18px;margin:18px 0;direction:rtl;text-align:right">
       <div style="color:#8a6a15;font-size:12px;letter-spacing:2px;margin-bottom:6px">תזכורת למספרים שלך</div>
       <div style="color:#8a6a15;font-size:23px;font-weight:bold">${range} בחודש</div>
       <div style="color:#666666;font-size:13px;margin-top:4px">פוטנציאל מתקציב של ${Math.round(r.budget).toLocaleString("he-IL")} ₪, לפי נתוני גוגל בתחום שלך</div>
@@ -130,7 +128,7 @@ ${btn(reportUrl, "לדוח שלך")}`),
       subject: `מחר נפגשים 👋 ${when}`,
       html: shell(`<p>${hi}</p>
 <p>תזכורת קטנה: מחר בשעה שקבענו נפגשים בזום לעבור על דוח הפוטנציאל שלך.</p>
-<p dir="rtl" style="background:#faf6e9;border:1px solid #e0c987;border-radius:10px;padding:14px 18px;text-align:right"><b style="color:#8a6a15">📅 ${when}</b><br>
+<p dir="rtl" style="background:#faf6e9;border-radius:10px;padding:14px 18px;text-align:right"><b style="color:#8a6a15">📅 ${when}</b><br>
 <a href="${ZOOM_LINK}" style="color:#8a6a15;font-weight:bold">קישור הזום לפגישה</a></p>
 <p>שווה לפתוח את הדוח לפני, ולהכין כל שאלה שעולה לך. סער יעבור איתך על הכל, כולל הצצה חיה למתחרים שלך.</p>
 ${btn(reportUrl, "לרענון הדוח לפני הפגישה")}`),
