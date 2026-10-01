@@ -14,6 +14,35 @@ function clientIp(req: Request): string {
   return (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim().slice(0, 60) || "unknown";
 }
 
+/** שחזור שיחה קיימת — הדפדפן חוזר לדף והשיחה ממשיכה מאיפה שעצרה */
+export async function GET(req: Request) {
+  const token = new URL(req.url).searchParams.get("session") ?? "";
+  if (!/^[a-z0-9-]{16,40}$/i.test(token)) return NextResponse.json({ found: false });
+  const chat = await prisma.prospectChat.findUnique({ where: { token } });
+  if (!chat) return NextResponse.json({ found: false });
+  // שיחה ישנה מדי לא משוחזרת — פותחים נקי
+  if (Date.now() - chat.updatedAt.getTime() > 72 * 3600_000) return NextResponse.json({ found: false });
+
+  let raw: Array<{ role: string; content: string }> = [];
+  try { raw = JSON.parse(chat.messages || "[]"); } catch { /* ריק */ }
+
+  const stripButtons = (t: string) => t.replace(/\[כפתורים:\s*[^\]]+\]\s*$/, "").trim();
+  const visible = raw
+    .filter((m) => !(m.role === "user" && (m.content.startsWith("[מערכת]") || m.content === "__research__")))
+    .map((m) => ({ role: m.role === "assistant" ? "bot" : "user", text: stripButtons(m.content) }))
+    .filter((m) => m.text);
+
+  // הכפתורים של ההודעה האחרונה של הסוכן
+  let quickReplies: string[] = [];
+  const lastBot = [...raw].reverse().find((m) => m.role === "assistant");
+  if (lastBot) {
+    const match = lastBot.content.match(/\[כפתורים:\s*([^\]]+)\]\s*$/);
+    if (match) quickReplies = match[1].split("|").map((x: string) => x.trim()).filter(Boolean).slice(0, 8);
+  }
+
+  return NextResponse.json({ found: true, messages: visible, quickReplies });
+}
+
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "bad request" }, { status: 400 }); }

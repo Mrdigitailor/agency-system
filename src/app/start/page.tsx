@@ -25,29 +25,49 @@ export default function ProspectChatPage() {
 
   const scroll = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 60);
 
-  // פתיחת שיחה
+  // פתיחת שיחה: קודם מנסים לשחזר שיחה קיימת, שחזרה מהדוח לא תאפס את השיחה
+  const freshSession = useCallback(async () => {
+    const res = await fetch("/api/public/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const d = await res.json();
+    if (d.sessionToken) {
+      tokenRef.current = d.sessionToken;
+      try { localStorage.setItem("mrd_chat_token", d.sessionToken); } catch { /* פרטי */ }
+    }
+    setMsgs([{ role: "bot", text: d.reply ?? "" }]);
+    setQuick(d.quickReplies ?? []);
+  }, []);
+
   useEffect(() => {
-    let saved = "";
-    try { saved = localStorage.getItem("mrd_chat_token") ?? ""; } catch { /* פרטי */ }
     (async () => {
       try {
-        const res = await fetch("/api/public/chat", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        const d = await res.json();
-        if (d.sessionToken) {
-          tokenRef.current = d.sessionToken;
-          try { localStorage.setItem("mrd_chat_token", d.sessionToken); } catch { /* פרטי */ }
+        let saved = "";
+        try { saved = localStorage.getItem("mrd_chat_token") ?? ""; } catch { /* פרטי */ }
+        if (saved) {
+          const res = await fetch(`/api/public/chat?session=${encodeURIComponent(saved)}`);
+          const d = await res.json();
+          if (d.found && Array.isArray(d.messages) && d.messages.length) {
+            tokenRef.current = saved;
+            setMsgs(d.messages);
+            setQuick(d.quickReplies ?? []);
+            scroll();
+            return;
+          }
         }
-        setMsgs([{ role: "bot", text: d.reply ?? "" }]);
-        setQuick(d.quickReplies ?? []);
+        await freshSession();
       } catch {
         setMsgs([{ role: "bot", text: "משהו השתבש בטעינה. רעננו את הדף?" }]);
       }
     })();
-    void saved; // שיחה חדשה בכל טעינה בגרסה הראשונה
-  }, []);
+  }, [freshSession]);
+
+  const resetChat = useCallback(async () => {
+    try { localStorage.removeItem("mrd_chat_token"); } catch { /* פרטי */ }
+    setMsgs([]); setQuick([]);
+    try { await freshSession(); } catch { /* יטופל ברענון */ }
+  }, [freshSession]);
 
   const startResearchAnim = () => {
     setResearchStep(0);
@@ -123,8 +143,9 @@ export default function ProspectChatPage() {
       <header className="flex items-center gap-3 border-b border-[#272319] bg-black px-4 py-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/images/logo-mrdigitailors.svg" alt="Mr.digitailor" className="h-8" />
-        <div className="mr-auto flex items-center gap-1.5 text-xs text-[#7e776a]">
-          <span className="inline-block h-2 w-2 rounded-full bg-[#22c55e]" /> זמין עכשיו
+        <div className="mr-auto flex items-center gap-3">
+          <button onClick={resetChat} className="text-xs text-[#7e776a] underline decoration-[#4e4227] hover:text-[#eed89b]">שיחה חדשה</button>
+          <span className="flex items-center gap-1.5 text-xs text-[#7e776a]"><span className="inline-block h-2 w-2 rounded-full bg-[#22c55e]" /> זמין עכשיו</span>
         </div>
       </header>
 
