@@ -28,11 +28,23 @@ function shell(inner: string): string {
 <body dir="rtl" style="margin:0;background:#f5f5f5;padding:28px 12px;direction:rtl">
 <div dir="rtl" style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;direction:rtl;font-family:'Ploni',Arial,'Segoe UI',sans-serif">
   <div dir="rtl" style="background:#000000;padding:16px 24px;text-align:right">
-    <img src="${APP_BASE}/images/logo-email.png" alt="Mr.digitailor" height="34" style="height:34px;display:inline-block;border:0">
+    <img src="${APP_BASE}/images/logo-mail.png" alt="Mr.digitailor" height="34" style="height:34px;display:inline-block;border:0">
   </div>
   <div dir="rtl" style="padding:28px 26px;color:#111111;font-size:16px;line-height:1.75;direction:rtl;text-align:right">${inner}</div>
-  <div dir="rtl" style="padding:14px 26px;border-top:1px solid #e0e0e0;color:#999999;font-size:12px;direction:rtl;text-align:right">
-    Mr.digitailor · שיווק דיגיטלי שתפור עליך<br>אפשר פשוט להשיב למייל הזה, אני קורא הכל.
+  <div dir="rtl" style="padding:20px 26px;border-top:1px solid #e0e0e0;direction:rtl;text-align:right">
+    <table dir="rtl" style="direction:rtl;border-collapse:collapse"><tr>
+      <td style="vertical-align:middle;padding-left:14px">
+        <img src="${APP_BASE}/images/sig-saar.png" alt="סער אדרי" width="52" height="52" style="width:52px;height:52px;border-radius:50%;border:2px solid #eed89b;display:block">
+      </td>
+      <td dir="rtl" style="vertical-align:middle;text-align:right;direction:rtl">
+        <div style="color:#111111;font-size:15px;font-weight:bold">סער אדרי</div>
+        <div style="color:#666666;font-size:12.5px">מייסד ובעלים, Mr.digitailor · מלווה עסקים בשיווק דיגיטלי</div>
+        <div style="color:#8a6a15;font-size:12.5px;margin-top:2px">054-7974206 · אפשר פשוט להשיב למייל הזה, אני קורא הכל</div>
+      </td>
+    </tr></table>
+  </div>
+  <div dir="rtl" style="padding:10px 26px;border-top:1px solid #eeeeee;color:#999999;font-size:11px;direction:rtl;text-align:right">
+    Mr.digitailor · שיווק דיגיטלי שתפור עליך
   </div>
 </div></body></html>`;
 }
