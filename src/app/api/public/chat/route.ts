@@ -40,6 +40,9 @@ export async function GET(req: Request) {
     if (match) quickReplies = match[1].split("|").map((x: string) => x.trim()).filter(Boolean).slice(0, 8);
   }
 
+  // שיחה שעוד לא התקדמה: כפתורי הפתיחה חוזרים איתה
+  if (quickReplies.length === 0 && visible.length <= 1) quickReplies = [...OPENING_REPLIES];
+
   return NextResponse.json({ found: true, messages: visible, quickReplies });
 }
 

@@ -6,6 +6,33 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Msg { role: "user" | "bot"; text: string }
 
+const TESTIMONIALS = [
+  { name: "הדס מליק", biz: "חברת חדרי בריחה ניידים", quote: "ממליצה בחום, סער אלוף. יודע לדייק את הפרסומים באופן מקצועי, וכל ההתנהלות נעימה וחברית. הקפיץ לי את הפרסום והשיווק כמה רמות למעלה" },
+  { name: "נועה טויטו", biz: "יוצרת המופע \"בלבוסטע\"", quote: "כל קמפיין עם מאות פניות. בחודש ימים בלבד סגרתי 16 מופעים, כשהיעד היה חמישה" },
+  { name: "עופרי מצא", biz: "מותג אופנה ומכון שיזוף", quote: "כל בעל עסק צריך את סער איתו! מקצועי, סבלני, תמיד נכון לעזור. הבחירה הכי טובה שעשיתי לעסק שלי" },
+  { name: "יואב לאמי", biz: "משרד מיתוג ועמודי נחיתה", quote: "בכל הנוגע לדיגיטל, אפשר לסמוך עליו בעיניים עצומות. התוצאות הדהימו והחזר ההשקעה היה מיידי" },
+  { name: "נירן רוזנשטיין", biz: "אתר איקומרס בתחום הביוטי", quote: "מאז שהתחלנו לעבוד איתו אנחנו רואים שיפור משמעותי, הרבה פניות ורכישות. ממליץ בחום על שירותיו" },
+  { name: "תמיר גליליאן", biz: "מותג טפטים מוביל בישראל", quote: "תותח על. מנהל קמפיינים מקצועי שתמיד זמין. ממליץ לכל מי שרוצה לקחת את העסק שלב נוסף קדימה" },
+];
+
+// רקע פוליגונלי עדין באווירת המותג — שקוף מאוד כדי לא להפריע לקריאה
+const POLY_BG = (
+  <svg aria-hidden className="pointer-events-none fixed inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1200 800">
+    <g opacity="0.05" fill="#eed89b">
+      <polygon points="0,0 280,0 90,210" />
+      <polygon points="1200,60 1010,250 1200,330" />
+      <polygon points="150,800 360,620 480,800" />
+      <polygon points="1200,800 1040,800 1200,560" />
+      <polygon points="620,0 760,120 540,160" opacity="0.6" />
+    </g>
+    <g opacity="0.04" fill="none" stroke="#c8ab5e" strokeWidth="1.5">
+      <polygon points="200,330 330,250 390,420 240,470" />
+      <polygon points="880,470 1020,420 1070,590 920,640" />
+      <polygon points="520,620 650,560 700,720 560,760" />
+    </g>
+  </svg>
+);
+
 const RESEARCH_STEPS = [
   "ניגש לגוגל לבדוק את התחום שלך...",
   "סורק ביטויי חיפוש רלוונטיים...",
@@ -138,7 +165,11 @@ export default function ProspectChatPage() {
   };
 
   return (
-    <div dir="rtl" className="flex h-dvh flex-col bg-[#0a0908] text-[#f4f0e7]" style={{ fontFamily: "Ploni, Assistant, sans-serif" }}>
+    <div dir="rtl" className="relative flex h-dvh justify-center gap-6 bg-[#0a0908] text-[#f4f0e7] lg:px-8 lg:py-6" style={{ fontFamily: "Ploni, Assistant, sans-serif" }}>
+      {POLY_BG}
+
+      {/* חלון הצ'אט — ברוחב מלא במובייל, עמודה מרוסנת בדסקטופ */}
+      <div className="relative z-10 flex h-full w-full flex-col overflow-hidden bg-[#0a0908]/80 backdrop-blur-[2px] lg:w-[460px] lg:rounded-2xl lg:border lg:border-[#272319] lg:shadow-2xl">
       {/* כותרת */}
       <header className="flex items-center gap-3 border-b border-[#272319] bg-black px-4 py-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -152,16 +183,27 @@ export default function ProspectChatPage() {
       {/* הודעות */}
       <div className="flex-1 space-y-2.5 overflow-y-auto px-4 py-5">
         {msgs.map((m, i) => (
-          <div key={i} className={m.role === "bot"
-            ? "max-w-[88%] whitespace-pre-line rounded-2xl rounded-br-md bg-[#1a1714] px-4 py-2.5 text-[15px] leading-relaxed shadow"
-            : "mr-auto max-w-[75%] whitespace-pre-line rounded-2xl rounded-bl-md border border-[#4e4227] bg-[#29230f] px-4 py-2 text-[14.5px] text-[#eed89b]"}>
-            {m.role === "bot" ? renderText(m.text) : m.text}
-          </div>
+          m.role === "bot" ? (
+            <div key={i} className="flex items-end gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/avatar-tailor.png" alt="" className="h-8 w-8 shrink-0 rounded-full border border-[#4e4227] object-cover" />
+              <div className="max-w-[82%] whitespace-pre-line rounded-2xl rounded-br-md bg-[#1a1714] px-4 py-2.5 text-[15px] leading-relaxed shadow">
+                {renderText(m.text)}
+              </div>
+            </div>
+          ) : (
+            <div key={i} className="mr-auto max-w-[75%] whitespace-pre-line rounded-2xl rounded-bl-md border border-[#4e4227] bg-[#29230f] px-4 py-2 text-[14.5px] text-[#eed89b]">
+              {m.text}
+            </div>
+          )
         ))}
 
         {/* מחוון הקלדה / התקדמות מחקר */}
         {busy && (
-          <div className="max-w-[88%] rounded-2xl rounded-br-md bg-[#1a1714] px-4 py-3 text-[13px] text-[#9a9184]">
+          <div className="flex items-end gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/avatar-tailor.png" alt="" className="h-8 w-8 shrink-0 rounded-full border border-[#4e4227] object-cover" />
+          <div className="max-w-[82%] rounded-2xl rounded-br-md bg-[#1a1714] px-4 py-3 text-[13px] text-[#9a9184]">
             {researchStep >= 0 ? (
               <span className="font-mono">{RESEARCH_STEPS[researchStep]}</span>
             ) : (
@@ -171,6 +213,7 @@ export default function ProspectChatPage() {
                 <i className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#c8ab5e]" style={{ animationDelay: "300ms" }} />
               </span>
             )}
+          </div>
           </div>
         )}
         <div ref={bottomRef} />
@@ -203,6 +246,23 @@ export default function ProspectChatPage() {
           שלח
         </button>
       </div>
+      </div>
+
+      {/* עמודת המלצות — דסקטופ בלבד, בצד שמאל */}
+      <aside className="relative z-10 hidden h-full w-[360px] flex-col gap-3 overflow-y-auto py-1 lg:flex">
+        <div className="mb-1 px-1">
+          <div className="text-[11px] tracking-[.2em] text-[#c8ab5e]">לקוחות מספרים</div>
+          <div className="text-lg font-semibold text-[#f4f0e7]">למה עובדים עם סער</div>
+        </div>
+        {TESTIMONIALS.map((t) => (
+          <div key={t.name} className="rounded-xl border border-[#272319] bg-[#131110]/90 p-4">
+            <div className="text-[13px] tracking-[.18em] text-[#eed89b]">★★★★★</div>
+            <p className="mt-2 text-[13.5px] font-light leading-relaxed text-[#b5ad9e]">"{t.quote}"</p>
+            <div className="mt-3 text-sm font-semibold text-[#f4f0e7]">{t.name}</div>
+            <div className="text-xs text-[#7e776a]">{t.biz}</div>
+          </div>
+        ))}
+      </aside>
     </div>
   );
 }
