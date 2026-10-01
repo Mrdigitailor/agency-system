@@ -75,11 +75,15 @@ async function run(req: Request) {
     const sentKeys: EmailKey[] = (() => { try { return JSON.parse(r.emailsSent || "[]"); } catch { return []; } })();
     const age = now - r.createdAt.getTime();
 
-    // מסלול קבע: תזכורת 22-26 שעות לפני הפגישה
+    // מסלול קבע: תזכורת יום לפני (22-26 שעות) + תזכורת קצרה כשעה לפני
     if (r.meetingAt && !r.cancelledAt) {
       const until = r.meetingAt.getTime() - now;
       if (until > 22 * 3600_000 && until < 26 * 3600_000 && !sentKeys.includes("reminder")) {
         if (await sendProspectEmail(r.id, "reminder")) sent.push(`reminder→${r.contactEmail}`);
+      }
+      // הקרון רץ כל שעה עגולה, אז חלון של 30-95 דקות תופס בדיוק ריצה אחת לפני הפגישה
+      if (until > 30 * 60_000 && until <= 95 * 60_000 && !sentKeys.includes("reminder1h")) {
+        if (await sendProspectEmail(r.id, "reminder1h")) sent.push(`reminder1h→${r.contactEmail}`);
       }
       continue; // מי שקבע לא מקבל חימום
     }

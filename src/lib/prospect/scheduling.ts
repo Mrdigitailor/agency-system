@@ -124,7 +124,7 @@ export async function getFreeSlots(): Promise<Slot[]> {
 
 /** קביעת פגישה בפועל: אימות שהמשבצת עדיין פנויה ← יצירת אירוע עם הזמנה וזום */
 export async function bookSlot(args: {
-  startIso: string; name: string; email: string; phone?: string; reportId?: string;
+  startIso: string; name: string; email: string; phone?: string; reportId?: string; business?: string;
 }): Promise<{ ok: boolean; error?: string; meetingAt?: string }> {
   const token = await freshCalendarToken();
   if (!token) return { ok: false, error: "calendar not connected" };
@@ -139,16 +139,19 @@ export async function bookSlot(args: {
 
   const end = new Date(start.getTime() + SLOT_MINUTES * 60_000);
   const description = [
-    `פגישת ניתוח שיווק עם ${args.name}`,
+    `פגישת ניתוח שיווק עם ${args.name}${args.business ? ` (${args.business})` : ""}`,
     args.phone ? `טלפון: ${args.phone}` : "",
     ZOOM_LINK ? `\nהצטרפות בזום: ${ZOOM_LINK}\n${ZOOM_DETAILS}` : "",
   ].filter(Boolean).join("\n");
+
+  // הכותרת משרתת את שני היומנים: אצל סער רואים מי ומה העסק, אצל הליד רואים ממי הפגישה
+  const summary = `ניתוח שיווק: ${args.name}${args.business ? ` · ${args.business}` : ""} ✕ Mr.digitailor`;
 
   const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      summary: `פגישת ניתוח שיווק: ${args.name}`,
+      summary,
       description,
       location: ZOOM_LINK || undefined,
       start: { dateTime: start.toISOString() },
@@ -168,6 +171,27 @@ export async function bookSlot(args: {
       where: { id: args.reportId },
       data: { bookedAt: new Date(), meetingAt: start, calendarEventId: String(created.id ?? ""), cancelledAt: null },
     }).catch(() => {});
+
+    // עדכון כרטיס הליד ב-CRM: הפגישה נרשמת כצעד הבא
+    try {
+      const report = await prisma.potentialReport.findUnique({ where: { id: args.reportId } });
+      if (report?.leadId) {
+        const lead = await prisma.lead.findUnique({ where: { id: report.leadId } });
+        if (lead) {
+          const p = ilParts(start);
+          const dateStr = `${String(p.day).padStart(2, "0")}/${String(p.mo).padStart(2, "0")}/${p.y} ${String(p.h).padStart(2, "0")}:${String(p.mi).padStart(2, "0")}`;
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: {
+              nextActionType: "meeting",
+              nextActionNote: `פגישת ניתוח בזום: ${dateStr}`,
+              nextFollowUp: `${p.y}-${String(p.mo).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`,
+              notes: `${lead.notes}\nנקבעה פגישת ניתוח בזום ל-${dateStr} (דרך הצ'אט)`.trim(),
+            },
+          });
+        }
+      }
+    } catch { /* לא מפיל את הקביעה */ }
   }
 
   const chat = ownerChatId();

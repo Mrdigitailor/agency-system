@@ -11,7 +11,7 @@ const APP_BASE = process.env.APP_BASE_URL ?? "https://agency.mr-digitailor.co.il
 const FROM = "סער מ-Mr.digitailor <noreply@mr-digitailor.co.il>";
 const REPLY_TO = "saar@digitailors.co.il";
 
-export type EmailKey = "report" | "nurture1" | "nurture3" | "nurture7" | "reminder" | "cancelled";
+export type EmailKey = "report" | "nurture1" | "nurture3" | "nurture7" | "reminder" | "reminder1h" | "cancelled";
 
 const parseSent = (raw: string): EmailKey[] => { try { return JSON.parse(raw || "[]"); } catch { return []; } };
 
@@ -32,7 +32,7 @@ function shell(inner: string): string {
   <div dir="rtl" style="margin-top:30px;padding-top:18px;border-top:1px solid #f0f0f0;direction:rtl;text-align:right">
     <table dir="rtl" style="direction:rtl;border-collapse:collapse"><tr>
       <td style="vertical-align:middle;padding-left:14px">
-        <img src="${APP_BASE}/images/sig-saar.png" alt="סער אדרי" width="60" height="60" style="width:60px;height:60px;border-radius:50%;display:block">
+        <img src="${APP_BASE}/images/sig-saar-photo.png" alt="סער אדרי" width="60" height="60" style="width:60px;height:60px;border-radius:50%;display:block">
       </td>
       <td dir="rtl" style="vertical-align:middle;text-align:right;direction:rtl">
         <div style="color:#111111;font-size:15px;font-weight:bold">סער אדרי</div>
@@ -40,9 +40,15 @@ function shell(inner: string): string {
         <div style="color:#8a6a15;font-size:12.5px;margin-top:2px">054-7974206 · אפשר פשוט להשיב למייל הזה, אני קורא הכל</div>
       </td>
       <td style="vertical-align:middle;padding-right:18px">
-        <img src="${APP_BASE}/images/logo-mail.png" alt="Mr.digitailor" height="34" style="height:34px;display:block;border:0;border-radius:6px">
+        <img src="${APP_BASE}/images/logo-light.png" alt="Mr.digitailor" height="30" style="height:30px;display:block;border:0">
       </td>
     </tr></table>
+    <div dir="rtl" style="margin-top:14px;direction:rtl;text-align:right">
+      <a href="https://www.instagram.com/mr.digitailor/" style="text-decoration:none;display:inline-block;margin-left:8px"><img src="${APP_BASE}/images/social/instagram.png" alt="אינסטגרם" width="28" height="28" style="width:28px;height:28px;border:0"></a>
+      <a href="https://www.facebook.com/mrdigitailor" style="text-decoration:none;display:inline-block;margin-left:8px"><img src="${APP_BASE}/images/social/facebook.png" alt="פייסבוק" width="28" height="28" style="width:28px;height:28px;border:0"></a>
+      <a href="https://www.linkedin.com/company/mr-digitailor/" style="text-decoration:none;display:inline-block;margin-left:8px"><img src="${APP_BASE}/images/social/linkedin.png" alt="לינקדאין" width="28" height="28" style="width:28px;height:28px;border:0"></a>
+      <a href="https://www.youtube.com/channel/UCCl4jpjricf061JqCeSkfQg" style="text-decoration:none;display:inline-block"><img src="${APP_BASE}/images/social/youtube.png" alt="יוטיוב" width="28" height="28" style="width:28px;height:28px;border:0"></a>
+    </div>
   </div>
 </div></body></html>`;
 }
@@ -132,6 +138,20 @@ ${btn(reportUrl, "לדוח שלך")}`),
 <a href="${ZOOM_LINK}" style="color:#8a6a15;font-weight:bold">קישור הזום לפגישה</a></p>
 <p>שווה לפתוח את הדוח לפני, ולהכין כל שאלה שעולה לך. סער יעבור איתך על הכל, כולל הצצה חיה למתחרים שלך.</p>
 ${btn(reportUrl, "לרענון הדוח לפני הפגישה")}`),
+    };
+  }
+
+  if (key === "reminder1h") {
+    const when = r.meetingAt
+      ? new Date(r.meetingAt).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" })
+      : "";
+    return {
+      subject: `נפגשים בקרוב 🕐 היום ב-${when}`,
+      html: shell(`<p>${hi}</p>
+<p>הפגישה שלנו מתחילה בקרוב, היום ב-<b>${when}</b>. זה הקישור:</p>
+${btn(ZOOM_LINK, "להצטרפות לזום")}
+<p style="color:#666666;font-size:14px">${ZOOM_LINK}</p>
+<p>נתראה עוד מעט!</p>`),
     };
   }
 

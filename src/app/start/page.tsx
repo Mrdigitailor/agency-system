@@ -7,78 +7,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 interface Msg { role: "user" | "bot"; text: string }
 
 const TESTIMONIALS = [
-  { name: "הדס מליק", biz: "חברת חדרי בריחה ניידים", img: "/images/testimonials/t1.png", quote: "ממליצה בחום, סער אלוף. יודע לדייק את הפרסומים באופן מקצועי, וכל ההתנהלות נעימה וחברית. הקפיץ לי את הפרסום והשיווק כמה רמות למעלה" },
-  { name: "נועה טויטו", biz: "יוצרת המופע \"בלבוסטע\"", img: "/images/testimonials/t2.png", quote: "כל קמפיין עם מאות פניות. בחודש ימים בלבד סגרתי 16 מופעים, כשהיעד היה חמישה" },
-  { name: "עופרי מצא", biz: "מותג אופנה ומכון שיזוף", img: "/images/testimonials/t3.png", quote: "כל בעל עסק צריך את סער איתו! מקצועי, סבלני, תמיד נכון לעזור. הבחירה הכי טובה שעשיתי לעסק שלי" },
-  { name: "יואב לאמי", biz: "משרד מיתוג ועמודי נחיתה", img: "/images/testimonials/t4.png", quote: "בכל הנוגע לדיגיטל, אפשר לסמוך עליו בעיניים עצומות. התוצאות הדהימו והחזר ההשקעה היה מיידי" },
-  { name: "נירן רוזנשטיין", biz: "אתר איקומרס בתחום הביוטי", img: "/images/testimonials/t5.png", quote: "מאז שהתחלנו לעבוד איתו אנחנו רואים שיפור משמעותי, הרבה פניות ורכישות. ממליץ בחום על שירותיו" },
-  { name: "תמיר גליליאן", biz: "מותג טפטים מוביל בישראל", img: "/images/testimonials/t6.png", quote: "תותח על. מנהל קמפיינים מקצועי שתמיד זמין. ממליץ לכל מי שרוצה לקחת את העסק שלב נוסף קדימה" },
+  { name: "הדס מליק", biz: "חברת חדרי בריחה ניידים", img: "/images/testimonials/t4.png", quote: "ממליצה בחום, סער אלוף. יודע לדייק את הפרסומים באופן מקצועי, וכל ההתנהלות נעימה וחברית. הקפיץ לי את הפרסום והשיווק כמה רמות למעלה" },
+  { name: "נועה טויטו", biz: "יוצרת המופע \"בלבוסטע\"", img: "/images/testimonials/t1.png", quote: "כל קמפיין עם מאות פניות. בחודש ימים בלבד סגרתי 16 מופעים, כשהיעד היה חמישה" },
+  { name: "עופרי מצא", biz: "מותג אופנה ומכון שיזוף", img: "/images/testimonials/t5.png", quote: "כל בעל עסק צריך את סער איתו! מקצועי, סבלני, תמיד נכון לעזור. הבחירה הכי טובה שעשיתי לעסק שלי" },
+  { name: "יואב לאמי", biz: "משרד מיתוג ועמודי נחיתה", img: "/images/testimonials/t6.png", quote: "בכל הנוגע לדיגיטל, אפשר לסמוך עליו בעיניים עצומות. התוצאות הדהימו והחזר ההשקעה היה מיידי" },
+  { name: "נירן רוזנשטיין", biz: "אתר איקומרס בתחום הביוטי", img: "/images/testimonials/t2.png", quote: "מאז שהתחלנו לעבוד איתו אנחנו רואים שיפור משמעותי, הרבה פניות ורכישות. ממליץ בחום על שירותיו" },
+  { name: "תמיר גליליאן", biz: "מותג טפטים מוביל בישראל", img: "/images/testimonials/t3.png", quote: "תותח על. מנהל קמפיינים מקצועי שתמיד זמין. ממליץ לכל מי שרוצה לקחת את העסק שלב נוסף קדימה" },
 ];
 
-// רקע פוליגונלי עדין באווירת המותג: דמות החייט מול מחשב, מפצחת משפך שיווק.
-// שקוף מאוד בכוונה — אווירה, לא תמונה שמפריעה לקריאה.
-const POLY_BG = (
-  <svg aria-hidden className="pointer-events-none fixed inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1200 800">
-    {/* שברי רקע בפינות */}
-    <g opacity="0.04" fill="#eed89b">
-      <polygon points="0,0 250,0 70,190" />
-      <polygon points="1200,40 1030,210 1200,300" />
-      <polygon points="0,800 170,800 60,620" />
-      <polygon points="1200,800 1050,800 1200,580" />
-    </g>
-
-    {/* הסצנה: חייט מול מסך עם משפך */}
-    <g opacity="0.07">
-      {/* שולחן */}
-      <polygon points="250,585 950,585 985,618 215,618" fill="#eed89b" opacity="0.85" />
-      <polygon points="285,618 320,618 315,760 290,760" fill="#eed89b" opacity="0.4" />
-      <polygon points="890,618 925,618 930,760 905,760" fill="#eed89b" opacity="0.4" />
-
-      {/* מסך: מסגרת, רגל ובסיס */}
-      <polygon points="385,262 685,252 696,522 392,530" fill="none" stroke="#eed89b" strokeWidth="5" />
-      <polygon points="398,274 672,265 682,510 404,517" fill="#eed89b" opacity="0.1" />
-      <polygon points="518,530 562,528 556,585 526,585" fill="#eed89b" opacity="0.7" />
-      <polygon points="488,585 595,585 608,600 476,600" fill="#eed89b" opacity="0.7" />
-
-      {/* המשפך על המסך */}
-      <g fill="#eed89b">
-        <polygon points="432,308 642,302 620,345 452,348" />
-        <polygon points="462,360 608,356 592,392 477,394" opacity="0.85" />
-        <polygon points="489,404 582,402 571,432 498,433" opacity="0.7" />
-        <polygon points="523,442 550,441 547,472 526,472" opacity="0.6" />
-        {/* לידים שנופלים מתחתית המשפך */}
-        <polygon points="533,482 541,488 535,496 528,489" />
-        <polygon points="545,497 552,502 547,509 541,503" opacity="0.7" />
-        <polygon points="525,505 531,510 526,517 520,511" opacity="0.5" />
-      </g>
-      {/* ניצוצות הפיצוח סביב המשפך */}
-      <g fill="#c8ab5e">
-        <polygon points="628,330 652,315 643,348" />
-        <polygon points="612,282 624,264 629,292" opacity="0.8" />
-        <polygon points="448,286 432,272 456,268" opacity="0.8" />
-        <polygon points="606,418 622,428 604,434" opacity="0.7" />
-      </g>
-
-      {/* הדמות: ראש, גוף, יד אל המקלדת */}
-      <g fill="#eed89b">
-        <polygon points="795,290 827,304 835,333 821,362 795,370 769,359 757,331 768,302" opacity="0.95" />
-        <polygon points="784,368 806,368 803,388 787,388" opacity="0.8" />
-        <polygon points="730,398 862,392 848,470 742,474" opacity="0.9" />
-        <polygon points="742,474 848,470 836,585 756,585" opacity="0.75" />
-        <polygon points="748,408 772,420 702,476 688,460" opacity="0.85" />
-        <polygon points="702,476 688,460 618,540 634,557" opacity="0.75" />
-      </g>
-      {/* סרט המדידה של החייט */}
-      <g fill="#c8ab5e">
-        <polygon points="779,382 791,384 772,468 759,464" />
-        <polygon points="806,384 818,386 822,470 809,470" />
-        <polygon points="756,464 775,470 772,484 753,478" opacity="0.8" />
-      </g>
-      {/* מקלדת וכיסא */}
-      <polygon points="560,585 712,585 722,567 576,567" fill="#eed89b" opacity="0.6" />
-      <polygon points="878,420 916,414 928,600 886,600" fill="#eed89b" opacity="0.5" />
-    </g>
-  </svg>
+// רקע באווירת המותג: איור פוליגונלי של דמות החייט מול מחשב, מפצחת משפך שיווק.
+// מעומעם בכוונה + שכבת האפלה בקצוות — אווירה, לא תמונה שמפריעה לקריאה.
+const SCENE_BG = (
+  <div aria-hidden className="pointer-events-none fixed inset-0">
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src="/images/chat-bg.webp" alt="" className="h-full w-full object-cover opacity-25" />
+    <div className="absolute inset-0 bg-gradient-to-b from-[#0a0908]/70 via-[#0a0908]/20 to-[#0a0908]/80" />
+  </div>
 );
 
 const RESEARCH_STEPS = [
@@ -214,7 +158,7 @@ export default function ProspectChatPage() {
 
   return (
     <div dir="rtl" className="relative flex h-dvh gap-6 bg-[#0a0908] text-[#f4f0e7] lg:px-[10vw] lg:py-6" style={{ fontFamily: "Ploni, Assistant, sans-serif" }}>
-      {POLY_BG}
+      {SCENE_BG}
 
       {/* חלון הצ'אט — רוחב מלא במובייל; בדסקטופ ממלא את כל השטח שנשאר אחרי עמודת ההמלצות */}
       <div className="relative z-10 flex h-full w-full flex-col overflow-hidden bg-[#0a0908]/80 backdrop-blur-[2px] lg:flex-1 lg:rounded-2xl lg:border lg:border-[#272319] lg:shadow-2xl">
@@ -300,7 +244,7 @@ export default function ProspectChatPage() {
       <aside className="relative z-10 hidden h-full w-[25vw] flex-col gap-3 overflow-y-auto py-1 lg:flex">
         <div className="mb-1 px-1">
           <div className="text-[11px] tracking-[.2em] text-[#c8ab5e]">לקוחות מספרים</div>
-          <div className="text-lg font-semibold text-[#f4f0e7]">למה עובדים עם סער</div>
+          <div className="text-lg font-semibold text-[#f4f0e7]">למה בעלי עסקים בוחרים ב-Mr.digitailor</div>
         </div>
         {TESTIMONIALS.map((t) => (
           <div key={t.name} className="rounded-xl border border-[#272319] bg-[#131110]/90 p-4">

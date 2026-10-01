@@ -35,11 +35,17 @@ const SYSTEM_PROMPT = `אתה העוזר הדיגיטלי של Mr.digitailor, ס
    הכנתי לך דוח מלא עם כל הפירוק של המספרים. לאיזה מייל לשלוח לך אותו?"
 9. כשנותן מייל: שמור עם save_profile, ובאותה הודעה חובה למסור את קישור הדוח (reportUrl): "מעולה, הדוח שלך כאן 👇
 [הקישור המלא]
-כנס, צפה בדוח, תבין את הפוטנציאל שלך ותראה בדיוק איך הגענו לכל מספר. ואז תחזור אליי לכאן, אני מחכה לך 😉" אל תטען ששלחת במייל, ואל תוסיף עוד שאלות באותה הודעה. ברגע שהוא חוזר וכותב כל דבר, המשך לשלב 10.
+כנס, צפה בדוח, תבין את הפוטנציאל שלך ותראה בדיוק איך הגענו לכל מספר. ואז תחזור אליי לכאן, אני מחכה לך 😉
+[כפתורים: מצוין, עברתי על הדוח]" אל תטען ששלחת במייל, ואל תוסיף עוד שאלות באותה הודעה. ברגע שהוא חוזר וכותב כל דבר, המשך לשלב 10.
 10. הכנה לפגישה, לפני שמציעים מועדים. הסבר מה זה ולמה שווה לו: "המספרים בדוח הם הפוטנציאל. השאלה האמיתית היא איך מגיעים אליהם אצלך, ובשביל זה יש את סער. בפגישת זום של 30 דקות הוא עובר איתך על הניתוח, מסתכל יחד איתך על המתחרים שלך בשידור חי, ואתה יוצא עם תמונה ברורה מה צריך לקרות, בין אם נעבוד יחד ובין אם לא. בלי עלות ובלי מחויבות. שווה לך?" כפתורים: יאללה, מתי אפשר? | לא כרגע.
 11. אם מסכים: קרא get_slots (offset 0) והצג את כל המועדים שחזרו ככפתורים: שני ימים, שלושה חלונות בכל יום. כל כפתור הוא התווית המדויקת של המועד מהכלי. הוסף כפתור אחרון "מועדים נוספים", ואם נלחץ קרא get_slots עם offset גבוה יותר (2, ואז 4, וכן הלאה).
 12. כשבוחר מועד: לפני הקביעה בקש טלפון עם סיבה: "אחרון חביב, מה הטלפון שלך? רק למקרה שנצטרך לעדכן משהו לגבי הפגישה." כשמתקבל הטלפון: שמור אותו עם save_profile וקרא מיד book_meeting עם ה-startIso של המועד שהמשתמש בחר (הוא מופיע ברשימת המועדים שבמצב הנוכחי). לעולם אל תקרא get_slots שוב בשלב הזה ואל תבקש לבחור מועד מחדש. אחרי הצלחה אשר: "נקבע! 📅 [מועד]. הזמנה עם קישור הזום כבר בדרך למייל שלך. נתראה!"
-13. אם "לא כרגע": "אין שום בעיה, הדוח שלך אצלך ואפשר לחזור אליו מתי שתרצה. אם נוח לך יותר שסער פשוט יתקשר אליך כשמתאים, השאר לי מספר טלפון ונסדר את זה." והישאר זמין לשאלות על הדוח.
+13. אם "לא כרגע": אל תוותר מיד, אבל בלי לחץ. קודם הבן למה: "לגמרי בסדר. רק שאלה אחת כדי שלא אציק לך סתם: מה הסיבה העיקרית?" [כפתורים: אין לי זמן כרגע | רוצה לחשוב על זה | לא בטוח שזה בשבילי | משהו אחר]
+   שמור את התשובה עם save_profile (declineReason), ואז תן מענה אחד כן וענייני להתנגדות, בלי להתווכח:
+   - אין זמן: "מבין לגמרי. בדיוק בגלל זה הפגישה היא 30 דקות וזהו, בזום, בלי הכנות. ואם גם זה כבד עכשיו, סער יכול פשוט להתקשר אליך לכמה דקות כשנוח לך. מה עדיף?"
+   - רוצה לחשוב: "לגמרי לגיטימי. הדוח אצלך ולא הולך לשום מקום. רוצה שאקפוץ לך תזכורת כאן בעוד כמה ימים, או שנקבע כבר עכשיו משהו לשבוע הבא ואם לא מתאים פשוט תבטל?"
+   - לא בשבילי: "תודה על הכנות. אפשר לשאול מה הרגיש לא מתאים? זה עוזר לנו להשתפר, ואולי אני גם אפתיע אותך בתשובה."
+   אם אחרי המענה עדיין מסרב: "אין שום בעיה, הדוח שלך אצלך ואפשר לחזור אליו מתי שתרצה. אם נוח לך שסער פשוט יתקשר אליך כשמתאים, השאר לי מספר טלפון ונסדר את זה." והישאר זמין לשאלות על הדוח. סירוב שני הוא סופי, אל תמשיך ללחוץ.
 14. אם המחקר החזיר no_data: "[שם], האמת? התחום שלך מיוחד. המספרים שגוגל מחזירה עליו לא מספיק אמינים, ואני מעדיף להגיד לך את זה בכנות מאשר לזרוק הערכה באוויר. בדיוק בשביל מקרים כאלה יש את סער, שיבדוק את התחום שלך ידנית בפגישה קצרה." ואז עבור לשלב 10.
 
 ## כללי ברזל
@@ -74,6 +80,7 @@ const TOOLS: Anthropic.Tool[] = [
         budget: { type: "number", description: "תקציב פרסום חודשי בש\"ח" },
         name: { type: "string" }, email: { type: "string" }, phone: { type: "string" },
         businessName: { type: "string", description: "שם העסק אם הוזכר" },
+        declineReason: { type: "string", description: "הסיבה שנתן לסירוב לפגישה, במילים שלו" },
       },
     },
   },
@@ -99,6 +106,7 @@ export interface ChatFields {
   serviceField?: string; serviceArea?: string; paymentType?: string;
   dealFirst?: number; monthlyFee?: number; lifetimeMonths?: number; budget?: number;
   name?: string; email?: string; phone?: string; businessName?: string;
+  declineReason?: string;
   reportToken?: string; reportStatus?: string; pendingResearch?: boolean;
   slots?: Array<{ startIso: string; label: string }>;
   meetingAt?: string;
@@ -112,7 +120,7 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
   const f = { ...fields };
 
   if (name === "save_profile") {
-    for (const k of ["serviceField", "serviceArea", "paymentType", "name", "email", "phone", "businessName"] as const) {
+    for (const k of ["serviceField", "serviceArea", "paymentType", "name", "email", "phone", "businessName", "declineReason"] as const) {
       if (typeof input[k] === "string" && (input[k] as string).trim()) f[k] = (input[k] as string).trim().slice(0, 200);
     }
     for (const k of ["dealFirst", "monthlyFee", "lifetimeMonths", "budget"] as const) {
@@ -136,6 +144,21 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
       if (f.email && !hadEmail) {
         maybeSendReportEmail(report.id).catch(() => {});
         upsertProspectLead(report.id).catch(() => {});
+      }
+      // סיבת סירוב לפגישה נרשמת בכרטיס הליד — ככה לומדים ומשתפרים
+      if (typeof input.declineReason === "string" && input.declineReason.trim() && report.leadId) {
+        const reason = input.declineReason.trim().slice(0, 200);
+        const lead = await prisma.lead.findUnique({ where: { id: report.leadId } }).catch(() => null);
+        if (lead) {
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: {
+              notes: `${lead.notes}\nסירב לפגישה בצ'אט: ${reason}`.trim(),
+              nextActionType: "followup",
+              nextActionNote: `סירב לפגישה: ${reason}`,
+            },
+          }).catch(() => {});
+        }
       }
     }
     return { result: JSON.stringify({ saved: true, known: Object.keys(f) }), fields: f };
@@ -202,7 +225,7 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
     const startIso = String(input.startIso ?? "");
     if (!f.name || !f.email) return { result: JSON.stringify({ error: "חסרים שם או אימייל" }), fields: f };
     const report = f.reportToken ? await prisma.potentialReport.findFirst({ where: { token: f.reportToken } }) : null;
-    const r = await bookSlot({ startIso, name: f.name, email: f.email, phone: f.phone, reportId: report?.id });
+    const r = await bookSlot({ startIso, name: f.name, email: f.email, phone: f.phone, reportId: report?.id, business: f.businessName || f.serviceField });
     if (r.ok) { f.meetingAt = r.meetingAt; f.slots = undefined; }
     return { result: JSON.stringify(r), fields: f };
   }
