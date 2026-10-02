@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useApp } from "@/lib/data/context";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
+import IcountRevenueTab from "./IcountRevenueTab";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -349,7 +350,7 @@ export default function FinancePage() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
-  const [tab, setTab] = useState<"income" | "expenses">("income");
+  const [tab, setTab] = useState<"income" | "expenses" | "icount">("income");
 
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
@@ -641,6 +642,16 @@ export default function FinancePage() {
           onClick={() => setTab("expenses")}
         >
           {t("expenses")}
+        </button>
+        <button
+          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            tab === "icount"
+              ? "bg-brand-light text-brand-dark shadow-sm"
+              : "text-brand-muted hover:text-brand-dark"
+          }`}
+          onClick={() => setTab("icount")}
+        >
+          הכנסות לקוחות
         </button>
       </div>
 
@@ -1110,6 +1121,9 @@ export default function FinancePage() {
           </div>
         </div>
       )}
+
+      {/* iCount Revenue Tab */}
+      {tab === "icount" && <IcountRevenueTab />}
     </div>
   );
 }

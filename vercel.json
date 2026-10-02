@@ -13,6 +13,10 @@
       "schedule": "20 5 * * *"
     },
     {
+      "path": "/api/finance/icount/revenue-sync",
+      "schedule": "0 3 * * *"
+    },
+    {
       "path": "/api/cron/weekly-reports",
       "schedule": "0 4 * * 0"
     },
