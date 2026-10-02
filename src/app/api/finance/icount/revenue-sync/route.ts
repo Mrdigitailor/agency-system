@@ -45,25 +45,44 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
 
-  // ===== מצב חקירה: סוגי מסמכים + שדות לדוגמה =====
+  // ===== מצב חקירה: סוגי מסמכים + שדות לדוגמה (עמיד לכשלים) =====
   if (searchParams.get("mode") === "explore") {
-    const types = await icountRequest<{ doctypes?: unknown }>("doc", "types");
-    const dt = types.doctypes;
-    const typeList = dt && typeof dt === "object"
-      ? Object.entries(dt as Record<string, unknown>).map(([k, v]) => {
-          const o = v as Record<string, unknown>;
-          return `${k}: ${o?.doctype_name ?? o?.name ?? JSON.stringify(o).slice(0, 60)}`;
-        })
-      : [String(dt)];
+    const out: Record<string, unknown> = {};
+    try {
+      const types = await icountRequest<{ doctypes?: unknown }>("doc", "types");
+      const dt = types.doctypes;
+      out.typeList = dt && typeof dt === "object"
+        ? Object.entries(dt as Record<string, unknown>).map(([k, v]) => {
+            const o = v as Record<string, unknown>;
+            return `${k}: ${typeof o === "object" && o ? (o.doctype_name ?? o.name ?? JSON.stringify(o).slice(0, 50)) : String(v)}`;
+          })
+        : [JSON.stringify(dt)?.slice(0, 300)];
+    } catch (e) { out.typesError = e instanceof Error ? e.message : "unknown"; }
 
-    const sample = await icountRequest<Record<string, unknown>>(
-      "doc", "search", { limit: 2, detail_level: 1 });
-    const topKeys = Object.keys(sample).filter((k) => k !== "status");
-    const raw = sample.results ?? sample.docs ?? sample.list;
-    const arr = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : [];
-    const docKeys = arr.length ? Object.keys(arr[0] as Record<string, unknown>) : [];
-
-    return NextResponse.json({ typeList, searchTopKeys: topKeys, sampleDocKeys: docKeys, sampleCount: arr.length });
+    const attempts: Array<[string, string, Record<string, unknown>]> = [
+      ["doc/search (invoice)", "search", { doctype: "invoice", limit: 2, detail_level: 1 }],
+      ["doc/search (בלי doctype)", "search", { limit: 2 }],
+      ["doc/list", "list", { limit: 2 }],
+      ["doc/get_list", "get_list", { limit: 2 }],
+    ];
+    const samples: Record<string, unknown> = {};
+    for (const [label, method, params] of attempts) {
+      try {
+        const sample = await icountRequest<Record<string, unknown>>("doc", method, params);
+        const topKeys = Object.keys(sample).filter((k) => k !== "status");
+        const raw = sample.results ?? sample.docs ?? sample.list ?? sample.data;
+        const arr = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : [];
+        samples[label] = {
+          topKeys,
+          count: arr.length,
+          docKeys: arr.length ? Object.keys(arr[0] as Record<string, unknown>) : [],
+        };
+      } catch (e) {
+        samples[label] = { error: e instanceof Error ? e.message : "unknown" };
+      }
+    }
+    out.samples = samples;
+    return NextResponse.json(out);
   }
 
   // ===== סנכרון מלא =====
