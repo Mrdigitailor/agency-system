@@ -40,13 +40,18 @@ export function isIcountConfigured(): boolean {
   return Boolean(process.env.ICOUNT_TOKEN || (process.env.ICOUNT_CID && process.env.ICOUNT_USER && process.env.ICOUNT_PASS));
 }
 
-/** קריאה גנרית ל-iCount — מצרף token או sid לפי מה שמוגדר */
+/**
+ * קריאה גנרית ל-iCount — מצרף token או sid לפי מה שמוגדר.
+ * forceLogin: מתעלם מהטוקן ומשתמש בהתחברות cid/user/pass — משמש לחשבון המשני
+ * (העוסק-מורשה הישן), כשהטוקן שייך לחשבון הבע"מ.
+ */
 export async function icountRequest<T = IcountResponse>(
   module: string,
   method: string,
   params: Record<string, unknown> = {},
+  opts: { forceLogin?: boolean } = {},
 ): Promise<T> {
-  const token = process.env.ICOUNT_TOKEN;
+  const token = opts.forceLogin ? undefined : process.env.ICOUNT_TOKEN;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const body: Record<string, unknown> = { ...params };
 
