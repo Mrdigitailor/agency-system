@@ -45,6 +45,23 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
 
+  // ===== מצב קריאה גנרית לצורכי פיתוח (CRON בלבד, מתודות קריאה בלבד) =====
+  if (searchParams.get("mode") === "call" && isCron) {
+    const ALLOWED = new Set(["doc/search", "doc/types", "doc/info", "client/get_list", "company/info"]);
+    const module_ = searchParams.get("module") ?? "";
+    const method = searchParams.get("method") ?? "";
+    if (!ALLOWED.has(`${module_}/${method}`)) return NextResponse.json({ error: "method לא ברשימה" }, { status: 400 });
+    let params: Record<string, unknown> = {};
+    try { params = JSON.parse(Buffer.from(searchParams.get("params") ?? "e30=", "base64").toString("utf8")); } catch { /* empty */ }
+    const account = (searchParams.get("account") === "old" ? "old" : "primary") as Acc;
+    try {
+      const data = await icountRequest<Record<string, unknown>>(module_, method, params, { account });
+      return NextResponse.json({ ok: true, data });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "unknown" });
+    }
+  }
+
   // ===== מצב חקירה: סוגי מסמכים + שדות לדוגמה (עמיד לכשלים) =====
   if (searchParams.get("mode") === "explore") {
     const out: Record<string, unknown> = {};
