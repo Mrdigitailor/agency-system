@@ -106,6 +106,7 @@ model Client {
   chatRoom      ChatRoom?
   platformConnections PlatformConnection[]
   icountLinks   IcountLink[]
+  icountRevenue IcountRevenue?
   profile       ClientProfile?
   competitors   Competitor[]
   questionnaire ClientQuestionnaire?
@@ -696,6 +697,22 @@ model IcountLink {
   @@unique([account, icountClientId])
   @@index([clientId])
   @@map("icount_links")
+}
+
+// סיכום הכנסות מ-iCount פר-לקוח (משני החשבונות יחד; net = לפני מע"מ)
+model IcountRevenue {
+  id           String   @id @default(cuid())
+  clientId     String   @unique
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  totalNet     Float    @default(0) // כל הזמנים
+  totalGross   Float    @default(0)
+  yearNet      Float    @default(0) // השנה הנוכחית
+  docCount     Int      @default(0)
+  firstDocDate String   @default("") // תחילת עבודה בפועל
+  lastDocDate  String   @default("")
+  syncedAt     DateTime @updatedAt
+
+  @@map("icount_revenue")
 }
 
 // ==================== הודעות ותגובות (cache מקומי) ====================
