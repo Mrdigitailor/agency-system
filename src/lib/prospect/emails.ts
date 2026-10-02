@@ -17,44 +17,42 @@ const parseSent = (raw: string): EmailKey[] => { try { return JSON.parse(raw || 
 
 // ---------- תבנית עטיפה ----------
 // מייל אישי ופשוט, כמו שכותבים לקולגה: רקע לבן, בלי כרטיסים ומסגרות.
-// המיתוג יושב בחתימה בלבד: תמונה על עיגול בצבע המותג + הלוגו לידה.
+// מבנה: לוגו בראש ← תוכן ← קו זהב ← חתימה ממורכזת (תמונה, פרטים, רשתות).
 // RTL מוצהר על כל רכיב (ג'ימייל מתעלם מהצהרות ברמת העמוד).
-// Ploni נטען איפה שנתמך (Apple Mail); ג'ימייל יציג Arial.
+// פונט המותג Ploni נטען בכל ארבעת המשקלים איפה שנתמך (Apple Mail, iPhone);
+// ג'ימייל חוסם פונטים מותאמים מכל שולח, שם תוצג החלופה הקרובה ביותר.
+const FONT = `'Ploni',Arial,'Segoe UI',sans-serif`;
 function shell(inner: string): string {
   return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8">
 <style>
+@font-face{font-family:'Ploni';src:url('${APP_BASE}/fonts/ploni-light-aaa.woff') format('woff');font-weight:300}
 @font-face{font-family:'Ploni';src:url('${APP_BASE}/fonts/ploni-regular-aaa.woff') format('woff');font-weight:400}
+@font-face{font-family:'Ploni';src:url('${APP_BASE}/fonts/ploni-medium-aaa.woff') format('woff');font-weight:500}
 @font-face{font-family:'Ploni';src:url('${APP_BASE}/fonts/ploni-demibold-aaa.woff') format('woff');font-weight:600}
 </style></head>
-<body dir="rtl" style="margin:0;background:#ffffff;padding:30px 18px;direction:rtl">
-<div dir="rtl" style="max-width:560px;margin:0 auto;direction:rtl;font-family:'Ploni',Arial,'Segoe UI',sans-serif">
-  <div dir="rtl" style="color:#111111;font-size:16px;line-height:1.8;direction:rtl;text-align:right">${inner}</div>
-  <div dir="rtl" style="margin-top:30px;padding-top:18px;border-top:1px solid #f0f0f0;direction:rtl;text-align:right">
-    <table dir="rtl" style="direction:rtl;border-collapse:collapse"><tr>
-      <td style="vertical-align:middle;padding-left:14px">
-        <img src="${APP_BASE}/images/sig-saar-photo.png" alt="סער אדרי" width="60" height="60" style="width:60px;height:60px;border-radius:50%;display:block">
-      </td>
-      <td dir="rtl" style="vertical-align:middle;text-align:right;direction:rtl">
-        <div style="color:#111111;font-size:15px;font-weight:bold">סער אדרי</div>
-        <div style="color:#666666;font-size:12.5px">מייסד ובעלים, Mr.digitailor · מלווה עסקים בשיווק דיגיטלי</div>
-        <div style="color:#8a6a15;font-size:12.5px;margin-top:2px">054-7974206 · אפשר פשוט להשיב למייל הזה, אני קורא הכל</div>
-      </td>
-      <td style="vertical-align:middle;padding-right:18px">
-        <img src="${APP_BASE}/images/logo-light.png" alt="Mr.digitailor" height="30" style="height:30px;display:block;border:0">
-      </td>
-    </tr></table>
-    <div dir="rtl" style="margin-top:14px;direction:rtl;text-align:right">
-      <a href="https://www.instagram.com/mr.digitailor/" style="text-decoration:none;display:inline-block;margin-left:8px"><img src="${APP_BASE}/images/social/instagram.png" alt="אינסטגרם" width="28" height="28" style="width:28px;height:28px;border:0"></a>
-      <a href="https://www.facebook.com/mrdigitailor" style="text-decoration:none;display:inline-block;margin-left:8px"><img src="${APP_BASE}/images/social/facebook.png" alt="פייסבוק" width="28" height="28" style="width:28px;height:28px;border:0"></a>
-      <a href="https://www.linkedin.com/company/mr-digitailor/" style="text-decoration:none;display:inline-block;margin-left:8px"><img src="${APP_BASE}/images/social/linkedin.png" alt="לינקדאין" width="28" height="28" style="width:28px;height:28px;border:0"></a>
-      <a href="https://www.youtube.com/channel/UCCl4jpjricf061JqCeSkfQg" style="text-decoration:none;display:inline-block"><img src="${APP_BASE}/images/social/youtube.png" alt="יוטיוב" width="28" height="28" style="width:28px;height:28px;border:0"></a>
+<body dir="rtl" style="margin:0;background:#ffffff;padding:30px 18px;direction:rtl;font-family:${FONT}">
+<div dir="rtl" style="max-width:560px;margin:0 auto;direction:rtl;font-family:${FONT}">
+  <div dir="rtl" style="margin-bottom:24px;text-align:right">
+    <img src="${APP_BASE}/images/logo-light.png" alt="Mr.digitailor" height="34" style="height:34px;border:0">
+  </div>
+  <div dir="rtl" style="color:#111111;font-size:16px;line-height:1.8;direction:rtl;text-align:right;font-family:${FONT}">${inner}</div>
+  <div dir="rtl" style="margin-top:34px;padding-top:24px;border-top:2px solid #eed89b;direction:rtl;text-align:center;font-family:${FONT}">
+    <img src="${APP_BASE}/images/sig-saar-photo.png" alt="סער אדרי" width="64" height="64" style="width:64px;height:64px;border-radius:50%;display:inline-block">
+    <div style="color:#111111;font-size:16px;font-weight:600;margin-top:10px;font-family:${FONT}">סער אדרי</div>
+    <div style="color:#666666;font-size:13px;margin-top:2px;font-family:${FONT}">מייסד ובעלים, Mr.digitailor · מלווה עסקים בשיווק דיגיטלי</div>
+    <div style="color:#8a6a15;font-size:13px;margin-top:3px;font-family:${FONT}">054-7974206 · אפשר פשוט להשיב למייל הזה, אני קורא הכל</div>
+    <div dir="rtl" style="margin-top:16px;text-align:center">
+      <a href="https://www.instagram.com/mr.digitailor/" style="text-decoration:none;display:inline-block;margin:0 5px"><img src="${APP_BASE}/images/social/instagram.png" alt="אינסטגרם" width="28" height="28" style="width:28px;height:28px;border:0"></a>
+      <a href="https://www.facebook.com/mrdigitailor" style="text-decoration:none;display:inline-block;margin:0 5px"><img src="${APP_BASE}/images/social/facebook.png" alt="פייסבוק" width="28" height="28" style="width:28px;height:28px;border:0"></a>
+      <a href="https://www.linkedin.com/company/mr-digitailor/" style="text-decoration:none;display:inline-block;margin:0 5px"><img src="${APP_BASE}/images/social/linkedin.png" alt="לינקדאין" width="28" height="28" style="width:28px;height:28px;border:0"></a>
+      <a href="https://www.youtube.com/channel/UCCl4jpjricf061JqCeSkfQg" style="text-decoration:none;display:inline-block;margin:0 5px"><img src="${APP_BASE}/images/social/youtube.png" alt="יוטיוב" width="28" height="28" style="width:28px;height:28px;border:0"></a>
     </div>
   </div>
 </div></body></html>`;
 }
 
 const btn = (href: string, label: string) =>
-  `<div dir="rtl" style="margin:22px 0;text-align:right"><a href="${href}" style="background:#eed89b;color:#000000;font-weight:bold;font-size:15px;padding:13px 30px;border-radius:8px;text-decoration:none;display:inline-block">${label}</a></div>`;
+  `<div dir="rtl" style="margin:22px 0;text-align:right"><a href="${href}" style="background:#eed89b;color:#000000;font-weight:600;font-size:15px;padding:13px 30px;border-radius:8px;text-decoration:none;display:inline-block;font-family:${FONT}">${label}</a></div>`;
 
 const firstName = (r: PotentialReport) => (r.contactName || "").trim().split(/\s+/)[0] || "";
 
