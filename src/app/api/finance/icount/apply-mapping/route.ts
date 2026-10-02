@@ -33,15 +33,19 @@ export async function POST(req: Request) {
   const pairs: Array<{ system: string; icount: string; account?: string }> = body.pairs ?? [];
   if (!pairs.length) return NextResponse.json({ error: "חסר pairs" }, { status: 400 });
 
-  // רשימת כרטיסי iCount (חשבון ראשי; old יתווסף כשיהיה טוקן לחשבון הישן)
-  const res = await icountRequest<{ clients?: unknown }>("client", "get_list", { limit: 500 });
-  const raw = res.clients;
-  const icountClients = (Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : [])
-    .map((c) => {
-      const o = c as Record<string, unknown>;
-      return { id: String(o.client_id ?? o.id ?? ""), name: String(o.client_name ?? o.name ?? "") };
-    })
-    .filter((c) => c.id && c.name);
+  // רשימת כרטיסים לכל חשבון שנדרש בזוגות
+  const accountsNeeded = [...new Set(pairs.map((p) => p.account ?? "primary"))] as Array<"primary" | "old">;
+  const listByAccount = new Map<string, Array<{ id: string; name: string }>>();
+  for (const acc of accountsNeeded) {
+    const res = await icountRequest<{ clients?: unknown }>("client", "get_list", { limit: 500 }, { account: acc });
+    const raw = res.clients;
+    listByAccount.set(acc, (Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : [])
+      .map((c) => {
+        const o = c as Record<string, unknown>;
+        return { id: String(o.client_id ?? o.id ?? ""), name: String(o.client_name ?? o.name ?? "") };
+      })
+      .filter((c) => c.id && c.name));
+  }
 
   const systemClients = await prisma.client.findMany({
     where: { deletedAt: null },
@@ -52,11 +56,12 @@ export async function POST(req: Request) {
   const failures: string[] = [];
 
   for (const p of pairs) {
+    const account0 = p.account ?? "primary";
     const sys = systemClients.find((c) => norm(c.name) === norm(p.system));
-    const ic = icountClients.find((c) => norm(c.name) === norm(p.icount));
+    const ic = (listByAccount.get(account0) ?? []).find((c) => norm(c.name) === norm(p.icount));
     if (!sys) { failures.push(`לקוח מערכת לא נמצא: "${p.system}"`); continue; }
     if (!ic) { failures.push(`כרטיס iCount לא נמצא: "${p.icount}"`); continue; }
-    const account = p.account ?? "primary";
+    const account = account0;
     await prisma.icountLink.upsert({
       where: { account_icountClientId: { account, icountClientId: ic.id } },
       update: { clientId: sys.id, icountClientName: ic.name },
