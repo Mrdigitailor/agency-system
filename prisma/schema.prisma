@@ -105,6 +105,7 @@ model Client {
   alerts        Alert[]
   chatRoom      ChatRoom?
   platformConnections PlatformConnection[]
+  icountLinks   IcountLink[]
   profile       ClientProfile?
   competitors   Competitor[]
   questionnaire ClientQuestionnaire?
@@ -677,6 +678,24 @@ model DataDeletionRequest {
 
   @@index([metaUserId])
   @@map("data_deletion_requests")
+}
+
+// ==================== קישורי iCount ====================
+// מיפוי לקוח-מערכת ← כרטיס לקוח באייקאונט. לקוח יכול להחזיק כמה כרטיסים
+// (למשל עוסק מורשה ישן + בע"מ חדשה), וכרטיס שייך לחשבון iCount מסוים.
+
+model IcountLink {
+  id               String   @id @default(cuid())
+  clientId         String
+  client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  account          String   @default("primary") // primary (בע"מ) | old (עוסק מורשה)
+  icountClientId   String
+  icountClientName String
+  createdAt        DateTime @default(now())
+
+  @@unique([account, icountClientId])
+  @@index([clientId])
+  @@map("icount_links")
 }
 
 // ==================== הודעות ותגובות (cache מקומי) ====================
