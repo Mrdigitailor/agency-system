@@ -1322,6 +1322,17 @@ model PotentialReport {
   @@map("potential_reports")
 }
 
+// פורטל ניהול לידים — המוצר העצמאי שלקוח מקבל: קישור ייחודי לעמוד הלידים שלו.
+// כרגע פורטל אחד שלנו (כל השיחות); כשלקוחות מצטרפים, כל פורטל יסונן לשיחות שלו.
+model FunnelPortal {
+  id        String   @id @default(cuid())
+  token     String   @unique @default(cuid()) // הקישור: /leads/<token>
+  name      String   // שם הלקוח/העסק שמוצג בכותרת
+  createdAt DateTime @default(now())
+
+  @@map("funnel_portals")
+}
+
 // תיעוד מייל שנשלח במשפך — כולל אירועי פתיחה/הקלקה שמגיעים מה-webhook של Resend
 model ProspectEmailLog {
   id          String    @id @default(cuid())
