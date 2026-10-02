@@ -63,7 +63,7 @@ export async function GET(req: Request) {
 
   // ===== מצב קריאה גנרית לצורכי פיתוח (CRON בלבד, מתודות קריאה בלבד) =====
   if (searchParams.get("mode") === "call" && isCron) {
-    const ALLOWED = new Set(["doc/search", "doc/types", "doc/info", "client/get_list", "company/info"]);
+    const ALLOWED = new Set(["doc/search", "doc/types", "doc/info", "client/get_list", "company/info", "sign/get_templates", "webhook/valid_actions"]);
     const module_ = searchParams.get("module") ?? "";
     const method = searchParams.get("method") ?? "";
     if (!ALLOWED.has(`${module_}/${method}`)) return NextResponse.json({ error: "method לא ברשימה" }, { status: 400 });
