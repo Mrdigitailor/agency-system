@@ -107,6 +107,7 @@ model Client {
   platformConnections PlatformConnection[]
   icountLinks   IcountLink[]
   icountRevenue IcountRevenue?
+  icountDocs    IcountDoc[]
   profile       ClientProfile?
   competitors   Competitor[]
   questionnaire ClientQuestionnaire?
@@ -699,20 +700,43 @@ model IcountLink {
   @@map("icount_links")
 }
 
-// סיכום הכנסות מ-iCount פר-לקוח (משני החשבונות יחד; net = לפני מע"מ)
+// סיכום הכנסות מ-iCount פר-לקוח (משני החשבונות יחד; net = לפני מע"מ, gross = כולל מע"מ)
 model IcountRevenue {
   id           String   @id @default(cuid())
   clientId     String   @unique
   client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  totalNet     Float    @default(0) // כל הזמנים
-  totalGross   Float    @default(0)
-  yearNet      Float    @default(0) // השנה הנוכחית
+  totalNet     Float    @default(0) // כל הזמנים — ללא מע"מ
+  totalVat     Float    @default(0) // כל הזמנים — סכום המע"מ
+  totalGross   Float    @default(0) // כל הזמנים — כולל מע"מ
+  yearNet      Float    @default(0) // השנה הנוכחית — ללא מע"מ
+  yearVat      Float    @default(0)
+  yearGross    Float    @default(0)
   docCount     Int      @default(0)
   firstDocDate String   @default("") // תחילת עבודה בפועל
   lastDocDate  String   @default("")
   syncedAt     DateTime @updatedAt
 
   @@map("icount_revenue")
+}
+
+// מסמך בודד מ-iCount (חשבונית / חשבונית-קבלה / זיכוי) של לקוח מקושר.
+// סכומים בש"ח (הומרו לפי שער המסמך), זיכוי נשמר בשלילי.
+model IcountDoc {
+  id         String @id @default(cuid())
+  account    String // primary | old
+  doctype    String // invoice | invrec | refund
+  docnum     String
+  clientId   String
+  client     Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  dateissued String @default("")
+  beforeVat  Float  @default(0) // totalsum — ללא מע"מ
+  vatAmount  Float  @default(0) // totalvat
+  withVat    Float  @default(0) // totalwithvat — כולל מע"מ
+  remaining  Float  @default(0) // יתרה שטרם שולמה (0 = שולם)
+
+  @@unique([account, doctype, docnum])
+  @@index([clientId, dateissued])
+  @@map("icount_docs")
 }
 
 // ==================== הודעות ותגובות (cache מקומי) ====================
@@ -833,9 +857,11 @@ model Income {
   serviceMonth    String   @default("") // עבור חודש שירות
   paymentTerms    String   @default("") // שוטף+0 / שוטף+30 / שוטף+45 / שוטף+60 / אחר
   automated       Boolean  @default(false)
+  icountDocKey    String   @default("") // account|doctype|docnum — שורה שמוזנת מ-iCount
   createdAt       DateTime @default(now())
 
   @@index([year, month])
+  @@index([icountDocKey])
   @@map("incomes")
 }
 

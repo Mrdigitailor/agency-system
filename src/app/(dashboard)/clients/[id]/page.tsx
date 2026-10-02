@@ -22,6 +22,7 @@ import {
   Pencil,
   Trash2,
   Rocket,
+  Wallet,
 } from "lucide-react";
 import {
   LineChart,
@@ -48,6 +49,7 @@ import ClientIdentityTab from "@/components/ui/ClientIdentityTab";
 import QuickProfileCard from "@/components/ui/QuickProfileCard";
 import AiChatTab from "@/components/ui/AiChatTab";
 import MonthPerformanceKpis from "@/components/ui/MonthPerformanceKpis";
+import ClientFinanceTab from "./ClientFinanceTab";
 import OptimizationsTab from "@/components/ui/OptimizationsTab";
 import TaskModal from "@/components/ui/TaskModal";
 import CreativesTab from "@/components/ui/CreativesTab";
@@ -91,6 +93,8 @@ const TAB_DEFS = [
   { id: "analytics", heLabel: "אנליטיקס", tKey: "analytics", icon: BarChart3 },
   { id: "tasks", heLabel: "משימות", tKey: "tasksList", icon: ListTodo },
   { id: "ai", heLabel: "צ׳אט AI", tKey: "aiChat", icon: BarChart3 },
+  // טאב פיננסים — מוצג לאדמין בלבד (מסונן ברנדור)
+  { id: "finance", heLabel: "פיננסים", tKey: "finance", icon: Wallet },
 ] as const;
 
 // keep tabs type for backward compat
@@ -519,7 +523,7 @@ export default function ClientDetailPage() {
 
       {/* ==================== טאבים ==================== */}
       <div className="flex flex-wrap gap-2">
-        {tabs.map((tab) => {
+        {tabs.filter((tab) => tab.id !== "finance" || isAdmin).map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
@@ -1171,6 +1175,9 @@ export default function ClientDetailPage() {
 
       {/* ===== טאב צ׳אט AI ===== */}
       {activeTab === "ai" && <AiChatTab clientId={client.id} clientName={client.name} />}
+
+      {/* ===== טאב פיננסים — אדמין בלבד ===== */}
+      {activeTab === "finance" && isAdmin && <ClientFinanceTab clientId={client.id} />}
 
       {/* ==================== מודל עריכת לקוח ==================== */}
       <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="עריכת לקוח" size="lg">

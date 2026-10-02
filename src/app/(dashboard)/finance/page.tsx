@@ -23,7 +23,8 @@ interface IncomeRow {
   collectionDate: string;
   serviceMonth: number;
   paymentTerms: string;
-  automation: boolean;
+  automated: boolean;
+  icountDocKey?: string;
 }
 
 interface ExpenseRow {
@@ -703,6 +704,11 @@ export default function FinancePage() {
                     >
                       {/* Client */}
                       <td className={tdClass}>
+                        {row.icountDocKey ? (
+                          <span className="ml-1 inline-block rounded bg-brand-gold/20 px-1.5 py-0.5 text-[10px] font-medium text-brand-dark" title="שורה שמוזנת אוטומטית מחשבונית iCount">
+                            iCount
+                          </span>
+                        ) : null}
                         {row.clientId ? (
                           <EditableSelect
                             value={row.clientId}
@@ -849,12 +855,12 @@ export default function FinancePage() {
                       <td className={tdClass + " text-center"}>
                         <input
                           type="checkbox"
-                          checked={row.automation}
+                          checked={row.automated}
                           onChange={() =>
                             patchIncome(
                               row.id,
-                              "automation",
-                              !row.automation,
+                              "automated",
+                              !row.automated,
                             )
                           }
                           className="h-4 w-4 cursor-pointer accent-brand-gold"

@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { RefreshCw, AlertTriangle } from "lucide-react";
 
 // טאב הכנסות לקוחות מ-iCount — סיכום חשבוניות פר לקוח (אדמין בלבד)
+// כל הסכומים מופרדים: ללא מע"מ / מע"מ / כולל מע"מ
 
 interface RevenueRow {
   clientId: string;
@@ -10,8 +11,11 @@ interface RevenueRow {
   status: string;
   monthlyRetainer: number;
   dealType: string;
+  totalNet: number;
+  totalVat: number;
   totalGross: number;
   yearNet: number;
+  yearGross: number;
   docCount: number;
   firstDocDate: string;
   lastDocDate: string;
@@ -86,8 +90,10 @@ export default function IcountRevenueTab() {
   }, [fetchData]);
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
-  const totalAll = useMemo(() => rows.reduce((s, r) => s + r.totalGross, 0), [rows]);
-  const totalYear = useMemo(() => rows.reduce((s, r) => s + r.yearNet, 0), [rows]);
+  const totalNet = useMemo(() => rows.reduce((s, r) => s + r.totalNet, 0), [rows]);
+  const totalVat = useMemo(() => rows.reduce((s, r) => s + r.totalVat, 0), [rows]);
+  const totalGross = useMemo(() => rows.reduce((s, r) => s + r.totalGross, 0), [rows]);
+  const yearNet = useMemo(() => rows.reduce((s, r) => s + r.yearNet, 0), [rows]);
   const monthsThisYear = new Date().getMonth() + 1;
   const thisYear = new Date().getFullYear();
 
@@ -101,22 +107,26 @@ export default function IcountRevenueTab() {
   return (
     <div className="space-y-4">
       {/* KPI */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <div className={cardClass}>
-          <p className="text-xs font-medium text-brand-muted">סה״כ הכנסות מאז ומעולם</p>
-          <p className="mt-1 text-xl font-semibold text-brand-dark">{fmt(totalAll)}</p>
+          <p className="text-xs font-medium text-brand-muted">סה״כ ללא מע״מ (מאז ומעולם)</p>
+          <p className="mt-1 text-xl font-semibold text-brand-dark">{fmt(totalNet)}</p>
         </div>
         <div className={cardClass}>
-          <p className="text-xs font-medium text-brand-muted">הכנסות {thisYear}</p>
-          <p className="mt-1 text-xl font-semibold text-brand-dark">{fmt(totalYear)}</p>
+          <p className="text-xs font-medium text-brand-muted">סה״כ מע״מ</p>
+          <p className="mt-1 text-xl font-semibold text-brand-muted">{fmt(totalVat)}</p>
         </div>
         <div className={cardClass}>
-          <p className="text-xs font-medium text-brand-muted">ממוצע חודשי {thisYear}</p>
-          <p className="mt-1 text-xl font-semibold text-brand-dark">{fmt(totalYear / monthsThisYear)}</p>
+          <p className="text-xs font-medium text-brand-muted">סה״כ כולל מע״מ</p>
+          <p className="mt-1 text-xl font-semibold text-brand-dark">{fmt(totalGross)}</p>
         </div>
         <div className={cardClass}>
-          <p className="text-xs font-medium text-brand-muted">לקוחות מקושרים</p>
-          <p className="mt-1 text-xl font-semibold text-brand-dark">{rows.length}</p>
+          <p className="text-xs font-medium text-brand-muted">{thisYear} ללא מע״מ</p>
+          <p className="mt-1 text-xl font-semibold text-brand-dark">{fmt(yearNet)}</p>
+        </div>
+        <div className={cardClass}>
+          <p className="text-xs font-medium text-brand-muted">ממוצע חודשי {thisYear} (ללא מע״מ)</p>
+          <p className="mt-1 text-xl font-semibold text-brand-dark">{fmt(yearNet / monthsThisYear)}</p>
         </div>
       </div>
 
@@ -141,12 +151,14 @@ export default function IcountRevenueTab() {
       {/* טבלה */}
       <div className={cardClass}>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px]">
+          <table className="w-full min-w-[1250px]">
             <thead>
               <tr className="border-b border-brand-border">
                 <th className={thClass}>לקוח</th>
-                <th className={thClass}>סה״כ מאז ומעולם</th>
-                <th className={thClass}>{thisYear}</th>
+                <th className={thClass}>ללא מע״מ</th>
+                <th className={thClass}>מע״מ</th>
+                <th className={thClass}>כולל מע״מ</th>
+                <th className={thClass}>{thisYear} (ללא מע״מ)</th>
                 <th className={thClass}>ממוצע חודשי</th>
                 <th className={thClass}>ריטיינר מוגדר</th>
                 <th className={thClass}>חשבוניות</th>
@@ -157,11 +169,13 @@ export default function IcountRevenueTab() {
             <tbody>
               {rows.map((r) => {
                 const gap = r.status === "active" && invoiceGap(r.lastDocDate);
-                const monthlyAvg = r.totalGross / monthsBetween(r.firstDocDate, r.lastDocDate);
+                const monthlyAvg = r.totalNet / monthsBetween(r.firstDocDate, r.lastDocDate);
                 return (
                   <tr key={r.clientId} className="border-b border-brand-border last:border-0 hover:bg-brand-bg/50">
                     <td className={tdClass + " font-medium text-brand-dark"}>{r.name}</td>
-                    <td className={tdClass + " font-semibold"}>{fmt(r.totalGross)}</td>
+                    <td className={tdClass + " font-semibold"}>{fmt(r.totalNet)}</td>
+                    <td className={tdClass + " text-brand-muted"}>{fmt(r.totalVat)}</td>
+                    <td className={tdClass}>{fmt(r.totalGross)}</td>
                     <td className={tdClass}>{r.yearNet ? fmt(r.yearNet) : "—"}</td>
                     <td className={tdClass + " text-brand-muted"}>{fmt(monthlyAvg)}</td>
                     <td className={tdClass + " text-brand-muted"}>{r.monthlyRetainer ? fmt(r.monthlyRetainer) : "—"}</td>
@@ -182,7 +196,7 @@ export default function IcountRevenueTab() {
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-sm text-brand-muted">
+                  <td colSpan={10} className="py-8 text-center text-sm text-brand-muted">
                     אין עדיין נתונים — לחץ על &quot;רענון מ-iCount&quot;
                   </td>
                 </tr>

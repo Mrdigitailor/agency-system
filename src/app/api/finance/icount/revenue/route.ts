@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/finance/icount/revenue — נתוני ההכנסות המסונכרנים מ-iCount לתצוגה בטאב הפיננסים.
  * אדמין בלבד (נתוני תשלומים רגישים). מחזיר שורה פר לקוח מקושר + לקוחות פעילים בלי קישור.
+ * כל הסכומים מופרדים: ללא מע"מ / מע"מ / כולל מע"מ.
  */
 export async function GET() {
   const auth = await requireRole(["admin"]);
@@ -37,14 +38,17 @@ export async function GET() {
         status: c.status,
         monthlyRetainer: c.monthlyRetainer,
         dealType: c.dealType,
+        totalNet: r.totalNet,
+        totalVat: r.totalVat,
         totalGross: r.totalGross,
         yearNet: r.yearNet,
+        yearGross: r.yearGross,
         docCount: r.docCount,
         firstDocDate: r.firstDocDate,
         lastDocDate: r.lastDocDate,
       };
     })
-    .sort((a, b) => b.totalGross - a.totalGross);
+    .sort((a, b) => b.totalNet - a.totalNet);
 
   // לקוחות פעילים שאין להם אף כרטיס iCount מקושר — כדי שסער יראה מי חסר
   const unlinked = clients
