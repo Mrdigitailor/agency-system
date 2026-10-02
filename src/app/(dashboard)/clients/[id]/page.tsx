@@ -200,6 +200,18 @@ export default function ClientDetailPage() {
       .catch(() => {});
   }, [client?.id]);
 
+  /* LTV אמיתי מ-iCount — אדמין בלבד (ה-route חוסם כל תפקיד אחר) */
+  const [icountLtv, setIcountLtv] = useState<{ totalNet: number; totalGross: number; firstDocDate: string; lastDocDate: string } | null>(null);
+  useEffect(() => {
+    if (!client?.id || !isAdmin) return;
+    let alive = true;
+    fetch(`/api/clients/${client.id}/finance`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive) setIcountLtv(d?.summary ?? null); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [client?.id, isAdmin]);
+
   /* קמפיינים — מצב מקומי */
   const [campaigns, setCampaigns] = useState<Campaign[]>(seedCampaigns);
   const [showCampaignModal, setShowCampaignModal] = useState(false);
@@ -662,6 +674,16 @@ export default function ClientDetailPage() {
                   const percentageLtv = percentageRate > 0 ? (percentageRate / 100) * totalSpend : 0;
                   const totalLtv = historicalRevenue + retainerLtv + percentageLtv;
 
+                  // LTV מ-iCount: חודשים מהחשבונית הראשונה עד האחרונה (כולל), ותאריך התחלה בפורמט ישראלי
+                  let icountMonths = 0;
+                  let icountSince = "";
+                  if (icountLtv?.firstDocDate) {
+                    const [fy, fm, fd] = icountLtv.firstDocDate.split("-").map(Number);
+                    const [ly, lm] = (icountLtv.lastDocDate || icountLtv.firstDocDate).split("-").map(Number);
+                    icountMonths = Math.max(1, (ly - fy) * 12 + (lm - fm) + 1);
+                    icountSince = `${String(fd).padStart(2, "0")}/${String(fm).padStart(2, "0")}/${fy}`;
+                  }
+
                   // תנאי עסקה label
                   let dealLabel = "";
                   if (dealType === "retainer_or_percentage_higher") {
@@ -683,11 +705,28 @@ export default function ClientDetailPage() {
                         </div>
                         <div>
                           <p className="text-[10px] text-brand-muted">LTV</p>
-                          <p className="text-lg font-semibold text-brand-gold">
-                            {monthsWorked > 0 ? `${monthsWorked} חודשים · ${sym}${Math.round(totalLtv).toLocaleString()}` : "—"}
-                          </p>
-                          {historicalRevenue > 0 && monthsWorked > 0 && (
-                            <p className="text-[10px] text-brand-muted">(כולל {sym}{historicalRevenue.toLocaleString()} היסטורי)</p>
+                          {icountLtv ? (
+                            <>
+                              {/* נתון אמת מחשבוניות iCount — ללא מע"מ, תמיד בש"ח */}
+                              <p className="text-lg font-semibold text-brand-gold">
+                                ₪{Math.round(icountLtv.totalNet).toLocaleString()}
+                              </p>
+                              <p className="text-[10px] text-brand-muted">
+                                ללא מע״מ · {icountMonths} חודשים · מאז {icountSince}
+                              </p>
+                              <p className="text-[10px] text-brand-muted">
+                                כולל מע״מ: ₪{Math.round(icountLtv.totalGross).toLocaleString()} · מקור: iCount
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-lg font-semibold text-brand-gold">
+                                {monthsWorked > 0 ? `${monthsWorked} חודשים · ${sym}${Math.round(totalLtv).toLocaleString()}` : "—"}
+                              </p>
+                              {historicalRevenue > 0 && monthsWorked > 0 && (
+                                <p className="text-[10px] text-brand-muted">(כולל {sym}{historicalRevenue.toLocaleString()} היסטורי)</p>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
