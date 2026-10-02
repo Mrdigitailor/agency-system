@@ -42,15 +42,16 @@ function similarity(a: string, b: string): number {
 }
 
 /** מושך את רשימת הלקוחות מחשבון iCount אחד; מחזיר null אם החשבון לא זמין */
-async function fetchAccountClients(forceLogin: boolean): Promise<{ account: string; clients: IcountClient[] } | null> {
+async function fetchAccountClients(account: "primary" | "old"): Promise<{ account: string; clients: IcountClient[] } | null> {
   try {
-    const info = await icountRequest<{ company_info?: { company_name?: string; name?: string } }>(
-      "company", "info", {}, { forceLogin });
+    const info = await icountRequest<{ company_name?: string; company_info?: { company_name?: string; name?: string } }>(
+      "company", "info", {}, { account });
     const accountName =
-      info.company_info?.company_name ?? info.company_info?.name ?? (forceLogin ? "חשבון משני" : "חשבון ראשי");
+      info.company_name ?? info.company_info?.company_name ?? info.company_info?.name ??
+      (account === "old" ? "החשבון הישן (עוסק)" : "החשבון הראשי (בע\"מ)");
 
     const res = await icountRequest<{ clients?: unknown; clients_count?: number }>(
-      "client", "get_list", { limit: 500 }, { forceLogin });
+      "client", "get_list", { limit: 500 }, { account });
     const raw = res.clients;
     const arr: Record<string, unknown>[] = Array.isArray(raw)
       ? (raw as Record<string, unknown>[])
@@ -67,7 +68,7 @@ async function fetchAccountClients(forceLogin: boolean): Promise<{ account: stri
 
     return { account: accountName, clients };
   } catch (e) {
-    console.error(`[icount match] account fetch failed (forceLogin=${forceLogin}):`, e instanceof Error ? e.message : e);
+    console.error(`[icount match] account fetch failed (${account}):`, e instanceof Error ? e.message : e);
     return null;
   }
 }
@@ -82,8 +83,8 @@ export async function GET(req: Request) {
 
   // שני החשבונות במקביל: ראשי (טוקן) + משני (התחברות)
   const [primary, secondary] = await Promise.all([
-    fetchAccountClients(false),
-    fetchAccountClients(true),
+    fetchAccountClients("primary"),
+    fetchAccountClients("old"),
   ]);
   const accounts = [primary, secondary].filter(Boolean) as Array<{ account: string; clients: IcountClient[] }>;
   const icountClients = accounts.flatMap((a) => a.clients);

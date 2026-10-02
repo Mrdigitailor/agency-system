@@ -49,9 +49,17 @@ export async function icountRequest<T = IcountResponse>(
   module: string,
   method: string,
   params: Record<string, unknown> = {},
-  opts: { forceLogin?: boolean } = {},
+  opts: { forceLogin?: boolean; account?: "primary" | "old" } = {},
 ): Promise<T> {
-  const token = opts.forceLogin ? undefined : process.env.ICOUNT_TOKEN;
+  const account = opts.account ?? "primary";
+  if (account === "old" && !process.env.ICOUNT_TOKEN_OLD) {
+    throw new Error("ICOUNT_TOKEN_OLD לא מוגדר — חסר טוקן לחשבון הישן");
+  }
+  const token = opts.forceLogin
+    ? undefined
+    : account === "old"
+      ? process.env.ICOUNT_TOKEN_OLD
+      : process.env.ICOUNT_TOKEN;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const body: Record<string, unknown> = { ...params };
 
