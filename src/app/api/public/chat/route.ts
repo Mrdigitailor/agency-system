@@ -62,9 +62,18 @@ export async function POST(req: Request) {
     if (recent >= MAX_SESSIONS_PER_IP_HOUR) {
       return NextResponse.json({ error: "יותר מדי שיחות, נסו שוב מאוחר יותר" }, { status: 429 });
     }
+    // מקור הגעה (utm/gclid/referrer) — רק מפתחות מוכרים, ערכים קצוצים
+    const source: Record<string, string> = {};
+    if (body.source && typeof body.source === "object") {
+      for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "ref", "referrer"]) {
+        const v = (body.source as Record<string, unknown>)[k];
+        if (typeof v === "string" && v.trim()) source[k] = v.trim().slice(0, 200);
+      }
+    }
     const chat = await prisma.prospectChat.create({
       data: {
         lastIp: ip,
+        source: JSON.stringify(source),
         messages: JSON.stringify([{ role: "assistant", content: OPENING_MESSAGE, at: new Date().toISOString() }]),
       },
     });

@@ -1315,10 +1315,29 @@ model PotentialReport {
   error    String @default("")
 
   leadId    String?
+  sourceJson String @default("{}") // JSON: מקור הגעה (utm, gclid, referrer) — מועתק מהשיחה
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("potential_reports")
+}
+
+// תיעוד מייל שנשלח במשפך — כולל אירועי פתיחה/הקלקה שמגיעים מה-webhook של Resend
+model ProspectEmailLog {
+  id          String    @id @default(cuid())
+  reportId    String
+  key         String    // report | nurture1 | nurture3 | nurture7 | reminder | reminder1h | cancelled
+  resendId    String    @default("") // מזהה המייל אצל Resend — לזיהוי אירועי webhook
+  subject     String    @default("")
+  sentAt      DateTime  @default(now())
+  deliveredAt DateTime?
+  openedAt    DateTime?
+  clickedAt   DateTime?
+  bouncedAt   DateTime?
+
+  @@index([reportId])
+  @@index([resendId])
+  @@map("prospect_email_logs")
 }
 
 // שיחת צ'אט של מתעניין — הסוכן בדף הנחיתה
@@ -1329,6 +1348,8 @@ model ProspectChat {
   messages  String   @default("[]")     // JSON: [{role, content, at}]
   fields    String   @default("{}")     // JSON: פרטים שנאספו בהדרגה (גם ליד חלקי נשמר)
   reportId  String?                     // דוח הפוטנציאל שנוצר בשיחה
+  source    String   @default("{}")     // JSON: מקור הגעה — utm_*, gclid, referrer
+  funnelStatus String @default("")      // סטטוס ידני שסער מעדכן בממשק המשפך
   lastIp    String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

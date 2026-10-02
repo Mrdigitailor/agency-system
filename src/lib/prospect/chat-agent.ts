@@ -175,6 +175,11 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
     f.reportToken = r.token;
     f.reportStatus = r.status;
     await prisma.prospectChat.update({ where: { id: chatId }, data: { reportId: r.reportId } }).catch(() => {});
+    // מקור ההגעה של השיחה מועתק לדוח — ככה הדשבורד יודע איזה קמפיין/מונח הביא כל ליד
+    const chatRow = await prisma.prospectChat.findUnique({ where: { id: chatId } }).catch(() => null);
+    if (chatRow?.source && chatRow.source !== "{}") {
+      await prisma.potentialReport.update({ where: { id: r.reportId }, data: { sourceJson: chatRow.source } }).catch(() => {});
+    }
     if (r.status !== "ready" || !r.chain) {
       return { result: JSON.stringify({ status: r.status, reason: r.reason ?? "" }), fields: f };
     }

@@ -17,6 +17,7 @@ import {
   MessageCircle,
   LogOut,
   BarChart3,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -34,6 +35,7 @@ const iconMap: Record<string, LucideIcon> = {
   UserCircle,
   MessageCircle,
   BarChart3,
+  Inbox,
 };
 
 // מיפוי href → מפתח תרגום

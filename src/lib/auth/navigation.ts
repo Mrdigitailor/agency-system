@@ -21,6 +21,12 @@ export const navigationItems: NavItem[] = [
     roles: ["campaignManager"],
   },
   {
+    label: "משפך הלידים",
+    href: "/funnel",
+    icon: "Inbox",
+    roles: ["admin", "manager"],
+  },
+  {
     label: "דוחות פוטנציאל",
     href: "/potential",
     icon: "BarChart3",

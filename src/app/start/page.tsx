@@ -46,9 +46,19 @@ export default function ProspectChatPage() {
 
   // פתיחת שיחה: קודם מנסים לשחזר שיחה קיימת, שחזרה מהדוח לא תאפס את השיחה
   const freshSession = useCallback(async () => {
+    // מקור ההגעה נתפס ברגע פתיחת השיחה — הבסיס לדשבורד "אילו מונחים מביאים עבודה"
+    const source: Record<string, string> = {};
+    try {
+      const params = new URLSearchParams(window.location.search);
+      for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "ref"]) {
+        const v = params.get(k);
+        if (v) source[k] = v.slice(0, 200);
+      }
+      if (document.referrer) source.referrer = document.referrer.slice(0, 200);
+    } catch { /* לא קריטי */ }
     const res = await fetch("/api/public/chat", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ source }),
     });
     const d = await res.json();
     if (d.sessionToken) {

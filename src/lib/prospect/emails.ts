@@ -191,6 +191,10 @@ export async function sendProspectEmail(reportId: string, key: EmailKey): Promis
       where: { id: r.id },
       data: { emailsSent: JSON.stringify([...sent, key]) },
     });
+    // תיעוד לממשק המשפך — אירועי פתיחה/הקלקה יתווספו דרך ה-webhook של Resend
+    await prisma.prospectEmailLog.create({
+      data: { reportId: r.id, key, resendId: res.data?.id ?? "", subject: email.subject },
+    }).catch(() => {});
     console.log(`[ProspectEmail] sent ${key} to ${r.contactEmail}`);
     return true;
   } catch (err) {
