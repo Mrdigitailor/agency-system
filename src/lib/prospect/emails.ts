@@ -16,12 +16,52 @@ export type EmailKey = "report" | "nurture1" | "nurture3" | "nurture7" | "remind
 const parseSent = (raw: string): EmailKey[] => { try { return JSON.parse(raw || "[]"); } catch { return []; } };
 
 // ---------- תבנית עטיפה ----------
-// מייל אישי ופשוט, כמו שכותבים לקולגה: רקע לבן, בלי כרטיסים ומסגרות.
-// מבנה: לוגו בראש ← תוכן ← קו זהב ← חתימה ממורכזת (תמונה, פרטים, רשתות).
+// לפי המוקאפ המאושר של סער: גוף נקי מיושר לימין, "בברכה, סער", קו מפריד דק,
+// ואז החתימה הקבועה בשתי עמודות: מימין תמונה + שם + תפקיד + פרטי קשר עם
+// אייקוני זהב (כולם לחיצים), משמאל הלוגו + משפט הניסיון + אייקוני רשתות.
+// בתחתית: BETTER BUSINESSES · BRIGHTER TOMORROW.
 // RTL מוצהר על כל רכיב (ג'ימייל מתעלם מהצהרות ברמת העמוד).
-// פונט המותג Ploni נטען בכל ארבעת המשקלים איפה שנתמך (Apple Mail, iPhone);
-// ג'ימייל חוסם פונטים מותאמים מכל שולח, שם תוצג החלופה הקרובה ביותר.
+// פונט המותג Ploni נטען איפה שנתמך (Apple Mail, iPhone); ג'ימייל מציג חלופה.
 const FONT = `'Ploni',Arial,'Segoe UI',sans-serif`;
+
+const SIGNATURE = `
+  <div dir="rtl" style="margin-top:34px;padding-top:26px;border-top:1px solid #e8e6e1;direction:rtl;font-family:${FONT}">
+    <table dir="rtl" width="100%" style="direction:rtl;border-collapse:collapse;width:100%"><tr>
+      <td dir="rtl" style="vertical-align:top;text-align:right;direction:rtl;width:50%;padding-left:16px">
+        <table dir="rtl" style="direction:rtl;border-collapse:collapse"><tr>
+          <td style="vertical-align:middle;padding-left:12px">
+            <img src="${APP_BASE}/images/sig-saar-photo.png" alt="סער אדרי" width="72" height="72" style="width:72px;height:72px;border-radius:50%;display:block">
+          </td>
+          <td dir="rtl" style="vertical-align:middle;text-align:right;direction:rtl">
+            <div style="color:#8a6a15;font-size:16px;font-weight:600;font-family:${FONT}">סער אדרי</div>
+            <div style="color:#666666;font-size:13px;margin-top:1px;font-family:${FONT}">Founder &amp; CEO</div>
+          </td>
+        </tr></table>
+        <table dir="rtl" style="direction:rtl;border-collapse:collapse;margin-top:12px"><tr>
+          <td style="vertical-align:middle;padding-left:8px"><img src="${APP_BASE}/images/social/icon-phone.png" alt="" width="16" height="16" style="width:16px;height:16px;display:block"></td>
+          <td dir="rtl" style="vertical-align:middle;text-align:right"><a href="tel:+972547974206" style="color:#333333;font-size:13.5px;text-decoration:none;font-family:${FONT}">054-7974206</a></td>
+        </tr><tr>
+          <td style="vertical-align:middle;padding-left:8px;padding-top:6px"><img src="${APP_BASE}/images/social/icon-mail.png" alt="" width="16" height="16" style="width:16px;height:16px;display:block"></td>
+          <td dir="rtl" style="vertical-align:middle;text-align:right;padding-top:6px"><a href="mailto:saar@digitailors.co.il" style="color:#333333;font-size:13.5px;text-decoration:none;font-family:${FONT}">saar@digitailors.co.il</a></td>
+        </tr><tr>
+          <td style="vertical-align:middle;padding-left:8px;padding-top:6px"><img src="${APP_BASE}/images/social/icon-link.png" alt="" width="16" height="16" style="width:16px;height:16px;display:block"></td>
+          <td dir="rtl" style="vertical-align:middle;text-align:right;padding-top:6px"><a href="https://www.mr-digitailor.co.il/" style="color:#333333;font-size:13.5px;text-decoration:none;font-family:${FONT}">www.mr-digitailor.co.il</a></td>
+        </tr></table>
+      </td>
+      <td dir="rtl" style="vertical-align:top;text-align:right;direction:rtl;width:50%;padding-right:18px;border-right:1px solid #e8e6e1">
+        <a href="https://www.mr-digitailor.co.il/" style="text-decoration:none"><img src="${APP_BASE}/images/logo-light.png" alt="Mr.digitailor" height="26" style="height:26px;border:0"></a>
+        <div dir="rtl" style="color:#666666;font-size:12.5px;line-height:1.65;margin-top:10px;text-align:right;font-family:${FONT}">ריכזנו 30 שנות ניסיון מצטבר של המוחות הטובים בעולמות השיווק לכדי מטרה אחת - לגרום לעסקים להכניס יותר לקוחות. מה עם העסק שלכם?</div>
+        <div dir="rtl" style="margin-top:12px;text-align:right">
+          <a href="https://www.instagram.com/mr.digitailor/" style="text-decoration:none;display:inline-block;margin-left:7px"><img src="${APP_BASE}/images/social/instagram-gray.png" alt="אינסטגרם" width="30" height="30" style="width:30px;height:30px;border:0"></a>
+          <a href="https://www.linkedin.com/company/mr-digitailor/" style="text-decoration:none;display:inline-block;margin-left:7px"><img src="${APP_BASE}/images/social/linkedin-gray.png" alt="לינקדאין" width="30" height="30" style="width:30px;height:30px;border:0"></a>
+          <a href="https://www.facebook.com/mrdigitailor" style="text-decoration:none;display:inline-block;margin-left:7px"><img src="${APP_BASE}/images/social/facebook-gray.png" alt="פייסבוק" width="30" height="30" style="width:30px;height:30px;border:0"></a>
+          <a href="https://www.youtube.com/channel/UCCl4jpjricf061JqCeSkfQg" style="text-decoration:none;display:inline-block"><img src="${APP_BASE}/images/social/youtube-gray.png" alt="יוטיוב" width="30" height="30" style="width:30px;height:30px;border:0"></a>
+        </div>
+      </td>
+    </tr></table>
+    <div style="margin-top:22px;padding-top:14px;border-top:1px solid #efede8;text-align:center;color:#9a958c;font-size:10.5px;letter-spacing:3px;font-family:${FONT}">BETTER BUSINESSES &nbsp;·&nbsp; BRIGHTER TOMORROW</div>
+  </div>`;
+
 function shell(inner: string): string {
   return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8">
 <style>
@@ -32,27 +72,14 @@ function shell(inner: string): string {
 </style></head>
 <body dir="rtl" style="margin:0;background:#ffffff;padding:30px 18px;direction:rtl;font-family:${FONT}">
 <div dir="rtl" style="max-width:560px;margin:0 auto;direction:rtl;font-family:${FONT}">
-  <div dir="rtl" style="margin-bottom:24px;text-align:right">
-    <img src="${APP_BASE}/images/logo-light.png" alt="Mr.digitailor" height="34" style="height:34px;border:0">
-  </div>
-  <div dir="rtl" style="color:#111111;font-size:16px;line-height:1.8;direction:rtl;text-align:right;font-family:${FONT}">${inner}</div>
-  <div dir="rtl" style="margin-top:34px;padding-top:24px;border-top:2px solid #eed89b;direction:rtl;text-align:center;font-family:${FONT}">
-    <img src="${APP_BASE}/images/sig-saar-photo.png" alt="סער אדרי" width="64" height="64" style="width:64px;height:64px;border-radius:50%;display:inline-block">
-    <div style="color:#111111;font-size:16px;font-weight:600;margin-top:10px;font-family:${FONT}">סער אדרי</div>
-    <div style="color:#666666;font-size:13px;margin-top:2px;font-family:${FONT}">מייסד ובעלים, Mr.digitailor · מלווה עסקים בשיווק דיגיטלי</div>
-    <div style="color:#8a6a15;font-size:13px;margin-top:3px;font-family:${FONT}">054-7974206 · אפשר פשוט להשיב למייל הזה, אני קורא הכל</div>
-    <div dir="rtl" style="margin-top:16px;text-align:center">
-      <a href="https://www.instagram.com/mr.digitailor/" style="text-decoration:none;display:inline-block;margin:0 5px"><img src="${APP_BASE}/images/social/instagram.png" alt="אינסטגרם" width="28" height="28" style="width:28px;height:28px;border:0"></a>
-      <a href="https://www.facebook.com/mrdigitailor" style="text-decoration:none;display:inline-block;margin:0 5px"><img src="${APP_BASE}/images/social/facebook.png" alt="פייסבוק" width="28" height="28" style="width:28px;height:28px;border:0"></a>
-      <a href="https://www.linkedin.com/company/mr-digitailor/" style="text-decoration:none;display:inline-block;margin:0 5px"><img src="${APP_BASE}/images/social/linkedin.png" alt="לינקדאין" width="28" height="28" style="width:28px;height:28px;border:0"></a>
-      <a href="https://www.youtube.com/channel/UCCl4jpjricf061JqCeSkfQg" style="text-decoration:none;display:inline-block;margin:0 5px"><img src="${APP_BASE}/images/social/youtube.png" alt="יוטיוב" width="28" height="28" style="width:28px;height:28px;border:0"></a>
-    </div>
-  </div>
+  <div dir="rtl" style="color:#111111;font-size:16.5px;line-height:1.8;direction:rtl;text-align:right;font-family:${FONT}">${inner}
+  <p style="margin-top:26px">בברכה,<br>סער</p></div>
+  ${SIGNATURE}
 </div></body></html>`;
 }
 
 const btn = (href: string, label: string) =>
-  `<div dir="rtl" style="margin:22px 0;text-align:right"><a href="${href}" style="background:#eed89b;color:#000000;font-weight:600;font-size:15px;padding:13px 30px;border-radius:8px;text-decoration:none;display:inline-block;font-family:${FONT}">${label}</a></div>`;
+  `<div dir="rtl" style="margin:24px 0;text-align:right"><a href="${href}" style="background:#eed89b;color:#000000;font-weight:600;font-size:15.5px;padding:14px 34px;border-radius:10px;text-decoration:none;display:inline-block;font-family:${FONT}">${label} &larr;</a></div>`;
 
 const firstName = (r: PotentialReport) => (r.contactName || "").trim().split(/\s+/)[0] || "";
 
@@ -64,10 +91,10 @@ function teaser(r: PotentialReport): string {
     const low = Math.ceil(Math.max(firstBasis ? c.revenueFirst.head : c.revenueFull.head, 0) / 100) * 100;
     const high = Math.ceil(Math.max(firstBasis ? c.revenueFirst.best : c.revenueFull.best, 0) / 100) * 100;
     const range = low === high ? `סביב ${low.toLocaleString("he-IL")} ₪` : `בין ${low.toLocaleString("he-IL")} ל-${high.toLocaleString("he-IL")} ₪`;
-    return `<div dir="rtl" style="background:#faf6e9;border-radius:10px;padding:16px 18px;margin:18px 0;direction:rtl;text-align:right">
-      <div style="color:#8a6a15;font-size:12px;letter-spacing:2px;margin-bottom:6px">תזכורת למספרים שלך</div>
-      <div style="color:#8a6a15;font-size:23px;font-weight:bold">${range} בחודש</div>
-      <div style="color:#666666;font-size:13px;margin-top:4px">פוטנציאל מתקציב של ${Math.round(r.budget).toLocaleString("he-IL")} ₪, לפי נתוני גוגל בתחום שלך</div>
+    return `<div dir="rtl" style="border-right:3px solid #eed89b;padding:4px 18px 6px 0;margin:22px 0;direction:rtl;text-align:right">
+      <div style="color:#8c8777;font-size:13.5px;font-family:${FONT}">פוטנציאל משוער להכנסות שלך</div>
+      <div style="color:#b8860b;font-size:26px;font-weight:600;margin-top:2px;font-family:${FONT}">${range} בחודש</div>
+      <div style="color:#8c8777;font-size:13px;margin-top:3px;font-family:${FONT}">לפי תקציב של ${Math.round(r.budget).toLocaleString("he-IL")} ₪ ונתוני גוגל בתחום שלך</div>
     </div>`;
   } catch { return ""; }
 }
