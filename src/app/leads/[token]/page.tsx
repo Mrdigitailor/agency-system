@@ -16,7 +16,8 @@ type Tab = "results" | "crm" | "customers";
 interface Row {
   id: string; createdAt: string; name: string; email: string; phone: string;
   business: string; msgCount: number; status: string; manualStatus: string;
-  declineReason: string; source: string; reportLink: string; reportStatus: string;
+  declineReason: string; source: string; utmSource: string; utmMedium: string;
+  reportLink: string; reportStatus: string;
   meetingAt: string | null; cancelledAt: string | null;
   emailsSent: number; emailsOpened: number; emailsClicked: number;
 }
@@ -92,6 +93,8 @@ export default function LeadsPortalPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [detailRow, setDetailRow] = useState<Row | null>(null);
+  const [detailTab, setDetailTab] = useState<"chat" | "info" | "report" | "newsletter">("chat");
   const [detailLoading, setDetailLoading] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
 
@@ -140,10 +143,10 @@ export default function LeadsPortalPage() {
   useEffect(() => { if (tab === "customers") loadCustomers(); }, [tab, loadCustomers]);
   useEffect(() => { if (tab === "results") loadResults(); }, [tab, loadResults]);
 
-  const openDetail = async (id: string) => {
-    setDetailLoading(true); setDetail(null);
+  const openDetail = async (row: Row) => {
+    setDetailLoading(true); setDetail(null); setDetailRow(row); setDetailTab("chat");
     try {
-      const res = await fetch(`/api/public/leads/${token}?id=${encodeURIComponent(id)}`);
+      const res = await fetch(`/api/public/leads/${token}?id=${encodeURIComponent(row.id)}`);
       if (res.ok) setDetail(await res.json());
     } catch { /* נסגר לבד */ }
     setDetailLoading(false);
@@ -270,7 +273,7 @@ export default function LeadsPortalPage() {
           </div>
         </div>
 
-        <main className="mx-auto max-w-5xl space-y-6 px-4 py-7 lg:px-8">
+        <main className={`mx-auto space-y-6 px-4 py-7 lg:px-8 ${tab === "crm" ? "max-w-[1500px]" : "max-w-5xl"}`}>
 
           {/* ===================== דשבורד תוצאות ===================== */}
           {tab === "results" && (
@@ -400,63 +403,44 @@ export default function LeadsPortalPage() {
                 )}
               </div>
 
-              {stats && (
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                  {kpi("שיחות נפתחו", String(stats.sessions), `${stats.engaged} נכנסו לשיחה`)}
-                  {kpi("השאירו פרטים", String(stats.withContact), pct(stats.withContact, stats.sessions))}
-                  {kpi("קיבלו דוח", String(stats.reports), pct(stats.reports, stats.sessions))}
-                  {kpi("קבעו פגישה", String(stats.meetings), pct(stats.meetings, stats.withContact))}
-                  {kpi("ביטלו / סירבו", String(stats.cancelled + stats.declined))}
-                </div>
-              )}
-
-              {stats && stats.bySource.length > 0 && (
-                <div className={`${cardCls} p-4`}>
-                  <div className="mb-2 text-sm font-medium text-white/80">מה מביא את הלידים</div>
-                  <div className="flex flex-wrap gap-2">
-                    {stats.bySource.map((s) => (
-                      <span key={s.source} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                        {s.source} · {s.total}{s.meetings > 0 ? ` · ${s.meetings} פגישות 🎯` : ""}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               <div className="relative">
                 <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש לפי שם, טלפון, מייל..."
                   className={`${inputCls} w-full max-w-sm py-2 pl-3 pr-9`} />
               </div>
 
-              <div className={`${cardCls} overflow-x-auto`}>
+              <div className={`${cardCls} min-h-[72vh] overflow-x-auto`}>
                 <table className="w-full text-right text-sm">
                   <thead>
                     <tr className="border-b border-white/10 text-xs text-white/40">
                       <th className="px-4 py-3 font-medium">תאריך</th>
                       <th className="px-4 py-3 font-medium">ליד</th>
                       <th className="px-4 py-3 font-medium">פרטי קשר</th>
-                      <th className="px-4 py-3 font-medium">הגיע מ</th>
+                      <th className="px-4 py-3 font-medium">מקור</th>
+                      <th className="px-4 py-3 font-medium">מדיום</th>
+                      <th className="px-4 py-3 font-medium">מילת חיפוש</th>
                       <th className="px-4 py-3 font-medium">מיילים</th>
                       <th className="px-4 py-3 font-medium">פגישה</th>
                       <th className="px-4 py-3 font-medium">סטטוס</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {loading && <tr><td colSpan={7} className="px-4 py-12 text-center text-white/40"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>}
-                    {!loading && filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-12 text-center text-white/40">אין עדיין שיחות בתקופה הזאת</td></tr>}
+                    {loading && <tr><td colSpan={9} className="px-4 py-12 text-center text-white/40"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>}
+                    {!loading && filtered.length === 0 && <tr><td colSpan={9} className="px-4 py-12 text-center text-white/40">אין עדיין שיחות בתקופה הזאת</td></tr>}
                     {!loading && filtered.map((r) => (
-                      <tr key={r.id} onClick={() => openDetail(r.id)} className="cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.05]">
-                        <td className="whitespace-nowrap px-4 py-3 text-white/40">{fmtDate(r.createdAt)}</td>
-                        <td className="px-4 py-3">
+                      <tr key={r.id} onClick={() => openDetail(r)} className="cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.05]">
+                        <td className="whitespace-nowrap px-4 py-3.5 text-white/40">{fmtDate(r.createdAt)}</td>
+                        <td className="px-4 py-3.5">
                           <div className="font-medium text-white">{r.name || "אנונימי"}</div>
                           <div className="text-xs text-white/40">{r.business}</div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-white/50">
+                        <td className="px-4 py-3.5 text-xs text-white/50">
                           <div>{r.email}</div><div dir="ltr" className="text-right">{r.phone}</div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-white/50">{r.source}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3.5 text-xs text-white/60">{r.utmSource}</td>
+                        <td className="px-4 py-3.5 text-xs text-white/60">{r.utmMedium}</td>
+                        <td className="max-w-[160px] truncate px-4 py-3.5 text-xs text-white/50">{r.source !== r.utmSource ? r.source : ""}</td>
+                        <td className="px-4 py-3.5">
                           {r.emailsSent > 0 ? (
                             <span className="inline-flex items-center gap-1.5 text-xs text-white/50">
                               <Mail className="h-3.5 w-3.5" /> {r.emailsSent}
@@ -465,12 +449,12 @@ export default function LeadsPortalPage() {
                             </span>
                           ) : <span className="text-xs text-white/25">-</span>}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs">
+                        <td className="whitespace-nowrap px-4 py-3.5 text-xs">
                           {r.meetingAt && !r.cancelledAt && <span className="inline-flex items-center gap-1 text-emerald-300"><Calendar className="h-3.5 w-3.5" /> {fmtFull(r.meetingAt)}</span>}
                           {r.cancelledAt && <span className="text-red-300">בוטלה</span>}
                         </td>
-                        <td className="px-4 py-3">
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLS[r.status] ?? "bg-brand-gold/15 text-brand-gold"}`}>{r.status}</span>
+                        <td className="px-4 py-3.5">
+                          <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLS[r.status] ?? "bg-brand-gold/15 text-brand-gold"}`}>{r.status}</span>
                         </td>
                       </tr>
                     ))}
@@ -576,111 +560,194 @@ export default function LeadsPortalPage() {
         </main>
       </div>
 
-      {/* פאנל פירוט ליד */}
+      {/* פופאפ ליד — ארבעה טאבים */}
       {(detail || detailLoading) && (
-        <div className="fixed inset-0 z-50 flex justify-start bg-black/70" onClick={() => setDetail(null)}>
-          <div dir="rtl" className="h-full w-full max-w-xl overflow-y-auto border-l border-white/10 bg-[#0d0c0a] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 lg:p-8" onClick={() => setDetail(null)}>
+          <div dir="rtl" className="flex h-full max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#0d0c0a] shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {detailLoading && <div className="flex h-40 items-center justify-center text-white/40"><Loader2 className="h-6 w-6 animate-spin" /></div>}
             {detail && (
-              <div className="space-y-5 p-5">
-                <div className="flex items-start justify-between">
+              <>
+                {/* כותרת */}
+                <div className="flex items-start justify-between border-b border-white/10 px-5 pb-3 pt-4">
                   <div>
                     <h2 className="text-lg font-semibold text-white">{String(detail.fields.name ?? "") || "אנונימי"}</h2>
                     <p className="text-sm text-white/50">{String(detail.fields.businessName ?? detail.fields.serviceField ?? "")}</p>
                   </div>
-                  <button onClick={() => setDetail(null)} className="rounded-lg p-1.5 text-white/40 hover:bg-white/10"><X className="h-5 w-5" /></button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={leadToCustomer}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-gold px-3.5 py-1.5 text-sm font-medium text-black transition-all hover:brightness-95">
+                      <UserPlus className="h-4 w-4" /> הפוך ללקוח
+                    </button>
+                    <button onClick={() => setDetail(null)} className="rounded-lg p-1.5 text-white/40 hover:bg-white/10"><X className="h-5 w-5" /></button>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm text-white/50">סטטוס:</span>
-                  <select value={detail.funnelStatus} onChange={(e) => saveStatus(e.target.value)} disabled={savingStatus}
-                    className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white focus:border-brand-gold focus:outline-none">
-                    <option value="" className="bg-black">אוטומטי</option>
-                    {detail.statusOptions.map((s) => <option key={s} value={s} className="bg-black">{s}</option>)}
-                  </select>
-                  {savingStatus && <Loader2 className="h-4 w-4 animate-spin text-white/40" />}
-                  <button onClick={leadToCustomer}
-                    className="mr-auto inline-flex items-center gap-1.5 rounded-lg bg-brand-gold px-3.5 py-1.5 text-sm font-medium text-black transition-all hover:brightness-95">
-                    <UserPlus className="h-4 w-4" /> הפוך ללקוח
-                  </button>
-                </div>
-
-                <div className={`grid grid-cols-2 gap-x-4 gap-y-2 ${cardCls} p-4 text-sm`}>
-                  {[
-                    ["מייל", String(detail.fields.email ?? "")],
-                    ["טלפון", String(detail.fields.phone ?? "")],
-                    ["תחום", String(detail.fields.serviceField ?? "")],
-                    ["תקציב", detail.fields.budget ? `${Number(detail.fields.budget).toLocaleString("he-IL")} ₪` : ""],
-                    ["נפתח", fmtFull(detail.createdAt)],
-                  ].filter(([, v]) => v).map(([k, v]) => (
-                    <div key={k}><span className="text-white/40">{k}: </span><span className="text-white/90">{v}</span></div>
+                {/* טאבים */}
+                <div className="flex gap-1 border-b border-white/10 px-3 pt-2">
+                  {([
+                    ["chat", "השיחה המלאה"],
+                    ["info", "פרטי הליד"],
+                    ["report", "הדוח שקיבל"],
+                    ["newsletter", "ניוזלטר ומשפך"],
+                  ] as const).map(([key, label]) => (
+                    <button key={key} onClick={() => setDetailTab(key)}
+                      className={`rounded-t-lg px-4 py-2 text-sm transition-colors ${detailTab === key ? "border-b-2 border-brand-gold font-medium text-brand-gold" : "text-white/50 hover:text-white"}`}>
+                      {label}
+                    </button>
                   ))}
-                  {Boolean(detail.fields.declineReason) && (
-                    <div className="col-span-2"><span className="text-white/40">סיבת סירוב: </span><span className="font-medium text-amber-300">{String(detail.fields.declineReason)}</span></div>
-                  )}
                 </div>
 
-                {detail.source && Object.keys(detail.source).length > 0 && (
-                  <div className="rounded-xl border border-white/10 p-4 text-sm">
-                    <div className="mb-1.5 font-medium text-white/80">מאיפה הליד הגיע</div>
-                    {Object.entries(detail.source).map(([k, v]) => (
-                      <div key={k} className="text-xs text-white/50"><span className="font-mono text-white/35">{k}</span>: {v}</div>
-                    ))}
-                  </div>
-                )}
-
-                {detail.report && (
-                  <div className="rounded-xl border border-white/10 p-4 text-sm">
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <span className="font-medium text-white/80">הדוח שקיבל</span>
-                      {detail.report.link && (
-                        <a href={detail.report.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-gold hover:underline">
-                          לצפייה <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
-                    </div>
-                    {detail.report.headline && <div className="text-brand-gold">{detail.report.headline}</div>}
-                    {detail.report.meetingAt && !detail.report.cancelledAt && (
-                      <div className="mt-1 inline-flex items-center gap-1 text-emerald-300"><Calendar className="h-4 w-4" /> פגישה: {fmtFull(detail.report.meetingAt)}</div>
-                    )}
-                    {detail.report.cancelledAt && <div className="mt-1 text-red-300">הפגישה בוטלה</div>}
-                  </div>
-                )}
-
-                {detail.emails.length > 0 && (
-                  <div className="rounded-xl border border-white/10 p-4 text-sm">
-                    <div className="mb-2 font-medium text-white/80">המיילים שקיבל</div>
+                {/* תוכן הטאב */}
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  {detailTab === "chat" && (
                     <div className="space-y-2">
-                      {detail.emails.map((e, i) => (
-                        <div key={i} className="flex items-center justify-between gap-2 text-xs">
-                          <span className="text-white/70">{EMAIL_LABELS[e.key] ?? e.key}</span>
-                          <span className="flex items-center gap-2 text-white/40">
-                            {fmtFull(e.sentAt)}
-                            {e.bouncedAt ? <span className="text-red-300">נדחה</span>
-                              : e.clickedAt ? <span className="inline-flex items-center gap-1 text-sky-300"><MousePointerClick className="h-3 w-3" /> הקליק</span>
-                              : e.openedAt ? <span className="inline-flex items-center gap-1 text-emerald-300"><MailOpen className="h-3 w-3" /> נפתח</span>
-                              : <span>נשלח</span>}
-                          </span>
+                      {detail.transcript.length === 0 && <div className="py-10 text-center text-white/40">אין עדיין הודעות בשיחה</div>}
+                      {detail.transcript.map((m, i) => (
+                        <div key={i} className={m.role === "assistant"
+                          ? "max-w-[85%] whitespace-pre-line rounded-xl rounded-tr-sm bg-white/[0.07] px-3 py-2 text-[13.5px] text-white/85"
+                          : "mr-auto max-w-[85%] whitespace-pre-line rounded-xl rounded-tl-sm border border-brand-gold/25 bg-brand-gold/10 px-3 py-2 text-[13.5px] text-brand-gold"}>
+                          {m.text}
+                          {m.at && <div className="mt-1 text-[10px] text-white/30">{fmtFull(m.at)}</div>}
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <div>
-                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-white/80"><FileText className="h-4 w-4" /> השיחה המלאה ({detail.transcript.length} הודעות)</div>
-                  <div className="max-h-[45vh] space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-3">
-                    {detail.transcript.map((m, i) => (
-                      <div key={i} className={m.role === "assistant"
-                        ? "max-w-[85%] whitespace-pre-line rounded-xl rounded-tr-sm bg-white/[0.07] px-3 py-2 text-[13px] text-white/85"
-                        : "mr-auto max-w-[85%] whitespace-pre-line rounded-xl rounded-tl-sm border border-brand-gold/25 bg-brand-gold/10 px-3 py-2 text-[13px] text-brand-gold"}>
-                        {m.text}
-                        {m.at && <div className="mt-1 text-[10px] text-white/30">{fmtFull(m.at)}</div>}
+                  {detailTab === "info" && (
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm text-white/50">סטטוס:</span>
+                        <select value={detail.funnelStatus} onChange={(e) => saveStatus(e.target.value)} disabled={savingStatus}
+                          className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white focus:border-brand-gold focus:outline-none">
+                          <option value="" className="bg-black">אוטומטי</option>
+                          {detail.statusOptions.map((s) => <option key={s} value={s} className="bg-black">{s}</option>)}
+                        </select>
+                        {savingStatus && <Loader2 className="h-4 w-4 animate-spin text-white/40" />}
                       </div>
-                    ))}
-                  </div>
+                      <div className={`grid grid-cols-2 gap-x-4 gap-y-2.5 ${cardCls} p-4 text-sm`}>
+                        {[
+                          ["שם", String(detail.fields.name ?? "")],
+                          ["עסק / תחום", String(detail.fields.businessName ?? detail.fields.serviceField ?? "")],
+                          ["מייל", String(detail.fields.email ?? "")],
+                          ["טלפון", String(detail.fields.phone ?? "")],
+                          ["אזור שירות", String(detail.fields.serviceArea ?? "")],
+                          ["תקציב פרסום", detail.fields.budget ? `${Number(detail.fields.budget).toLocaleString("he-IL")} ₪ לחודש` : ""],
+                          ["שווי עסקה", detail.fields.dealFirst ? `${Number(detail.fields.dealFirst).toLocaleString("he-IL")} ₪` : ""],
+                          ["נכנס לשיחה", fmtFull(detail.createdAt)],
+                        ].filter(([, v]) => v).map(([k, v]) => (
+                          <div key={k}><div className="text-xs text-white/40">{k}</div><div className="text-white/90">{v}</div></div>
+                        ))}
+                        {Boolean(detail.fields.declineReason) && (
+                          <div className="col-span-2"><div className="text-xs text-white/40">סיבת סירוב לפגישה</div><div className="font-medium text-amber-300">{String(detail.fields.declineReason)}</div></div>
+                        )}
+                      </div>
+                      {detail.source && Object.keys(detail.source).length > 0 && (
+                        <div className="rounded-xl border border-white/10 p-4 text-sm">
+                          <div className="mb-2 font-medium text-white/80">מקור ההגעה</div>
+                          <div className="grid grid-cols-2 gap-y-1.5">
+                            {Object.entries(detail.source).map(([k, v]) => (
+                              <div key={k} className="text-xs text-white/50"><span className="font-mono text-white/35">{k}</span>: {v}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {detailTab === "report" && (
+                    <div className="flex h-full flex-col gap-3">
+                      {!detail.report && <div className="py-10 text-center text-white/40">הליד עוד לא הגיע לשלב הדוח</div>}
+                      {detail.report && (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              {detail.report.headline && <div className="text-lg font-semibold text-brand-gold">{detail.report.headline}</div>}
+                              {detail.report.meetingAt && !detail.report.cancelledAt && (
+                                <div className="mt-0.5 inline-flex items-center gap-1 text-sm text-emerald-300"><Calendar className="h-4 w-4" /> פגישה: {fmtFull(detail.report.meetingAt)}</div>
+                              )}
+                              {detail.report.cancelledAt && <div className="mt-0.5 text-sm text-red-300">הפגישה בוטלה</div>}
+                            </div>
+                            {detail.report.link && (
+                              <a href={detail.report.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-brand-gold/40 px-3 py-1.5 text-sm text-brand-gold hover:bg-brand-gold/10">
+                                פתיחה בחלון מלא <ExternalLink className="h-3.5 w-3.5" />
+                              </a>
+                            )}
+                          </div>
+                          {detail.report.link
+                            ? <iframe src={detail.report.link} className="min-h-0 w-full flex-1 rounded-xl border border-white/10 bg-black" title="דוח הפוטנציאל" />
+                            : <div className={`${cardCls} px-6 py-10 text-center text-sm text-white/45`}>בסביבת ההדגמה הדוח המלא לא מוצג. אצל ליד אמיתי הדוח הממותג נפתח כאן.</div>}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {detailTab === "newsletter" && (() => {
+                    const emailOpened = detail.emails.some((e) => e.openedAt);
+                    const emailClicked = detail.emails.some((e) => e.clickedAt);
+                    const hasContact = Boolean(detail.fields.email || detail.fields.phone);
+                    const hasReport = Boolean(detail.report);
+                    const hasMeeting = Boolean(detail.report?.meetingAt && !detail.report?.cancelledAt);
+                    const meetingDone = hasMeeting && new Date(String(detail.report!.meetingAt)).getTime() < Date.now();
+                    const isHot = detail.funnelStatus === "חם";
+                    const closed = detail.funnelStatus === "נסגר";
+                    const steps = [
+                      { label: "נכנס לשיחה", pctVal: 5, done: true },
+                      { label: "השאיר פרטים", pctVal: 25, done: hasContact },
+                      { label: "קיבל דוח", pctVal: 35, done: hasReport },
+                      { label: "פתח מייל", pctVal: 45, done: emailOpened },
+                      { label: "הקליק בקישור", pctVal: 55, done: emailClicked },
+                      { label: "קבע פגישה", pctVal: 70, done: hasMeeting || meetingDone || closed },
+                      { label: "פגישה התקיימה", pctVal: 80, done: meetingDone || closed },
+                      { label: "ליד חם / הצעת מחיר", pctVal: 90, done: isHot || closed },
+                      { label: "נסגר לעסקה", pctVal: 100, done: closed },
+                    ];
+                    const progress = Math.max(...steps.filter((s) => s.done).map((s) => s.pctVal), 0);
+                    return (
+                      <div className="space-y-5">
+                        <div className={`${cardCls} p-4`}>
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-sm font-medium text-white/80">השלמת המשפך</span>
+                            <span className="text-xl font-semibold text-brand-gold">{progress}%</span>
+                          </div>
+                          <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
+                            <div className="h-full rounded-full bg-gradient-to-l from-[#c8a44c] to-[#eed89b] transition-all" style={{ width: `${progress}%` }} />
+                          </div>
+                          <div className="mt-4 grid gap-1.5 sm:grid-cols-3">
+                            {steps.map((s) => (
+                              <div key={s.label} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ${s.done ? "bg-brand-gold/10 text-brand-gold" : "text-white/35"}`}>
+                                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${s.done ? "bg-brand-gold text-black" : "border border-white/20"}`}>
+                                  {s.done && <Check className="h-3 w-3" />}
+                                </span>
+                                <span className="flex-1">{s.label}</span>
+                                <span className="font-mono text-[10px] opacity-70">{s.pctVal}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-white/10 p-4 text-sm">
+                          <div className="mb-2 font-medium text-white/80">המיילים שקיבל</div>
+                          {detail.emails.length === 0 && <div className="py-4 text-center text-xs text-white/40">עוד לא נשלחו מיילים לליד הזה</div>}
+                          <div className="space-y-2.5">
+                            {detail.emails.map((e, i) => (
+                              <div key={i} className="flex items-center justify-between gap-2 text-xs">
+                                <span className="text-white/70">{EMAIL_LABELS[e.key] ?? e.key}</span>
+                                <span className="flex items-center gap-2 text-white/40">
+                                  {fmtFull(e.sentAt)}
+                                  {e.bouncedAt ? <span className="text-red-300">נדחה</span>
+                                    : e.clickedAt ? <span className="inline-flex items-center gap-1 text-sky-300"><MousePointerClick className="h-3 w-3" /> הקליק בקישור</span>
+                                    : e.openedAt ? <span className="inline-flex items-center gap-1 text-emerald-300"><MailOpen className="h-3 w-3" /> נפתח</span>
+                                    : <span>נשלח</span>}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-              </div>
+              </>
             )}
           </div>
         </div>

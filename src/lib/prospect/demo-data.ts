@@ -14,6 +14,7 @@ const base = {
   reportLink: "", leadId: null as string | null, manualStatus: "", declineReason: "",
   cancelledAt: null as string | null, meetingAt: null as string | null,
   emailsSent: 0, emailsOpened: 0, emailsClicked: 0, budget: 0,
+  utmSource: "google", utmMedium: "cpc",
 };
 
 export const DEMO_ROWS: FunnelRow[] = [

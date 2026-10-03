@@ -12,7 +12,7 @@ export interface FunnelRow {
   id: string; createdAt: Date | string; updatedAt: Date | string;
   name: string; email: string; phone: string; business: string; budget: number;
   msgCount: number; status: string; derivedStatus: string; manualStatus: string;
-  declineReason: string; source: string;
+  declineReason: string; source: string; utmSource: string; utmMedium: string;
   reportLink: string; reportStatus: string;
   meetingAt: Date | string | null; cancelledAt: Date | string | null; leadId: string | null;
   emailsSent: number; emailsOpened: number; emailsClicked: number;
@@ -39,6 +39,22 @@ export const FUNNEL_STATUS_OPTIONS = ["חדש", "בטיפול", "חם", "קבע 
 const parse = <T,>(raw: string | null | undefined, fallback: T): T => {
   try { return JSON.parse(raw || "") as T; } catch { return fallback; }
 };
+
+/** מקור (utm_source) עם נפילה חכמה: gclid = גוגל, אחרת דומיין מפנה, אחרת ישיר */
+export function utmSourceOf(src: Record<string, string>): string {
+  if (src.utm_source) return src.utm_source;
+  if (src.gclid) return "google";
+  if (src.referrer) { try { return new URL(src.referrer).hostname.replace(/^www\./, ""); } catch { /* לא URL */ } }
+  return "ישיר";
+}
+
+/** מדיום (utm_medium): gclid = cpc, מפנה בלי utm = אורגני */
+export function utmMediumOf(src: Record<string, string>): string {
+  if (src.utm_medium) return src.utm_medium;
+  if (src.gclid) return "cpc";
+  if (src.referrer) return "אורגני";
+  return "ישיר";
+}
 
 /** תווית מקור קריאה לבן אדם מתוך נתוני ה-utm */
 export function sourceLabel(src: Record<string, string>): string {
@@ -94,6 +110,7 @@ export function buildRow(c: ProspectChat, r: PotentialReport | undefined | null,
     msgCount: parse<unknown[]>(c.messages, []).length,
     status: c.funnelStatus || derived, derivedStatus: derived, manualStatus: c.funnelStatus,
     declineReason: f.declineReason ?? "", source: sourceLabel(src),
+    utmSource: utmSourceOf(src), utmMedium: utmMediumOf(src),
     reportLink: r ? `${appBase}/report/${r.token}` : "", reportStatus: r?.status ?? "",
     meetingAt: r?.meetingAt ?? null, cancelledAt: r?.cancelledAt ?? null, leadId: r?.leadId ?? null,
     emailsSent: logs.length,
