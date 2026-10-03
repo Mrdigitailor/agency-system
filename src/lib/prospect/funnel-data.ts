@@ -13,6 +13,7 @@ export interface FunnelRow {
   name: string; email: string; phone: string; business: string; budget: number;
   msgCount: number; status: string; derivedStatus: string; manualStatus: string;
   declineReason: string; source: string; utmSource: string; utmMedium: string;
+  utmCampaign: string; utmContent: string; relevant: string;
   reportLink: string; reportStatus: string;
   meetingAt: Date | string | null; cancelledAt: Date | string | null; leadId: string | null;
   emailsSent: number; emailsOpened: number; emailsClicked: number;
@@ -111,6 +112,7 @@ export function buildRow(c: ProspectChat, r: PotentialReport | undefined | null,
     status: c.funnelStatus || derived, derivedStatus: derived, manualStatus: c.funnelStatus,
     declineReason: f.declineReason ?? "", source: sourceLabel(src),
     utmSource: utmSourceOf(src), utmMedium: utmMediumOf(src),
+    utmCampaign: src.utm_campaign ?? "", utmContent: src.utm_content ?? "", relevant: c.relevant ?? "",
     reportLink: r ? `${appBase}/report/${r.token}` : "", reportStatus: r?.status ?? "",
     meetingAt: r?.meetingAt ?? null, cancelledAt: r?.cancelledAt ?? null, leadId: r?.leadId ?? null,
     emailsSent: logs.length,
@@ -247,5 +249,47 @@ export async function loadResults(clientId: string, days: number): Promise<Resul
       .sort((a, b) => b.spend - a.spend).slice(0, 8),
     terms: [...byTerm.entries()].map(([term, v]) => ({ term, clicks: v.clicks, leads: Math.round(v.leads * 10) / 10, cpl: v.leads > 0 ? Math.round(v.spend / v.leads) : 0 }))
       .sort((a, b) => b.leads - a.leads || b.clicks - a.clicks).slice(0, 8),
+  };
+}
+
+// ==================== מדדי עסק לדשבורד התוצאות ====================
+export interface BusinessMetrics {
+  relevantPct: number | null;  // אחוז רלוונטיים מתוך מי שסומן
+  closeRate: number | null;    // לקוחות שנסגרו ביחס ללידים עם פרטי קשר
+  salesMonth: number;          // שווי מכירות החודש הקלנדרי (הקמות + ריטיינרים של לקוחות ששילמו)
+  roiMonth: number | null;     // החזר על השקעה החודש: מכירות חלקי הוצאת פרסום
+}
+
+/** מדדי עסק: רלוונטיות, סגירה, מכירות החודש ו-ROI — מחושבים מהנתונים החיים */
+export async function loadBusinessMetrics(portalId: string, clientId: string | null, days: number): Promise<BusinessMetrics> {
+  const since = days > 0 ? new Date(Date.now() - days * 24 * 3600_000) : undefined;
+  const monthStart = new Date();
+  monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+
+  const [relevantYes, relevantNo, withContactChats, customers, monthCustomers] = await Promise.all([
+    prisma.prospectChat.count({ where: { relevant: "yes", ...(since ? { createdAt: { gte: since } } : {}) } }),
+    prisma.prospectChat.count({ where: { relevant: "no", ...(since ? { createdAt: { gte: since } } : {}) } }),
+    prisma.prospectChat.count({ where: { fields: { contains: "@" }, ...(since ? { createdAt: { gte: since } } : {}) } }),
+    prisma.portalCustomer.count({ where: { portalId, ...(since ? { createdAt: { gte: since } } : {}) } }),
+    prisma.portalCustomer.findMany({ where: { portalId, paid: true, createdAt: { gte: monthStart } } }),
+  ]);
+
+  const salesMonth = monthCustomers.reduce((s, c) => s + c.amountPaid + c.monthlyFee, 0);
+
+  let roiMonth: number | null = null;
+  if (clientId && salesMonth > 0) {
+    const monthYmd = monthStart.toISOString().slice(0, 10);
+    const spendAgg = await prisma.googleAdsInsightDaily.aggregate({
+      where: { clientId, date: { gte: monthYmd } }, _sum: { spend: true },
+    });
+    const spendMonth = spendAgg._sum.spend ?? 0;
+    if (spendMonth > 0) roiMonth = salesMonth / spendMonth;
+  }
+
+  return {
+    relevantPct: relevantYes + relevantNo > 0 ? (relevantYes / (relevantYes + relevantNo)) * 100 : null,
+    closeRate: withContactChats > 0 ? (customers / withContactChats) * 100 : null,
+    salesMonth,
+    roiMonth,
   };
 }

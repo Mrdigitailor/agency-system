@@ -7,16 +7,17 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Mail, MailOpen, MousePointerClick, Calendar, FileText, ExternalLink, X, Loader2, Search,
-  BarChart3, Inbox, Users, Plus, UserPlus, Check,
+  BarChart3, Inbox, Users, Plus, UserPlus, Check, MessagesSquare, AlertTriangle, ThumbsUp, ThumbsDown,
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
-type Tab = "results" | "crm" | "customers";
+type Tab = "results" | "crm" | "customers" | "conversations" | "escalations";
 
 interface Row {
   id: string; createdAt: string; name: string; email: string; phone: string;
   business: string; msgCount: number; status: string; manualStatus: string;
   declineReason: string; source: string; utmSource: string; utmMedium: string;
+  utmCampaign: string; utmContent: string; relevant: string;
   reportLink: string; reportStatus: string;
   meetingAt: string | null; cancelledAt: string | null;
   emailsSent: number; emailsOpened: number; emailsClicked: number;
@@ -36,7 +37,8 @@ interface Detail {
 }
 interface Customer {
   id: string; name: string; business: string; email: string; phone: string;
-  stage: string; paid: boolean; amountPaid: number; monthlyFee: number; notes: string; createdAt: string;
+  stage: string; dealType: string; paid: boolean; amountPaid: number; monthlyFee: number; percentRate: number;
+  notes: string; createdAt: string; sourceChatId?: string | null;
 }
 interface Results {
   hasData: boolean;
@@ -44,7 +46,20 @@ interface Results {
   daily: Array<{ date: string; spend: number; leads: number }>;
   campaigns: Array<{ name: string; spend: number; clicks: number; leads: number; cpl: number }>;
   terms: Array<{ term: string; clicks: number; leads: number; cpl: number }>;
+  business?: { relevantPct: number | null; closeRate: number | null; salesMonth: number; roiMonth: number | null };
 }
+interface Escalation {
+  id: string; chatId: string; chatName: string; question: string;
+  status: string; answer: string; createdAt: string;
+}
+
+const DEAL_TYPES: Array<{ value: string; label: string }> = [
+  { value: "one_time", label: "עסקה חד פעמית" },
+  { value: "retainer", label: "ריטיינר חודשי" },
+  { value: "setup_retainer", label: "הקמה חד פעמית + ריטיינר" },
+  { value: "percent", label: "אחוזים מהעסקאות" },
+];
+const dealLabel = (t: string) => DEAL_TYPES.find((d) => d.value === t)?.label ?? t;
 
 const EMAIL_LABELS: Record<string, string> = {
   report: "מייל הדוח", nurture1: "מייל מעקב 1", nurture3: "מייל מעקב 2", nurture7: "מייל מעקב 3",
@@ -109,6 +124,15 @@ export default function LeadsPortalPage() {
   const [results, setResults] = useState<Results | null>(null);
   const [resultsLoading, setResultsLoading] = useState(false);
 
+  // --- לקוח בפופאפ ---
+  const [custPopup, setCustPopup] = useState<Customer | null>(null);
+
+  // --- אסקלציות ---
+  const [escalations, setEscalations] = useState<Escalation[]>([]);
+  const [escLoading, setEscLoading] = useState(false);
+  const [escDrafts, setEscDrafts] = useState<Record<string, string>>({});
+  const [escSaving, setEscSaving] = useState("");
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -142,6 +166,40 @@ export default function LeadsPortalPage() {
 
   useEffect(() => { if (tab === "customers") loadCustomers(); }, [tab, loadCustomers]);
   useEffect(() => { if (tab === "results") loadResults(); }, [tab, loadResults]);
+
+  const loadEscalations = useCallback(async () => {
+    setEscLoading(true);
+    try {
+      const res = await fetch(`/api/public/leads/${token}?view=escalations`);
+      if (res.ok) { const d = await res.json(); setEscalations(d.escalations ?? []); }
+    } catch { /* רענון ידני */ }
+    setEscLoading(false);
+  }, [token]);
+  useEffect(() => { if (tab === "escalations") loadEscalations(); }, [tab, loadEscalations]);
+
+  const answerEscalation = async (id: string) => {
+    const answer = (escDrafts[id] ?? "").trim();
+    if (!answer) return;
+    setEscSaving(id);
+    try {
+      const res = await fetch(`/api/public/leads/${token}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "escalation", id, answer }),
+      });
+      if (res.ok) setEscalations((es) => es.map((e) => (e.id === id ? { ...e, status: "answered", answer } : e)));
+    } catch { /* ננסה שוב */ }
+    setEscSaving("");
+  };
+
+  const setRelevant = async (rowId: string, relevant: string) => {
+    setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, relevant } : r)));
+    try {
+      await fetch(`/api/public/leads/${token}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "relevant", id: rowId, relevant }),
+      });
+    } catch { /* העדכון המקומי מוצג */ }
+  };
 
   const openDetail = async (row: Row) => {
     setDetailLoading(true); setDetail(null); setDetailRow(row); setDetailTab("chat");
@@ -224,10 +282,13 @@ export default function LeadsPortalPage() {
     return <div className="py-24 text-center text-white/60">הקישור לא נמצא. פנו אלינו ונשלח לכם קישור חדש.</div>;
   }
 
+  const openEscalations = escalations.filter((e) => e.status === "open").length;
   const NAV: Array<{ key: Tab; label: string; icon: typeof Inbox }> = [
     { key: "results", label: "דשבורד תוצאות", icon: BarChart3 },
     { key: "crm", label: "CRM · לידים", icon: Inbox },
     { key: "customers", label: "ניהול לקוחות", icon: Users },
+    { key: "conversations", label: "שיחות", icon: MessagesSquare },
+    { key: "escalations", label: "אסקלציות", icon: AlertTriangle },
   ];
 
   return (
@@ -245,7 +306,10 @@ export default function LeadsPortalPage() {
             <button key={key} onClick={() => setTab(key)}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${tab === key ? "bg-white/10 font-medium text-brand-gold" : "text-white/60 hover:bg-white/5 hover:text-white"}`}>
               <Icon className={`h-[18px] w-[18px] ${tab === key ? "text-brand-gold" : "text-white/35"}`} />
-              {label}
+              <span className="flex-1 text-right">{label}</span>
+              {key === "escalations" && openEscalations > 0 && (
+                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-gold text-[10px] font-bold text-black">{openEscalations}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -273,7 +337,7 @@ export default function LeadsPortalPage() {
           </div>
         </div>
 
-        <main className={`mx-auto space-y-6 px-4 py-7 lg:px-8 ${tab === "crm" ? "max-w-[1500px]" : "max-w-5xl"}`}>
+        <main className={`mx-auto space-y-6 px-4 py-7 lg:px-8 ${tab === "crm" || tab === "conversations" ? "max-w-[1500px]" : "max-w-5xl"}`}>
 
           {/* ===================== דשבורד תוצאות ===================== */}
           {tab === "results" && (
@@ -312,6 +376,15 @@ export default function LeadsPortalPage() {
                     {kpi("עלות לליד", ils(results.totals.cpl))}
                     {kpi("אחוז המרה", `${results.totals.convRate.toFixed(1)}%`)}
                   </div>
+
+                  {results.business && (
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                      {kpi("לידים רלוונטיים", results.business.relevantPct !== null ? `${results.business.relevantPct.toFixed(0)}%` : "-", "מתוך מי שסומן ב-CRM")}
+                      {kpi("אחוז סגירה", results.business.closeRate !== null ? `${results.business.closeRate.toFixed(0)}%` : "-", "לקוחות מתוך לידים שהשאירו פרטים")}
+                      {kpi("מכירות החודש", ils(results.business.salesMonth), "לקוחות ששילמו החודש")}
+                      {kpi("החזר על השקעה", results.business.roiMonth !== null ? `פי ${results.business.roiMonth.toFixed(1)}` : "-", "מכירות מול הוצאת פרסום, החודש")}
+                    </div>
+                  )}
 
                   <div className="grid gap-4 lg:grid-cols-2">
                     <div className={`${cardCls} p-4`}>
@@ -421,12 +494,13 @@ export default function LeadsPortalPage() {
                       <th className="px-4 py-3 font-medium">מילת חיפוש</th>
                       <th className="px-4 py-3 font-medium">מיילים</th>
                       <th className="px-4 py-3 font-medium">פגישה</th>
+                      <th className="px-4 py-3 font-medium">רלוונטי</th>
                       <th className="px-4 py-3 font-medium">סטטוס</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {loading && <tr><td colSpan={9} className="px-4 py-12 text-center text-white/40"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>}
-                    {!loading && filtered.length === 0 && <tr><td colSpan={9} className="px-4 py-12 text-center text-white/40">אין עדיין שיחות בתקופה הזאת</td></tr>}
+                    {loading && <tr><td colSpan={10} className="px-4 py-12 text-center text-white/40"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>}
+                    {!loading && filtered.length === 0 && <tr><td colSpan={10} className="px-4 py-12 text-center text-white/40">אין עדיין שיחות בתקופה הזאת</td></tr>}
                     {!loading && filtered.map((r) => (
                       <tr key={r.id} onClick={() => openDetail(r)} className="cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.05]">
                         <td className="whitespace-nowrap px-4 py-3.5 text-white/40">{fmtDate(r.createdAt)}</td>
@@ -452,6 +526,18 @@ export default function LeadsPortalPage() {
                         <td className="whitespace-nowrap px-4 py-3.5 text-xs">
                           {r.meetingAt && !r.cancelledAt && <span className="inline-flex items-center gap-1 text-emerald-300"><Calendar className="h-3.5 w-3.5" /> {fmtFull(r.meetingAt)}</span>}
                           {r.cancelledAt && <span className="text-red-300">בוטלה</span>}
+                        </td>
+                        <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                          <span className="inline-flex gap-1">
+                            <button onClick={() => setRelevant(r.id, r.relevant === "yes" ? "" : "yes")} title="רלוונטי"
+                              className={`rounded-md p-1.5 transition-colors ${r.relevant === "yes" ? "bg-emerald-400/20 text-emerald-300" : "text-white/25 hover:bg-white/10 hover:text-white/60"}`}>
+                              <ThumbsUp className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => setRelevant(r.id, r.relevant === "no" ? "" : "no")} title="לא רלוונטי"
+                              className={`rounded-md p-1.5 transition-colors ${r.relevant === "no" ? "bg-red-400/20 text-red-300" : "text-white/25 hover:bg-white/10 hover:text-white/60"}`}>
+                              <ThumbsDown className="h-3.5 w-3.5" />
+                            </button>
+                          </span>
                         </td>
                         <td className="px-4 py-3.5">
                           <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLS[r.status] ?? "bg-brand-gold/15 text-brand-gold"}`}>{r.status}</span>
@@ -500,8 +586,8 @@ export default function LeadsPortalPage() {
                       <th className="px-4 py-3 font-medium">לקוח</th>
                       <th className="px-4 py-3 font-medium">קשר</th>
                       <th className="px-4 py-3 font-medium">שלב בתהליך</th>
+                      <th className="px-4 py-3 font-medium">מבנה העסקה</th>
                       <th className="px-4 py-3 font-medium">תשלום</th>
-                      <th className="px-4 py-3 font-medium">הערות</th>
                       <th className="px-4 py-3 font-medium">נוצר</th>
                     </tr>
                   </thead>
@@ -513,43 +599,31 @@ export default function LeadsPortalPage() {
                       </td></tr>
                     )}
                     {!custLoading && customers.map((c) => (
-                      <tr key={c.id} className="border-b border-white/5 align-top">
-                        <td className="px-4 py-3">
+                      <tr key={c.id} onClick={() => setCustPopup(c)} className="cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.05]">
+                        <td className="px-4 py-3.5">
                           <div className="font-medium text-white">{c.name}</div>
                           <div className="text-xs text-white/40">{c.business}</div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-white/50">
+                        <td className="px-4 py-3.5 text-xs text-white/50">
                           <div>{c.email}</div><div dir="ltr" className="text-right">{c.phone}</div>
                         </td>
-                        <td className="px-4 py-3">
-                          <select value={c.stage} onChange={(e) => patchCustomer(c.id, { stage: e.target.value })}
-                            className={`rounded-full border-0 px-3 py-1.5 text-xs font-medium focus:outline-none ${STAGE_CLS[c.stage] ?? "bg-white/10 text-white/70"}`}>
-                            {stages.map((s) => <option key={s} value={s} className="bg-black text-white">{s}</option>)}
-                          </select>
+                        <td className="px-4 py-3.5">
+                          <span className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium ${STAGE_CLS[c.stage] ?? "bg-white/10 text-white/70"}`}>{c.stage}</span>
                         </td>
-                        <td className="px-4 py-3">
-                          <button onClick={() => patchCustomer(c.id, { paid: !c.paid })}
-                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${c.paid ? "bg-emerald-400/15 text-emerald-300" : "bg-red-400/10 text-red-300"}`}>
-                            {c.paid ? <><Check className="h-3.5 w-3.5" /> שילם</> : "לא שילם"}
-                          </button>
-                          <div className="mt-2 flex items-center gap-1.5 text-xs text-white/50">
-                            <input type="number" value={c.amountPaid || ""} placeholder="הקמה"
-                              onChange={(e) => patchCustomer(c.id, { amountPaid: Number(e.target.value) || 0 })}
-                              className={`${inputCls} w-20 px-2 py-1 text-xs`} />
-                            <span>+</span>
-                            <input type="number" value={c.monthlyFee || ""} placeholder="חודשי"
-                              onChange={(e) => patchCustomer(c.id, { monthlyFee: Number(e.target.value) || 0 })}
-                              className={`${inputCls} w-16 px-2 py-1 text-xs`} />
-                            <span>₪</span>
+                        <td className="px-4 py-3.5 text-xs text-white/60">
+                          <div>{dealLabel(c.dealType)}</div>
+                          <div className="mt-0.5 text-white/40">
+                            {c.dealType === "percent"
+                              ? `${c.percentRate}% מהעסקאות`
+                              : [c.amountPaid ? `הקמה ${ils(c.amountPaid)}` : "", c.monthlyFee ? `ריטיינר ${ils(c.monthlyFee)}/חודש` : ""].filter(Boolean).join(" · ") || "-"}
                           </div>
                         </td>
-                        <td className="px-4 py-3">
-                          <textarea value={c.notes} rows={2} placeholder="הערות..."
-                            onChange={(e) => setCustomers((cs) => cs.map((x) => x.id === c.id ? { ...x, notes: e.target.value } : x))}
-                            onBlur={(e) => patchCustomer(c.id, { notes: e.target.value })}
-                            className={`${inputCls} w-44 resize-none px-2 py-1.5 text-xs`} />
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${c.paid ? "bg-emerald-400/15 text-emerald-300" : "bg-red-400/10 text-red-300"}`}>
+                            {c.paid ? <><Check className="h-3.5 w-3.5" /> שילם</> : "לא שילם"}
+                          </span>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-white/40">{fmtDate(c.createdAt)}</td>
+                        <td className="whitespace-nowrap px-4 py-3.5 text-xs text-white/40">{fmtDate(c.createdAt)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -557,8 +631,235 @@ export default function LeadsPortalPage() {
               </div>
             </>
           )}
+
+          {/* ===================== שיחות ===================== */}
+          {tab === "conversations" && (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h1 className="text-2xl font-semibold text-white">שיחות</h1>
+                  <p className="mt-1 text-sm text-white/50">כל שיחה שהתקיימה עם הסוכן: מאיזה קמפיין, קבוצת מודעות ומילת מפתח היא הגיעה, והשיחה המלאה לניתוח</p>
+                </div>
+                {!demo && (
+                  <select value={days} onChange={(e) => setDays(Number(e.target.value))} className={inputCls}>
+                    <option value={7} className="bg-black">7 ימים</option>
+                    <option value={30} className="bg-black">30 ימים</option>
+                    <option value={90} className="bg-black">90 ימים</option>
+                    <option value={0} className="bg-black">הכל</option>
+                  </select>
+                )}
+              </div>
+
+              <div className={`${cardCls} min-h-[72vh] overflow-x-auto`}>
+                <table className="w-full text-right text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-xs text-white/40">
+                      <th className="px-4 py-3 font-medium">תאריך</th>
+                      <th className="px-4 py-3 font-medium">ליד</th>
+                      <th className="px-4 py-3 font-medium">קמפיין</th>
+                      <th className="px-4 py-3 font-medium">קבוצת מודעות</th>
+                      <th className="px-4 py-3 font-medium">מילת מפתח</th>
+                      <th className="px-4 py-3 font-medium">הודעות</th>
+                      <th className="px-4 py-3 font-medium">תוצאה</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading && <tr><td colSpan={7} className="px-4 py-12 text-center text-white/40"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>}
+                    {!loading && rows.length === 0 && <tr><td colSpan={7} className="px-4 py-12 text-center text-white/40">אין עדיין שיחות בתקופה הזאת</td></tr>}
+                    {!loading && rows.map((r) => (
+                      <tr key={r.id} onClick={() => openDetail(r)} className="cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.05]">
+                        <td className="whitespace-nowrap px-4 py-3.5 text-white/40">{fmtFull(r.createdAt)}</td>
+                        <td className="px-4 py-3.5">
+                          <div className="font-medium text-white">{r.name || "אנונימי"}</div>
+                          <div className="text-xs text-white/40">{r.business}</div>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-white/60">{r.utmCampaign || "-"}</td>
+                        <td className="px-4 py-3.5 text-xs text-white/60">{r.utmContent || "-"}</td>
+                        <td className="max-w-[170px] truncate px-4 py-3.5 text-xs text-white/60">{r.source !== r.utmSource ? r.source : "-"}</td>
+                        <td className="px-4 py-3.5 text-xs text-white/50">{r.msgCount}</td>
+                        <td className="px-4 py-3.5">
+                          <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLS[r.status] ?? "bg-brand-gold/15 text-brand-gold"}`}>{r.status}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {/* ===================== אסקלציות ===================== */}
+          {tab === "escalations" && (
+            <>
+              <div>
+                <h1 className="text-2xl font-semibold text-white">אסקלציות</h1>
+                <p className="mt-1 text-sm text-white/50">שאלות שהסוכן לא ידע לענות עליהן. ענה כאן פעם אחת, והסוכן ידע לענות בכל השיחות הבאות</p>
+              </div>
+
+              {escLoading && <div className="py-16 text-center text-white/40"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></div>}
+              {!escLoading && escalations.length === 0 && (
+                <div className={`${cardCls} px-6 py-14 text-center`}>
+                  <AlertTriangle className="mx-auto h-10 w-10 text-brand-gold/40" />
+                  <div className="mt-4 text-lg font-medium text-white/80">אין אסקלציות פתוחות</div>
+                  <div className="mx-auto mt-2 max-w-md text-sm text-white/45">כשגולש ישאל את הסוכן שאלה שאין לו עליה תשובה, היא תופיע כאן ותחכה לתשובה שלך.</div>
+                </div>
+              )}
+
+              {!escLoading && escalations.map((e) => (
+                <div key={e.id} className={`${cardCls} p-5`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs text-white/40">{fmtFull(e.createdAt)} · {e.chatName}</div>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${e.status === "open" ? "bg-amber-400/15 text-amber-300" : "bg-emerald-400/15 text-emerald-300"}`}>
+                      {e.status === "open" ? "ממתין לתשובה" : "נענה · הסוכן למד"}
+                    </span>
+                  </div>
+                  <div className="mt-3 text-[15px] leading-relaxed text-white/90">{e.question}</div>
+                  {e.status === "answered" ? (
+                    <div className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100/90">
+                      <span className="text-xs text-emerald-300/80">התשובה שלך: </span>{e.answer}
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+                      <textarea rows={2} placeholder="כתוב כאן את התשובה, והסוכן ישתמש בה בשיחות הבאות..."
+                        value={escDrafts[e.id] ?? ""}
+                        onChange={(ev) => setEscDrafts((d) => ({ ...d, [e.id]: ev.target.value }))}
+                        className={`${inputCls} flex-1 resize-none`} />
+                      <button onClick={() => answerEscalation(e.id)} disabled={!(escDrafts[e.id] ?? "").trim() || escSaving === e.id}
+                        className="rounded-lg bg-brand-gold px-5 py-2.5 text-sm font-medium text-black transition-all hover:brightness-95 disabled:opacity-40">
+                        {escSaving === e.id ? "שומר..." : "שמור ולמד"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
         </main>
       </div>
+
+      {/* פופאפ לקוח — כל המידע והעריכה במקום אחד */}
+      {custPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 lg:p-8" onClick={() => setCustPopup(null)}>
+          <div dir="rtl" className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#0d0c0a] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-white/10 px-5 pb-3 pt-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">{custPopup.name}</h2>
+                <p className="text-sm text-white/50">{custPopup.business}</p>
+              </div>
+              <button onClick={() => setCustPopup(null)} className="rounded-lg p-1.5 text-white/40 hover:bg-white/10"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+              {/* פרטי הלקוח */}
+              <div className={`${cardCls} p-4`}>
+                <div className="mb-3 text-sm font-medium text-white/80">פרטי הלקוח</div>
+                <div className="grid grid-cols-2 gap-3">
+                  {([["name", "שם"], ["business", "עסק"], ["phone", "טלפון"], ["email", "מייל"]] as const).map(([field, label]) => (
+                    <div key={field}>
+                      <label className="mb-1 block text-xs text-white/50">{label}</label>
+                      <input value={String(custPopup[field] ?? "")}
+                        onChange={(e) => setCustPopup({ ...custPopup, [field]: e.target.value })}
+                        onBlur={(e) => patchCustomer(custPopup.id, { [field]: e.target.value } as Partial<Customer>)}
+                        className={`${inputCls} w-full`} />
+                    </div>
+                  ))}
+                  <div>
+                    <label className="mb-1 block text-xs text-white/50">שלב בתהליך</label>
+                    <select value={custPopup.stage}
+                      onChange={(e) => { setCustPopup({ ...custPopup, stage: e.target.value }); patchCustomer(custPopup.id, { stage: e.target.value }); }}
+                      className={`${inputCls} w-full`}>
+                      {stages.map((s) => <option key={s} value={s} className="bg-black">{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-white/50">נוצר</label>
+                    <div className="px-1 py-2 text-sm text-white/60">{fmtFull(custPopup.createdAt)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* מבנה העסקה — חד משמעי מה כל סכום אומר */}
+              <div className={`${cardCls} p-4`}>
+                <div className="mb-3 text-sm font-medium text-white/80">מבנה העסקה</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="mb-1 block text-xs text-white/50">איך העסקה בנויה?</label>
+                    <select value={custPopup.dealType}
+                      onChange={(e) => { setCustPopup({ ...custPopup, dealType: e.target.value }); patchCustomer(custPopup.id, { dealType: e.target.value }); }}
+                      className={`${inputCls} w-full`}>
+                      {DEAL_TYPES.map((d) => <option key={d.value} value={d.value} className="bg-black">{d.label}</option>)}
+                    </select>
+                  </div>
+                  {(custPopup.dealType === "one_time") && (
+                    <div>
+                      <label className="mb-1 block text-xs text-white/50">שווי העסקה (חד פעמי) ₪</label>
+                      <input type="number" value={custPopup.amountPaid || ""}
+                        onChange={(e) => setCustPopup({ ...custPopup, amountPaid: Number(e.target.value) || 0 })}
+                        onBlur={(e) => patchCustomer(custPopup.id, { amountPaid: Number(e.target.value) || 0 })}
+                        className={`${inputCls} w-full`} />
+                    </div>
+                  )}
+                  {(custPopup.dealType === "setup_retainer") && (
+                    <div>
+                      <label className="mb-1 block text-xs text-white/50">הקמה חד פעמית ₪</label>
+                      <input type="number" value={custPopup.amountPaid || ""}
+                        onChange={(e) => setCustPopup({ ...custPopup, amountPaid: Number(e.target.value) || 0 })}
+                        onBlur={(e) => patchCustomer(custPopup.id, { amountPaid: Number(e.target.value) || 0 })}
+                        className={`${inputCls} w-full`} />
+                    </div>
+                  )}
+                  {(custPopup.dealType === "retainer" || custPopup.dealType === "setup_retainer") && (
+                    <div>
+                      <label className="mb-1 block text-xs text-white/50">ריטיינר חודשי ₪</label>
+                      <input type="number" value={custPopup.monthlyFee || ""}
+                        onChange={(e) => setCustPopup({ ...custPopup, monthlyFee: Number(e.target.value) || 0 })}
+                        onBlur={(e) => patchCustomer(custPopup.id, { monthlyFee: Number(e.target.value) || 0 })}
+                        className={`${inputCls} w-full`} />
+                    </div>
+                  )}
+                  {custPopup.dealType === "percent" && (
+                    <div>
+                      <label className="mb-1 block text-xs text-white/50">אחוז מהעסקאות %</label>
+                      <input type="number" value={custPopup.percentRate || ""}
+                        onChange={(e) => setCustPopup({ ...custPopup, percentRate: Number(e.target.value) || 0 })}
+                        onBlur={(e) => patchCustomer(custPopup.id, { percentRate: Number(e.target.value) || 0 })}
+                        className={`${inputCls} w-full`} />
+                    </div>
+                  )}
+                  <div className="col-span-2 flex items-center gap-3">
+                    <button onClick={() => { setCustPopup({ ...custPopup, paid: !custPopup.paid }); patchCustomer(custPopup.id, { paid: !custPopup.paid }); }}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium ${custPopup.paid ? "bg-emerald-400/15 text-emerald-300" : "bg-red-400/10 text-red-300"}`}>
+                      {custPopup.paid ? <><Check className="h-4 w-4" /> שילם</> : "לא שילם"}
+                    </button>
+                    <span className="text-xs text-white/40">
+                      {custPopup.dealType === "percent"
+                        ? "בעסקת אחוזים, הסימון מתייחס להתחשבנות השוטפת"
+                        : custPopup.dealType === "retainer" ? "הסימון מתייחס לריטיינר השוטף" : "הסימון מתייחס לתשלום ההקמה/העסקה"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* הערות ותיעוד תהליך */}
+              <div className={`${cardCls} p-4`}>
+                <div className="mb-2 text-sm font-medium text-white/80">תיעוד והערות</div>
+                <textarea rows={4} placeholder="תיעוד התהליך: מה סוכם, מה נשלח, מה הצעד הבא..."
+                  value={custPopup.notes}
+                  onChange={(e) => setCustPopup({ ...custPopup, notes: e.target.value })}
+                  onBlur={(e) => patchCustomer(custPopup.id, { notes: e.target.value })}
+                  className={`${inputCls} w-full resize-none`} />
+              </div>
+
+              {/* המקור במשפך */}
+              {custPopup.sourceChatId && (
+                <button onClick={() => { const row = rows.find((r) => r.id === custPopup.sourceChatId); setCustPopup(null); if (row) openDetail(row); }}
+                  className="inline-flex items-center gap-1.5 text-sm text-brand-gold hover:underline">
+                  <MessagesSquare className="h-4 w-4" /> צפייה בשיחה המקורית מהמשפך
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* פופאפ ליד — ארבעה טאבים */}
       {(detail || detailLoading) && (

@@ -14,20 +14,20 @@ const base = {
   reportLink: "", leadId: null as string | null, manualStatus: "", declineReason: "",
   cancelledAt: null as string | null, meetingAt: null as string | null,
   emailsSent: 0, emailsOpened: 0, emailsClicked: 0, budget: 0,
-  utmSource: "google", utmMedium: "cpc",
+  utmSource: "google", utmMedium: "cpc", utmCampaign: "קמפיין חיפוש ראשי", utmContent: "קבוצת מודעות - שירות", relevant: "",
 };
 
 export const DEMO_ROWS: FunnelRow[] = [
-  { ...base, id: "demo-1", createdAt: h(3), updatedAt: h(2), name: "אורי ברק", email: "uri@example.co.il", phone: "050-1234567",
+  { ...base, id: "demo-1", relevant: "yes", createdAt: h(3), updatedAt: h(2), name: "אורי ברק", email: "uri@example.co.il", phone: "050-1234567",
     business: "עורך דין מקרקעין", budget: 6000, msgCount: 22, status: "קבע פגישה", derivedStatus: "קבע פגישה",
     source: "עורך דין מקרקעין", reportStatus: "ready", meetingAt: inDays(2, 10), emailsSent: 1, emailsOpened: 1, emailsClicked: 1 },
-  { ...base, id: "demo-2", createdAt: h(8), updatedAt: h(7), name: "מיכל אדן", email: "michal@example.co.il", phone: "052-7654321",
+  { ...base, id: "demo-2", relevant: "yes", createdAt: h(8), updatedAt: h(7), name: "מיכל אדן", email: "michal@example.co.il", phone: "052-7654321",
     business: "מרפאת אסתטיקה", budget: 8000, msgCount: 19, status: "קבע פגישה", derivedStatus: "קבע פגישה",
     source: "הזרקות בוטוקס מחיר", reportStatus: "ready", meetingAt: inDays(1, 13), emailsSent: 2, emailsOpened: 2, emailsClicked: 1 },
-  { ...base, id: "demo-3", createdAt: h(26), updatedAt: h(25), name: "יוסי מזרחי", email: "yossi@example.co.il", phone: "",
+  { ...base, id: "demo-3", relevant: "yes", createdAt: h(26), updatedAt: h(25), name: "יוסי מזרחי", email: "yossi@example.co.il", phone: "",
     business: "אינסטלציה ותיקוני צנרת", budget: 3500, msgCount: 16, status: "קיבל דוח", derivedStatus: "קיבל דוח",
     source: "אינסטלטור בחיפה", reportStatus: "ready", emailsSent: 2, emailsOpened: 1 },
-  { ...base, id: "demo-4", createdAt: h(30), updatedAt: h(29), name: "רונית שגב", email: "ronit@example.co.il", phone: "054-9876543",
+  { ...base, id: "demo-4", relevant: "yes", createdAt: h(30), updatedAt: h(29), name: "רונית שגב", email: "ronit@example.co.il", phone: "054-9876543",
     business: "סטודיו לעיצוב פנים", budget: 5000, msgCount: 21, status: "חם", derivedStatus: "קיבל דוח", manualStatus: "חם",
     source: "מעצבת פנים תל אביב", reportStatus: "ready", emailsSent: 2, emailsOpened: 2, emailsClicked: 1 },
   { ...base, id: "demo-5", createdAt: h(50), updatedAt: h(49), name: "דנה לוי", email: "dana@example.co.il", phone: "",
@@ -36,13 +36,13 @@ export const DEMO_ROWS: FunnelRow[] = [
   { ...base, id: "demo-6", createdAt: h(54), updatedAt: h(54), name: "", email: "", phone: "",
     business: "שיפוצים", budget: 0, msgCount: 4, status: "שיחה", derivedStatus: "שיחה",
     source: "קבלן שיפוצים מרכז", reportStatus: "" },
-  { ...base, id: "demo-7", createdAt: h(76), updatedAt: h(70), name: "אבי כהן", email: "avi@example.co.il", phone: "053-1112233",
+  { ...base, id: "demo-7", relevant: "yes", createdAt: h(76), updatedAt: h(70), name: "אבי כהן", email: "avi@example.co.il", phone: "053-1112233",
     business: "הובלות ומשלוחים", budget: 4000, msgCount: 18, status: "סירב לפגישה", derivedStatus: "סירב לפגישה", declineReason: "אין לי זמן כרגע, אולי בעוד חודש",
     source: "הובלות דירה מחיר", reportStatus: "ready", emailsSent: 3, emailsOpened: 2 },
-  { ...base, id: "demo-8", createdAt: h(120), updatedAt: h(96), name: "נועם פרץ", email: "noam@example.co.il", phone: "058-4455667",
+  { ...base, id: "demo-8", relevant: "no", createdAt: h(120), updatedAt: h(96), name: "נועם פרץ", email: "noam@example.co.il", phone: "058-4455667",
     business: "מכון כושר אישי", budget: 3000, msgCount: 20, status: "ביטל פגישה", derivedStatus: "ביטל פגישה",
     source: "מאמן כושר אישי", reportStatus: "ready", cancelledAt: h(96), emailsSent: 4, emailsOpened: 3, emailsClicked: 2 },
-  { ...base, id: "demo-9", createdAt: h(200), updatedAt: h(140), name: "שירה גולן", email: "shira@example.co.il", phone: "050-7788990",
+  { ...base, id: "demo-9", relevant: "yes", createdAt: h(200), updatedAt: h(140), name: "שירה גולן", email: "shira@example.co.il", phone: "050-7788990",
     business: "משרד רואי חשבון", budget: 7000, msgCount: 24, status: "נסגר", derivedStatus: "קבע פגישה", manualStatus: "נסגר",
     source: "רואה חשבון לעצמאיים", reportStatus: "ready", meetingAt: h(150), emailsSent: 2, emailsOpened: 2, emailsClicked: 2 },
   // שיחות אנונימיות קצרות — כדי שיחסי ההמרה בדמו ייראו אמינים
@@ -106,15 +106,15 @@ export function demoDetail(id: string): FunnelDetail | null {
 // ==================== דמו: לקוחות ====================
 export interface DemoCustomer {
   id: string; name: string; business: string; email: string; phone: string;
-  stage: string; paid: boolean; amountPaid: number; monthlyFee: number; notes: string; createdAt: string;
+  stage: string; dealType: string; paid: boolean; amountPaid: number; monthlyFee: number; percentRate: number; notes: string; createdAt: string;
 }
 export const DEMO_CUSTOMERS: DemoCustomer[] = [
   { id: "dc-1", name: "שירה גולן", business: "משרד רואי חשבון", email: "shira@example.co.il", phone: "050-7788990",
-    stage: "קמפיין באוויר", paid: true, amountPaid: 14800, monthlyFee: 800, notes: "נסגרה אחרי פגישה ראשונה. הקמפיין עלה ב-01 לחודש.", createdAt: h(140) },
+    stage: "קמפיין באוויר", dealType: "setup_retainer", paid: true, amountPaid: 14800, monthlyFee: 800, percentRate: 0, notes: "נסגרה אחרי פגישה ראשונה. הקמפיין עלה ב-01 לחודש.", createdAt: h(140) },
   { id: "dc-2", name: "אורי ברק", business: "עורך דין מקרקעין", email: "uri@example.co.il", phone: "050-1234567",
-    stage: "הקמה", paid: true, amountPaid: 14800, monthlyFee: 800, notes: "דף הנחיתה באישור אצלו, ממתינים לחומרים.", createdAt: h(60) },
+    stage: "הקמה", dealType: "setup_retainer", paid: true, amountPaid: 14800, monthlyFee: 800, percentRate: 0, notes: "דף הנחיתה באישור אצלו, ממתינים לחומרים.", createdAt: h(60) },
   { id: "dc-3", name: "מיכל אדן", business: "מרפאת אסתטיקה", email: "michal@example.co.il", phone: "052-7654321",
-    stage: "אפיון", paid: false, amountPaid: 0, monthlyFee: 0, notes: "חתמה על הצעה, תשלום ביום ההקמה.", createdAt: h(20) },
+    stage: "אפיון", dealType: "percent", paid: false, amountPaid: 0, monthlyFee: 0, percentRate: 12, notes: "חתמה על הצעה, תשלום ביום ההקמה.", createdAt: h(20) },
 ];
 
 // ==================== דמו: דשבורד תוצאות ====================
@@ -159,4 +159,27 @@ export const DEMO_RESULTS: ResultsData = {
     { term: "עורך דין קבוצת רכישה", clicks: 64, leads: 5, cpl: 70 },
     { term: "בדיקת חוזה דירה", clicks: 51, leads: 4, cpl: 58 },
   ],
+};
+
+// ==================== דמו: אסקלציות ====================
+export interface DemoEscalation {
+  id: string; chatId: string; chatName: string; question: string;
+  status: string; answer: string; createdAt: string;
+}
+export const DEMO_ESCALATIONS: DemoEscalation[] = [
+  { id: "esc-1", chatId: "demo-3", chatName: "יוסי מזרחי · אינסטלציה", status: "open", answer: "", createdAt: h(20),
+    question: "הליד שאל אם אתם עובדים גם עם לקוחות פרטיים או רק עם עסקים, ומה קורה אם יש לו כבר קמפיין פעיל בגוגל שמנוהל על ידי פרילנסר" },
+  { id: "esc-2", chatId: "demo-5", chatName: "דנה לוי · קליניקת שיניים", status: "open", answer: "", createdAt: h(44),
+    question: "הליד שאל האם אפשר לפצל את תשלום ההקמה לשלושה תשלומים" },
+  { id: "esc-3", chatId: "demo-7", chatName: "אבי כהן · הובלות", status: "answered", createdAt: h(90),
+    answer: "כן, יש התחייבות לשלושה חודשים ראשונים בלבד, ואחרי זה אפשר להפסיק בהודעה של 30 יום מראש.",
+    question: "הליד שאל אם יש התחייבות לתקופה מינימלית בשירות החודשי" },
+];
+
+// ==================== דמו: מדדי עסק ====================
+export const DEMO_BUSINESS_METRICS = {
+  relevantPct: 85.7,  // 6 מתוך 7 שסומנו
+  closeRate: 37.5,    // 3 לקוחות מתוך 8 לידים עם פרטים
+  salesMonth: 31200,  // 2 הקמות + 2 ריטיינרים
+  roiMonth: 9.8,      // מול כ-3,200 ₪ הוצאת פרסום
 };

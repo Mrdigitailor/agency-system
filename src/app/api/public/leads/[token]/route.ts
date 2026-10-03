@@ -4,8 +4,8 @@
 // POST: יצירת לקוח. PATCH: עדכון סטטוס ליד או עדכון לקוח (kind=customer).
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { loadFunnel, loadFunnelDetail, loadResults, FUNNEL_STATUS_OPTIONS, CUSTOMER_STAGES } from "@/lib/prospect/funnel-data";
-import { DEMO_ROWS, DEMO_STATS, demoDetail, DEMO_CUSTOMERS, DEMO_RESULTS } from "@/lib/prospect/demo-data";
+import { loadFunnel, loadFunnelDetail, loadResults, loadBusinessMetrics, FUNNEL_STATUS_OPTIONS, CUSTOMER_STAGES } from "@/lib/prospect/funnel-data";
+import { DEMO_ROWS, DEMO_STATS, demoDetail, DEMO_CUSTOMERS, DEMO_RESULTS, DEMO_ESCALATIONS, DEMO_BUSINESS_METRICS } from "@/lib/prospect/demo-data";
 
 export const dynamic = "force-dynamic";
 
@@ -44,11 +44,30 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   }
 
   if (view === "results") {
-    if (portal.demo) return NextResponse.json(DEMO_RESULTS);
+    if (portal.demo) return NextResponse.json({ ...DEMO_RESULTS, business: DEMO_BUSINESS_METRICS });
+    const business = await loadBusinessMetrics(portal.id, portal.clientId, days);
     if (!portal.clientId) {
-      return NextResponse.json({ hasData: false, totals: { spend: 0, impressions: 0, clicks: 0, cpc: 0, leads: 0, cpl: 0, convRate: 0 }, daily: [], campaigns: [], terms: [] });
+      return NextResponse.json({ hasData: false, totals: { spend: 0, impressions: 0, clicks: 0, cpc: 0, leads: 0, cpl: 0, convRate: 0 }, daily: [], campaigns: [], terms: [], business });
     }
-    return NextResponse.json(await loadResults(portal.clientId, days));
+    return NextResponse.json({ ...(await loadResults(portal.clientId, days)), business });
+  }
+
+  if (view === "escalations") {
+    if (portal.demo) return NextResponse.json({ escalations: DEMO_ESCALATIONS });
+    const rows = await prisma.chatEscalation.findMany({ orderBy: [{ status: "desc" }, { createdAt: "desc" }], take: 100 });
+    // שם הליד מהשיחה — כדי שהמנהל ידע על מי מדובר
+    const chatIds = [...new Set(rows.map((r) => r.chatId))];
+    const chats = chatIds.length ? await prisma.prospectChat.findMany({ where: { id: { in: chatIds } } }) : [];
+    const nameByChat = new Map(chats.map((c) => {
+      try { const f = JSON.parse(c.fields || "{}"); return [c.id, [f.name, f.businessName || f.serviceField].filter(Boolean).join(" · ") || "אנונימי"]; }
+      catch { return [c.id, "אנונימי"]; }
+    }));
+    return NextResponse.json({
+      escalations: rows.map((r) => ({
+        id: r.id, chatId: r.chatId, chatName: nameByChat.get(r.chatId) ?? "אנונימי",
+        question: r.question, status: r.status, answer: r.answer, createdAt: r.createdAt,
+      })),
+    });
   }
 
   // view=leads
@@ -80,6 +99,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       portalId: portal.id, name,
       business: str(body.business), email: str(body.email), phone: str(body.phone, 50),
       stage, notes: str(body.notes, 2000),
+      dealType: ["one_time", "retainer", "setup_retainer", "percent"].includes(String(body.dealType)) ? String(body.dealType) : "setup_retainer",
       sourceChatId: str(body.sourceChatId, 40) || null,
     },
   });
@@ -103,9 +123,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ token:
       if (!CUSTOMER_STAGES.includes(body.stage)) return NextResponse.json({ error: "שלב לא מוכר" }, { status: 400 });
       data.stage = body.stage;
     }
+    if (typeof body.dealType === "string") {
+      if (!["one_time", "retainer", "setup_retainer", "percent"].includes(body.dealType)) return NextResponse.json({ error: "סוג עסקה לא מוכר" }, { status: 400 });
+      data.dealType = body.dealType;
+    }
     if (typeof body.paid === "boolean") data.paid = body.paid;
     if (body.amountPaid !== undefined) data.amountPaid = num(body.amountPaid);
     if (body.monthlyFee !== undefined) data.monthlyFee = num(body.monthlyFee);
+    if (body.percentRate !== undefined) data.percentRate = Math.min(num(body.percentRate), 100);
     if (typeof body.notes === "string") data.notes = body.notes.trim().slice(0, 2000);
     if (typeof body.name === "string" && body.name.trim()) data.name = str(body.name);
     if (typeof body.business === "string") data.business = str(body.business);
@@ -115,6 +140,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ token:
     if (portal.demo) return NextResponse.json({ ok: true });
     const customer = await prisma.portalCustomer.updateMany({ where: { id, portalId: portal.id }, data: data as never });
     if (customer.count === 0) return NextResponse.json({ error: "not found" }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  }
+
+  // סימון רלוונטיות של ליד
+  if (body.kind === "relevant") {
+    const relevant = typeof body.relevant === "string" && ["yes", "no", ""].includes(body.relevant) ? body.relevant : null;
+    if (relevant === null) return NextResponse.json({ error: "ערך לא תקין" }, { status: 400 });
+    if (portal.demo) return NextResponse.json({ ok: true, relevant });
+    const chat = await prisma.prospectChat.update({ where: { id }, data: { relevant } }).catch(() => null);
+    if (!chat) return NextResponse.json({ error: "not found" }, { status: 404 });
+    return NextResponse.json({ ok: true, relevant });
+  }
+
+  // תשובת מנהל לאסקלציה — נכנסת לידע של הסוכן בשיחות הבאות
+  if (body.kind === "escalation") {
+    const answer = typeof body.answer === "string" ? body.answer.trim().slice(0, 2000) : "";
+    if (!answer) return NextResponse.json({ error: "חסרה תשובה" }, { status: 400 });
+    if (portal.demo) return NextResponse.json({ ok: true });
+    const esc = await prisma.chatEscalation.update({
+      where: { id }, data: { answer, status: "answered", answeredAt: new Date() },
+    }).catch(() => null);
+    if (!esc) return NextResponse.json({ error: "not found" }, { status: 404 });
     return NextResponse.json({ ok: true });
   }
 

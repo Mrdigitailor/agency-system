@@ -54,6 +54,7 @@ const SYSTEM_PROMPT = `אתה העוזר הדיגיטלי של Mr.digitailor, ס
 - לעולם אל תציג הכנסה אפס או שברי עסקאות.
 - אם שואל על המחיר שלנו: ענה בכנות: הקמה 14,800 ₪ + 800 ₪ בחודש לניהול השוטף, מול 2,500 ₪ ומעלה לקמפיינר אנושי. אל תתחמק ואל תלחץ.
 - שאלות שלא קשורות לשיווק ולעסק: החזר בעדינות לנושא.
+- שאלה עניינית שאין לך עליה תשובה אמינה (ולא מופיעה בידע שנצבר): אל תמציא. קרא escalate_question, ענה שתבדוק ושסער יחזור עם תשובה, והמשך את השיחה.
 - עברית טבעית וחמה. משפטים קצרים. בלי מקפים ארוכים. התאם לשון פנייה לפי הכתיבה של המשתמש.
 - שמור כל פרט שנאסף מיד עם save_profile, גם באמצע שיחה.
 - שאלה אחת בכל הודעה. אל תחזור על שאלה שכבר נענתה (בדוק במצב הנוכחי).
@@ -98,6 +99,11 @@ const TOOLS: Anthropic.Tool[] = [
     name: "book_meeting",
     description: "קובע את הפגישה. דורש שם ואימייל שמורים ומועד (startIso מהכלי get_slots).",
     input_schema: { type: "object", properties: { startIso: { type: "string" } }, required: ["startIso"] },
+  },
+  {
+    name: "escalate_question",
+    description: "קרא כשנשאלת שאלה עניינית שאין לך עליה תשובה אמינה (על השירות, המחיר, תנאים, או כל דבר שלא מכוסה בידע שלך). השאלה תגיע למנהל, התשובה שלו תילמד לשיחות הבאות. אחרי הקריאה ענה למשתמש בכנות שתבדוק ותחזור אליו, והמשך את השיחה.",
+    input_schema: { type: "object", properties: { question: { type: "string", description: "השאלה כפי שנשאלה, בניסוח ברור" } }, required: ["question"] },
   },
 ];
 
@@ -235,6 +241,15 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
     return { result: JSON.stringify(r), fields: f };
   }
 
+  if (name === "escalate_question") {
+    const question = String(input.question ?? "").trim().slice(0, 500);
+    if (question) {
+      await prisma.chatEscalation.create({ data: { chatId, question } }).catch(() => {});
+      console.log(`[ChatAgent] escalation logged: ${question.slice(0, 80)}`);
+    }
+    return { result: JSON.stringify({ noted: true, guidance: "ענה בכנות שאין לך תשובה מדויקת כרגע, שהשאלה הועברה לסער והוא יחזור עם תשובה, והמשך את השיחה מאיפה שהייתם." }), fields: f };
+  }
+
   return { result: JSON.stringify({ error: "unknown tool" }), fields: f };
 }
 
@@ -301,7 +316,15 @@ export async function runChatTurn(chatId: string, userMessage: string): Promise<
   const slotsLine = fields.slots?.length
     ? `\nהמועדים שהוצגו למשתמש (תווית ← startIso עבור book_meeting):\n${fields.slots.map((s) => `"${s.label}" ← ${s.startIso}`).join("\n")}`
     : "";
-  const system = `${SYSTEM_PROMPT}\n\n## מצב נוכחי\nפרטים שכבר נאספו: ${known || "עדיין כלום"}${reportLine}${slotsLine}`;
+  // ידע נלמד: תשובות שהמנהל נתן לשאלות שהסוכן לא ידע לענות עליהן בעבר
+  const learned = await prisma.chatEscalation.findMany({
+    where: { status: "answered", answer: { not: "" } },
+    orderBy: { answeredAt: "desc" }, take: 20,
+  }).catch(() => []);
+  const learnedBlock = learned.length
+    ? `\n\n## ידע שנצבר מתשובות המנהל (השתמש בו כשנשאלת שאלה דומה)\n${learned.map((e) => `ש: ${e.question}\nת: ${e.answer}`).join("\n---\n")}`
+    : "";
+  const system = `${SYSTEM_PROMPT}${learnedBlock}\n\n## מצב נוכחי\nפרטים שכבר נאספו: ${known || "עדיין כלום"}${reportLine}${slotsLine}`;
 
   const msgs: Anthropic.MessageParam[] = [
     { role: "assistant", content: OPENING_MESSAGE },

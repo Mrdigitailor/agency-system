@@ -1344,9 +1344,12 @@ model PortalCustomer {
   email        String   @default("")
   phone        String   @default("")
   stage        String   @default("חדש") // חדש | אפיון | הקמה | קמפיין באוויר | פעיל | הסתיים
+  // מבנה העסקה — כדי שיהיה חד משמעי מה כל סכום אומר
+  dealType     String   @default("setup_retainer") // one_time | retainer | setup_retainer | percent
   paid         Boolean  @default(false)
-  amountPaid   Float    @default(0)
-  monthlyFee   Float    @default(0)
+  amountPaid   Float    @default(0) // עסקה מלאה / הקמה חד פעמית (לפי הסוג)
+  monthlyFee   Float    @default(0) // ריטיינר חודשי
+  percentRate  Float    @default(0) // אחוז מהעסקאות, במסלול אחוזים
   notes        String   @default("")
   sourceChatId String?  // הליד במשפך שממנו נוצר
   createdAt    DateTime @default(now())
@@ -1354,6 +1357,22 @@ model PortalCustomer {
 
   @@index([portalId])
   @@map("portal_customers")
+}
+
+// אסקלציה — שאלה שסוכן הצ'אט לא ידע לענות עליה. המנהל מזין תשובה,
+// והתשובה נכנסת לידע של הסוכן בשיחות הבאות (לולאת למידה).
+model ChatEscalation {
+  id         String    @id @default(cuid())
+  chatId     String    // השיחה שבה עלתה השאלה
+  question   String    // השאלה כפי שהסוכן ניסח אותה
+  status     String    @default("open") // open | answered
+  answer     String    @default("")
+  answeredAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([status])
+  @@map("chat_escalations")
 }
 
 // תיעוד מייל שנשלח במשפך — כולל אירועי פתיחה/הקלקה שמגיעים מה-webhook של Resend
@@ -1384,6 +1403,7 @@ model ProspectChat {
   reportId  String?                     // דוח הפוטנציאל שנוצר בשיחה
   source    String   @default("{}")     // JSON: מקור הגעה — utm_*, gclid, referrer
   funnelStatus String @default("")      // סטטוס ידני שסער מעדכן בממשק המשפך
+  relevant  String   @default("")       // סימון ידני: "yes" | "no" | "" — לאחוז לידים רלוונטיים
   lastIp    String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
