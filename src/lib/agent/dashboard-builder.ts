@@ -7,7 +7,20 @@ import { prisma } from "@/lib/db/prisma";
 import { classifyBusinessType, type BusinessType } from "./business-knowledge";
 import { normalizeName } from "@/lib/reports/group-by-product";
 import { shiftYmd, todayIL } from "@/lib/utils/ildate";
-import { campaignSectionSpecs, specToRow, type WidgetSpec } from "@/lib/dashboard/section-template";
+
+/** הגדרת ווידג'ט לבנייה (שדות DashboardWidget הרלוונטיים) */
+interface WidgetSpec {
+  platform: string;
+  metrics: string[];
+  displayType: string;
+  dimension: string;
+  size: string;
+  title: string;
+  textBody?: string;
+  compare?: boolean;
+  /** סינון לפי שם קמפיין — לסקשנים פר-מוצר */
+  campaignFilter?: string;
+}
 
 /** אילו פלטפורמות פעילות ללקוח (יש דאטה ב-30 הימים האחרונים) */
 async function getActivePlatforms(clientId: string): Promise<Array<"meta" | "google_ads" | "tiktok">> {
@@ -212,9 +225,24 @@ function buildDeepRecipe(type: BusinessType, clientName: string, platforms: stri
     specs.push({ platform: "meta", metrics: ["impressions", "clicks", "ctr"], displayType: "table", dimension: "campaign", size: "full", title: "ביצועים לפי קמפיין" });
   }
 
-  // ===== סקשן מפורט לכל מוצר (Meta) — אותה תבנית של "הוסף סקשן קמפיין" =====
+  // ===== סקשן מפורט לכל מוצר (Meta) =====
+  const productKpi = isEcom
+    ? ["spend", "purchaseValue", "roas", "conversions", "cpa", "ctr", "clicks"]
+    : ["cpc", "ctr", "clicks", "impressions", "spend", "cpl", "leads"];
+  const creativeCols = isEcom ? ["spend", "conversions", "cpa"] : ["spend", "leads", "cpl"];
   if (hasMeta) {
-    for (const product of products) specs.push(...campaignSectionSpecs(product, product, isEcom));
+    for (const product of products) {
+      specs.push({ platform: "all", metrics: [], displayType: "heading", dimension: "none", size: "full", title: product });
+      specs.push({ platform: "meta", metrics: productKpi, displayType: "kpi", dimension: "none", size: "full", title: "", compare: true, campaignFilter: product });
+      specs.push({ platform: "meta", metrics: [resultMetric], displayType: "pie", dimension: "age", size: "half", title: `${resultWord} לפי גיל`, campaignFilter: product });
+      specs.push({ platform: "meta", metrics: [resultMetric], displayType: "pie", dimension: "device", size: "half", title: `${resultWord} לפי מכשיר`, campaignFilter: product });
+      // שני גרפים נפרדים (סקאלות שונות): מגמת התוצאה + מגמת העלות-לתוצאה
+      specs.push({ platform: "meta", metrics: [resultMetric], displayType: "line", dimension: "date", size: "half", title: `${resultWord} לאורך זמן`, campaignFilter: product });
+      specs.push({ platform: "meta", metrics: isEcom ? ["cpa"] : ["cpl"], displayType: "line", dimension: "date", size: "half", title: `עלות ל${isEcom ? "המרה" : "ליד"} לאורך זמן`, campaignFilter: product });
+      specs.push({ platform: "meta", metrics: ["impressions", "clicks", "ctr"], displayType: "table", dimension: "campaign", size: "full", title: "קמפיינים", campaignFilter: product });
+      specs.push({ platform: "meta", metrics: ["impressions", "clicks", "ctr"], displayType: "table", dimension: "adset", size: "full", title: "קהלים", campaignFilter: product });
+      specs.push({ platform: "meta", metrics: creativeCols, displayType: "table", dimension: "ad", size: "full", title: "מודעות", campaignFilter: product });
+    }
   }
 
   // ===== סקשן Google — סיכום =====
@@ -254,7 +282,21 @@ export async function buildSmartDashboard(clientId: string, opts: { variant?: "s
   });
 
   await prisma.dashboardWidget.createMany({
-    data: specs.map((s, i) => specToRow(s, clientId, report.id, i)),
+    data: specs.map((s, i) => ({
+      clientId,
+      reportId: report.id,
+      sortOrder: i,
+      platform: s.platform,
+      dataLevel: "campaign",
+      metrics: JSON.stringify(s.metrics),
+      dimension: s.dimension,
+      filters: s.campaignFilter ? JSON.stringify([{ field: "campaign", operator: "contains", value: s.campaignFilter }]) : "[]",
+      displayType: s.displayType,
+      size: s.size,
+      title: s.title,
+      textBody: s.textBody ?? "",
+      compare: s.compare ?? false,
+    })),
   });
 
   return { report, widgetCount: specs.length, businessType: type, platforms, products, variant };
