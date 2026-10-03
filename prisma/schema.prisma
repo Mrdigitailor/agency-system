@@ -1328,9 +1328,32 @@ model FunnelPortal {
   id        String   @id @default(cuid())
   token     String   @unique @default(cuid()) // הקישור: /leads/<token>
   name      String   // שם הלקוח/העסק שמוצג בכותרת
+  clientId  String?  // חיבור ללקוח במערכת — ממנו נמשכים נתוני הקמפיינים לדשבורד התוצאות
   createdAt DateTime @default(now())
 
   @@map("funnel_portals")
+}
+
+// לקוח של בעל הפורטל — מי שנסגר מהמשפך ועכשיו מנהלים את התהליך שלו:
+// שלב, תשלום, הערות. נוצר ידנית או בלחיצה "הפוך ללקוח" מתוך ליד.
+model PortalCustomer {
+  id           String   @id @default(cuid())
+  portalId     String
+  name         String
+  business     String   @default("")
+  email        String   @default("")
+  phone        String   @default("")
+  stage        String   @default("חדש") // חדש | אפיון | הקמה | קמפיין באוויר | פעיל | הסתיים
+  paid         Boolean  @default(false)
+  amountPaid   Float    @default(0)
+  monthlyFee   Float    @default(0)
+  notes        String   @default("")
+  sourceChatId String?  // הליד במשפך שממנו נוצר
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([portalId])
+  @@map("portal_customers")
 }
 
 // תיעוד מייל שנשלח במשפך — כולל אירועי פתיחה/הקלקה שמגיעים מה-webhook של Resend

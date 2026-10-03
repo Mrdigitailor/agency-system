@@ -5,6 +5,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Plus, Pencil, Trash2, GripVertical, Loader2, Link2, Copy, ExternalLink, ArrowRight, FileText, Share2, ChevronLeft, Sparkles, Palette } from "lucide-react";
+import AddCampaignSection from "@/components/ui/AddCampaignSection";
 import { WidgetRenderer, type WidgetDTO } from "@/components/dashboard/DashboardWidgets";
 import { getMetricsForPlatform, PLATFORM_LABELS, DISPLAY_LABELS, DIMENSION_LABELS, validDimensions, type Platform, type DisplayType, type Dimension } from "@/lib/dashboard/metrics";
 
@@ -397,7 +398,10 @@ function ReportEditor({ clientId, reportId, reportName, onBack }: { clientId: st
           <div className="rounded-lg border border-brand-border bg-brand-light shadow-sm">
             <div className="flex items-center justify-between border-b border-brand-border px-4 py-3">
               <h3 className="text-sm font-semibold text-brand-dark">מאפייני נתונים</h3>
-              <button onClick={selectNew} className="flex items-center gap-1 rounded-lg bg-brand-gold px-2.5 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80"><Plus className="h-3.5 w-3.5" />חדש</button>
+              <div className="flex items-center gap-2">
+                <AddCampaignSection clientId={clientId} reportId={reportId} onAdded={async () => { await loadWidgets(); await loadPreview(since, until); }} />
+                <button onClick={selectNew} className="flex items-center gap-1 rounded-lg bg-brand-gold px-2.5 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand-gold/80"><Plus className="h-3.5 w-3.5" />חדש</button>
+              </div>
             </div>
             <div className="max-h-[70vh] overflow-y-auto p-4">
               {selectedId === null ? (

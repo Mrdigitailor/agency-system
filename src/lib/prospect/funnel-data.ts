@@ -166,3 +166,69 @@ export function buildDetail(chat: ProspectChat, report: PotentialReport | null, 
     lead: lead ? { id: lead.id, stage: lead.stage, status: lead.status, nextActionNote: lead.nextActionNote, notes: lead.notes } : null,
   };
 }
+
+// ==================== לקוחות הפורטל ====================
+export const CUSTOMER_STAGES = ["חדש", "אפיון", "הקמה", "קמפיין באוויר", "פעיל", "הסתיים"];
+
+// ==================== דשבורד תוצאות (קידום ממומן) ====================
+export interface ResultsData {
+  hasData: boolean;
+  totals: { spend: number; impressions: number; clicks: number; cpc: number; leads: number; cpl: number; convRate: number };
+  daily: Array<{ date: string; spend: number; leads: number }>;
+  campaigns: Array<{ name: string; spend: number; clicks: number; leads: number; cpl: number }>;
+  terms: Array<{ term: string; clicks: number; leads: number; cpl: number }>;
+}
+
+/** אגרגציית תוצאות הקמפיינים של לקוח מחובר, מתוך נתוני הסנכרון היומי של גוגל אדס */
+export async function loadResults(clientId: string, days: number): Promise<ResultsData> {
+  const since = new Date(Date.now() - days * 24 * 3600_000).toISOString().slice(0, 10);
+  const rows = await prisma.googleAdsInsightDaily.findMany({
+    where: { clientId, date: { gte: since } },
+    orderBy: { date: "asc" },
+  });
+  if (rows.length === 0) {
+    return { hasData: false, totals: { spend: 0, impressions: 0, clicks: 0, cpc: 0, leads: 0, cpl: 0, convRate: 0 }, daily: [], campaigns: [], terms: [] };
+  }
+
+  const spend = rows.reduce((s, r) => s + r.spend, 0);
+  const clicks = rows.reduce((s, r) => s + r.clicks, 0);
+  const impressions = rows.reduce((s, r) => s + r.impressions, 0);
+  const leads = rows.reduce((s, r) => s + r.conversions, 0);
+
+  const byDate = new Map<string, { spend: number; leads: number }>();
+  for (const r of rows) {
+    const d = byDate.get(r.date) ?? { spend: 0, leads: 0 };
+    d.spend += r.spend; d.leads += r.conversions;
+    byDate.set(r.date, d);
+  }
+  const byCampaign = new Map<string, { spend: number; clicks: number; leads: number }>();
+  for (const r of rows) {
+    const name = r.campaignName || r.campaignId;
+    const c = byCampaign.get(name) ?? { spend: 0, clicks: 0, leads: 0 };
+    c.spend += r.spend; c.clicks += r.clicks; c.leads += r.conversions;
+    byCampaign.set(name, c);
+  }
+
+  const termRows = await prisma.googleSearchTermDaily.findMany({ where: { clientId, date: { gte: since } } });
+  const byTerm = new Map<string, { spend: number; clicks: number; leads: number }>();
+  for (const r of termRows) {
+    const t = byTerm.get(r.searchTerm) ?? { spend: 0, clicks: 0, leads: 0 };
+    t.spend += r.spend; t.clicks += r.clicks; t.leads += r.conversions;
+    byTerm.set(r.searchTerm, t);
+  }
+
+  return {
+    hasData: true,
+    totals: {
+      spend, impressions, clicks,
+      cpc: clicks > 0 ? spend / clicks : 0,
+      leads, cpl: leads > 0 ? spend / leads : 0,
+      convRate: clicks > 0 ? (leads / clicks) * 100 : 0,
+    },
+    daily: [...byDate.entries()].map(([date, v]) => ({ date, spend: Math.round(v.spend), leads: Math.round(v.leads * 10) / 10 })),
+    campaigns: [...byCampaign.entries()].map(([name, v]) => ({ name, spend: Math.round(v.spend), clicks: v.clicks, leads: Math.round(v.leads * 10) / 10, cpl: v.leads > 0 ? Math.round(v.spend / v.leads) : 0 }))
+      .sort((a, b) => b.spend - a.spend).slice(0, 8),
+    terms: [...byTerm.entries()].map(([term, v]) => ({ term, clicks: v.clicks, leads: Math.round(v.leads * 10) / 10, cpl: v.leads > 0 ? Math.round(v.spend / v.leads) : 0 }))
+      .sort((a, b) => b.leads - a.leads || b.clicks - a.clicks).slice(0, 8),
+  };
+}
