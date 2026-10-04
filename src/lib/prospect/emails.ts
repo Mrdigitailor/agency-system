@@ -24,46 +24,46 @@ const parseSent = (raw: string): EmailKey[] => { try { return JSON.parse(raw || 
 // פונט המותג Ploni נטען איפה שנתמך (Apple Mail, iPhone); ג'ימייל מציג חלופה.
 const FONT = `'Ploni',Arial,'Segoe UI',sans-serif`;
 
+// שתי העמודות בנויות כבלוקים נוזליים: במסך רחב הן יושבות זו לצד זו,
+// ובמובייל הן נערמות אוטומטית זו מתחת לזו (בלי media queries, שלא כל לקוח מייל מכבד).
+// הלוגו עם רקע לבן אפוי בקובץ — נבלע ברקע הבהיר, וקריא במצב כהה.
 const SIGNATURE = `
-  <div dir="rtl" style="margin-top:34px;padding-top:26px;border-top:1px solid #e8e6e1;direction:rtl;font-family:${FONT}">
-    <table dir="rtl" width="100%" style="direction:rtl;border-collapse:collapse;width:100%"><tr>
-      <td dir="rtl" style="vertical-align:top;text-align:right;direction:rtl;width:50%;padding-left:16px">
-        <table dir="rtl" style="direction:rtl;border-collapse:collapse"><tr>
-          <td style="vertical-align:middle;padding-left:12px">
-            <img src="${APP_BASE}/images/sig-saar-photo.png" alt="סער אדרי" width="72" height="72" style="width:72px;height:72px;border-radius:50%;display:block">
-          </td>
-          <td dir="rtl" style="vertical-align:middle;text-align:right;direction:rtl">
-            <div style="color:#8a6a15;font-size:16px;font-weight:600;font-family:${FONT}">סער אדרי</div>
-            <div style="color:#666666;font-size:13px;margin-top:1px;font-family:${FONT}">Founder &amp; CEO</div>
-          </td>
-        </tr></table>
-        <table dir="rtl" style="direction:rtl;border-collapse:collapse;margin-top:12px"><tr>
-          <td style="vertical-align:middle;padding-left:8px"><img src="${APP_BASE}/images/social/icon-phone.png" alt="" width="16" height="16" style="width:16px;height:16px;display:block"></td>
-          <td dir="rtl" style="vertical-align:middle;text-align:right"><a href="tel:+972547974206" style="color:#333333;font-size:13.5px;text-decoration:none;font-family:${FONT}">054-7974206</a></td>
-        </tr><tr>
-          <td style="vertical-align:middle;padding-left:8px;padding-top:6px"><img src="${APP_BASE}/images/social/icon-mail.png" alt="" width="16" height="16" style="width:16px;height:16px;display:block"></td>
-          <td dir="rtl" style="vertical-align:middle;text-align:right;padding-top:6px"><a href="mailto:saar@digitailors.co.il" style="color:#333333;font-size:13.5px;text-decoration:none;font-family:${FONT}">saar@digitailors.co.il</a></td>
-        </tr><tr>
-          <td style="vertical-align:middle;padding-left:8px;padding-top:6px"><img src="${APP_BASE}/images/social/icon-link.png" alt="" width="16" height="16" style="width:16px;height:16px;display:block"></td>
-          <td dir="rtl" style="vertical-align:middle;text-align:right;padding-top:6px"><a href="https://www.mr-digitailor.co.il/" style="color:#333333;font-size:13.5px;text-decoration:none;font-family:${FONT}">www.mr-digitailor.co.il</a></td>
-        </tr></table>
-      </td>
-      <td dir="rtl" style="vertical-align:top;text-align:right;direction:rtl;width:50%;padding-right:18px;border-right:1px solid #e8e6e1">
-        <a href="https://www.mr-digitailor.co.il/" style="text-decoration:none"><img src="${APP_BASE}/images/logo-light.png" alt="Mr.digitailor" height="26" style="height:26px;border:0"></a>
-        <div dir="rtl" style="color:#666666;font-size:12.5px;line-height:1.65;margin-top:10px;text-align:right;font-family:${FONT}">ריכזנו 30 שנות ניסיון מצטבר של המוחות הטובים בעולמות השיווק לכדי מטרה אחת - לגרום לעסקים להכניס יותר לקוחות. מה עם העסק שלכם?</div>
-        <div dir="rtl" style="margin-top:12px;text-align:right">
-          <a href="https://www.instagram.com/mr.digitailor/" style="text-decoration:none;display:inline-block;margin-left:7px"><img src="${APP_BASE}/images/social/instagram-gray.png" alt="אינסטגרם" width="30" height="30" style="width:30px;height:30px;border:0"></a>
-          <a href="https://www.linkedin.com/company/mr-digitailor/" style="text-decoration:none;display:inline-block;margin-left:7px"><img src="${APP_BASE}/images/social/linkedin-gray.png" alt="לינקדאין" width="30" height="30" style="width:30px;height:30px;border:0"></a>
-          <a href="https://www.facebook.com/mrdigitailor" style="text-decoration:none;display:inline-block;margin-left:7px"><img src="${APP_BASE}/images/social/facebook-gray.png" alt="פייסבוק" width="30" height="30" style="width:30px;height:30px;border:0"></a>
-          <a href="https://www.youtube.com/channel/UCCl4jpjricf061JqCeSkfQg" style="text-decoration:none;display:inline-block"><img src="${APP_BASE}/images/social/youtube-gray.png" alt="יוטיוב" width="30" height="30" style="width:30px;height:30px;border:0"></a>
-        </div>
-      </td>
-    </tr></table>
-    <div style="margin-top:22px;padding-top:14px;border-top:1px solid #efede8;text-align:center;color:#9a958c;font-size:10.5px;letter-spacing:3px;font-family:${FONT}">BETTER BUSINESSES &nbsp;·&nbsp; BRIGHTER TOMORROW</div>
+  <div dir="rtl" style="margin-top:34px;padding-top:26px;border-top:1px solid #e8e6e1;direction:rtl;text-align:right;font-family:${FONT};font-size:0">
+    <div dir="rtl" style="display:inline-block;vertical-align:top;width:100%;max-width:265px;direction:rtl;text-align:right;font-size:14px;padding-bottom:22px">
+      <table dir="rtl" style="direction:rtl;border-collapse:collapse"><tr>
+        <td style="vertical-align:middle;padding-left:12px">
+          <img src="${APP_BASE}/images/sig-saar-photo.png" alt="סער אדרי" width="72" height="72" style="width:72px;height:72px;border-radius:50%;display:block">
+        </td>
+        <td dir="rtl" style="vertical-align:middle;text-align:right;direction:rtl">
+          <div style="color:#8a6a15;font-size:16px;font-weight:600;font-family:${FONT}">סער אדרי</div>
+          <div style="color:#666666;font-size:13px;margin-top:1px;font-family:${FONT}">Founder &amp; CEO</div>
+        </td>
+      </tr></table>
+      <table dir="rtl" style="direction:rtl;border-collapse:collapse;margin-top:12px"><tr>
+        <td style="vertical-align:middle;padding-left:8px"><img src="${APP_BASE}/images/social/icon-phone.png" alt="" width="16" height="16" style="width:16px;height:16px;display:block"></td>
+        <td dir="rtl" style="vertical-align:middle;text-align:right"><a href="tel:+972547974206" style="color:#333333;font-size:13.5px;text-decoration:none;font-family:${FONT}">054-7974206</a></td>
+      </tr><tr>
+        <td style="vertical-align:middle;padding-left:8px;padding-top:6px"><img src="${APP_BASE}/images/social/icon-mail.png" alt="" width="16" height="16" style="width:16px;height:16px;display:block"></td>
+        <td dir="rtl" style="vertical-align:middle;text-align:right;padding-top:6px"><a href="mailto:saar@digitailors.co.il" style="color:#333333;font-size:13.5px;text-decoration:none;font-family:${FONT}">saar@digitailors.co.il</a></td>
+      </tr><tr>
+        <td style="vertical-align:middle;padding-left:8px;padding-top:6px"><img src="${APP_BASE}/images/social/icon-link.png" alt="" width="16" height="16" style="width:16px;height:16px;display:block"></td>
+        <td dir="rtl" style="vertical-align:middle;text-align:right;padding-top:6px"><a href="https://www.mr-digitailor.co.il/" style="color:#333333;font-size:13.5px;text-decoration:none;font-family:${FONT}">www.mr-digitailor.co.il</a></td>
+      </tr></table>
+    </div><div dir="rtl" style="display:inline-block;vertical-align:top;width:100%;max-width:265px;direction:rtl;text-align:right;font-size:14px;padding-bottom:10px">
+      <a href="https://www.mr-digitailor.co.il/" style="text-decoration:none"><img src="${APP_BASE}/images/logo-sig.png" alt="Mr.digitailor" width="148" style="width:148px;height:auto;border:0;display:block"></a>
+      <div dir="rtl" style="color:#666666;font-size:12.5px;line-height:1.65;margin-top:8px;text-align:right;font-family:${FONT}">ריכזנו 30 שנות ניסיון מצטבר של המוחות הטובים בעולמות השיווק לכדי מטרה אחת - לגרום לעסקים להכניס יותר לקוחות. מה עם העסק שלכם?</div>
+      <div dir="rtl" style="margin-top:12px;text-align:right">
+        <a href="https://www.instagram.com/mr.digitailor/" style="text-decoration:none;display:inline-block;margin-left:7px"><img src="${APP_BASE}/images/social/instagram-gray.png" alt="אינסטגרם" width="30" height="30" style="width:30px;height:30px;border:0"></a>
+        <a href="https://www.linkedin.com/company/mr-digitailor/" style="text-decoration:none;display:inline-block;margin-left:7px"><img src="${APP_BASE}/images/social/linkedin-gray.png" alt="לינקדאין" width="30" height="30" style="width:30px;height:30px;border:0"></a>
+        <a href="https://www.facebook.com/mrdigitailor" style="text-decoration:none;display:inline-block;margin-left:7px"><img src="${APP_BASE}/images/social/facebook-gray.png" alt="פייסבוק" width="30" height="30" style="width:30px;height:30px;border:0"></a>
+        <a href="https://www.youtube.com/channel/UCCl4jpjricf061JqCeSkfQg" style="text-decoration:none;display:inline-block"><img src="${APP_BASE}/images/social/youtube-gray.png" alt="יוטיוב" width="30" height="30" style="width:30px;height:30px;border:0"></a>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid #efede8;text-align:center;color:#9a958c;font-size:10.5px;letter-spacing:3px;font-family:${FONT}">BETTER BUSINESSES &nbsp;·&nbsp; BRIGHTER TOMORROW</div>
   </div>`;
 
 function shell(inner: string): string {
-  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8">
+  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 @font-face{font-family:'Ploni';src:url('${APP_BASE}/fonts/ploni-light-aaa.woff') format('woff');font-weight:300}
 @font-face{font-family:'Ploni';src:url('${APP_BASE}/fonts/ploni-regular-aaa.woff') format('woff');font-weight:400}
