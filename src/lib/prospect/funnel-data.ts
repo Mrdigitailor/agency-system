@@ -199,10 +199,9 @@ export interface ResultsData {
 }
 
 /** אגרגציית תוצאות הקמפיינים של לקוח מחובר, מתוך נתוני הסנכרון היומי של גוגל אדס */
-export async function loadResults(clientId: string, days: number): Promise<ResultsData> {
-  const since = new Date(Date.now() - days * 24 * 3600_000).toISOString().slice(0, 10);
+export async function loadResults(clientId: string, from: string, to: string): Promise<ResultsData> {
   const rows = await prisma.googleAdsInsightDaily.findMany({
-    where: { clientId, date: { gte: since } },
+    where: { clientId, date: { gte: from, lte: to } },
     orderBy: { date: "asc" },
   });
   if (rows.length === 0) {
@@ -228,7 +227,7 @@ export async function loadResults(clientId: string, days: number): Promise<Resul
     byCampaign.set(name, c);
   }
 
-  const termRows = await prisma.googleSearchTermDaily.findMany({ where: { clientId, date: { gte: since } } });
+  const termRows = await prisma.googleSearchTermDaily.findMany({ where: { clientId, date: { gte: from, lte: to } } });
   const byTerm = new Map<string, { spend: number; clicks: number; leads: number }>();
   for (const r of termRows) {
     const t = byTerm.get(r.searchTerm) ?? { spend: 0, clicks: 0, leads: 0 };
@@ -256,40 +255,47 @@ export async function loadResults(clientId: string, days: number): Promise<Resul
 export interface BusinessMetrics {
   relevantPct: number | null;  // אחוז רלוונטיים מתוך מי שסומן
   closeRate: number | null;    // לקוחות שנסגרו ביחס ללידים עם פרטי קשר
-  salesMonth: number;          // שווי מכירות החודש הקלנדרי (הקמות + ריטיינרים של לקוחות ששילמו)
-  roiMonth: number | null;     // החזר על השקעה החודש: מכירות חלקי הוצאת פרסום
+  sales: number;               // שווי מכירות בתקופה (הקמות + ריטיינרים של לקוחות ששילמו)
+  roi: number | null;          // החזר על השקעה בתקופה: מכירות חלקי הוצאת פרסום
 }
 
-/** מדדי עסק: רלוונטיות, סגירה, מכירות החודש ו-ROI — מחושבים מהנתונים החיים */
-export async function loadBusinessMetrics(portalId: string, clientId: string | null, days: number): Promise<BusinessMetrics> {
-  const since = days > 0 ? new Date(Date.now() - days * 24 * 3600_000) : undefined;
-  const monthStart = new Date();
-  monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+/** חצות של יום נתון בשעון ישראל, כרגע UTC אמיתי (מטפל בשעון קיץ/חורף) */
+function ilMidnight(ymd: string): Date {
+  const utc = new Date(`${ymd}T00:00:00Z`);
+  const il = new Date(utc.toLocaleString("en-US", { timeZone: "Asia/Jerusalem" }));
+  const ref = new Date(utc.toLocaleString("en-US", { timeZone: "UTC" }));
+  return new Date(utc.getTime() - (il.getTime() - ref.getTime()));
+}
 
-  const [relevantYes, relevantNo, withContactChats, customers, monthCustomers] = await Promise.all([
-    prisma.prospectChat.count({ where: { relevant: "yes", ...(since ? { createdAt: { gte: since } } : {}) } }),
-    prisma.prospectChat.count({ where: { relevant: "no", ...(since ? { createdAt: { gte: since } } : {}) } }),
-    prisma.prospectChat.count({ where: { fields: { contains: "@" }, ...(since ? { createdAt: { gte: since } } : {}) } }),
-    prisma.portalCustomer.count({ where: { portalId, ...(since ? { createdAt: { gte: since } } : {}) } }),
-    prisma.portalCustomer.findMany({ where: { portalId, paid: true, createdAt: { gte: monthStart } } }),
+/** מדדי עסק לטווח התאריכים שנבחר (כולל שני הקצוות, בשעון ישראל) */
+export async function loadBusinessMetrics(portalId: string, clientId: string | null, from: string, to: string): Promise<BusinessMetrics> {
+  const start = ilMidnight(from);
+  const end = new Date(ilMidnight(to).getTime() + 24 * 3600_000);
+  const inRange = { createdAt: { gte: start, lt: end } };
+
+  const [relevantYes, relevantNo, withContactChats, customers, paidCustomers] = await Promise.all([
+    prisma.prospectChat.count({ where: { relevant: "yes", ...inRange } }),
+    prisma.prospectChat.count({ where: { relevant: "no", ...inRange } }),
+    prisma.prospectChat.count({ where: { fields: { contains: "@" }, ...inRange } }),
+    prisma.portalCustomer.count({ where: { portalId, ...inRange } }),
+    prisma.portalCustomer.findMany({ where: { portalId, paid: true, ...inRange } }),
   ]);
 
-  const salesMonth = monthCustomers.reduce((s, c) => s + c.amountPaid + c.monthlyFee, 0);
+  const sales = paidCustomers.reduce((s, c) => s + c.amountPaid + c.monthlyFee, 0);
 
-  let roiMonth: number | null = null;
-  if (clientId && salesMonth > 0) {
-    const monthYmd = monthStart.toISOString().slice(0, 10);
+  let roi: number | null = null;
+  if (clientId && sales > 0) {
     const spendAgg = await prisma.googleAdsInsightDaily.aggregate({
-      where: { clientId, date: { gte: monthYmd } }, _sum: { spend: true },
+      where: { clientId, date: { gte: from, lte: to } }, _sum: { spend: true },
     });
-    const spendMonth = spendAgg._sum.spend ?? 0;
-    if (spendMonth > 0) roiMonth = salesMonth / spendMonth;
+    const spend = spendAgg._sum.spend ?? 0;
+    if (spend > 0) roi = sales / spend;
   }
 
   return {
     relevantPct: relevantYes + relevantNo > 0 ? (relevantYes / (relevantYes + relevantNo)) * 100 : null,
     closeRate: withContactChats > 0 ? (customers / withContactChats) * 100 : null,
-    salesMonth,
-    roiMonth,
+    sales,
+    roi,
   };
 }

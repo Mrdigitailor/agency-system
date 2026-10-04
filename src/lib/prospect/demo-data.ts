@@ -120,46 +120,64 @@ export const DEMO_CUSTOMERS: DemoCustomer[] = [
 // ==================== דמו: דשבורד תוצאות ====================
 import type { ResultsData } from "./funnel-data";
 
-function demoDaily(): ResultsData["daily"] {
+/** סדרה יומית דטרמיניסטית לפי תאריך — אותו יום תמיד נותן אותם מספרים, בכל טווח שנבחר */
+function demoDaily(from: string, to: string): ResultsData["daily"] {
   const out: ResultsData["daily"] = [];
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 24 * 3600_000);
-    const wave = 1 + 0.25 * Math.sin(i / 2.1);
+  const start = new Date(`${from}T00:00:00Z`).getTime();
+  const end = new Date(`${to}T00:00:00Z`).getTime();
+  for (let t = start; t <= end && out.length < 366; t += 24 * 3600_000) {
+    const n = Math.floor(t / (24 * 3600_000));
+    const wave = 1 + 0.25 * Math.sin(n / 2.1);
     out.push({
-      date: d.toISOString().slice(0, 10),
-      spend: Math.round(215 * wave + (i % 3) * 14),
-      leads: Math.round((3.6 * wave + (i % 2)) * 10) / 10,
+      date: new Date(t).toISOString().slice(0, 10),
+      spend: Math.round(215 * wave + (n % 3) * 14),
+      leads: Math.round((3.6 * wave + (n % 2)) * 10) / 10,
     });
   }
   return out;
 }
-const DEMO_DAILY = demoDaily();
-const demoSpend = DEMO_DAILY.reduce((s, d) => s + d.spend, 0);
-const demoLeads = Math.round(DEMO_DAILY.reduce((s, d) => s + d.leads, 0));
-const demoClicks = Math.round(demoSpend / 7.4);
 
-export const DEMO_RESULTS: ResultsData = {
-  hasData: true,
-  totals: {
-    spend: demoSpend, impressions: demoClicks * 19, clicks: demoClicks,
-    cpc: demoSpend / demoClicks, leads: demoLeads, cpl: demoSpend / demoLeads,
-    convRate: (demoLeads / demoClicks) * 100,
-  },
-  daily: DEMO_DAILY,
-  campaigns: [
-    { name: "חיפוש · ביטויי שירות", spend: Math.round(demoSpend * 0.52), clicks: Math.round(demoClicks * 0.48), leads: Math.round(demoLeads * 0.58), cpl: 48 },
-    { name: "חיפוש · ביטויי מחיר", spend: Math.round(demoSpend * 0.31), clicks: Math.round(demoClicks * 0.34), leads: Math.round(demoLeads * 0.3), cpl: 56 },
-    { name: "מיקוד מתחרים", spend: Math.round(demoSpend * 0.17), clicks: Math.round(demoClicks * 0.18), leads: Math.round(demoLeads * 0.12), cpl: 74 },
-  ],
-  terms: [
-    { term: "עורך דין מקרקעין", clicks: 212, leads: 21, cpl: 44 },
-    { term: "עורך דין נדלן מחיר", clicks: 150, leads: 14, cpl: 52 },
-    { term: "עו\"ד מקרקעין תל אביב", clicks: 118, leads: 11, cpl: 49 },
-    { term: "ליווי משפטי קניית דירה", clicks: 96, leads: 8, cpl: 61 },
-    { term: "עורך דין קבוצת רכישה", clicks: 64, leads: 5, cpl: 70 },
-    { term: "בדיקת חוזה דירה", clicks: 51, leads: 4, cpl: 58 },
-  ],
-};
+/** תוצאות הדמו לטווח תאריכים — כדי שבורר התאריכים ירגיש חי בשיחת מכירה */
+export function demoResults(from: string, to: string): ResultsData {
+  const daily = demoDaily(from, to);
+  const spend = daily.reduce((s, d) => s + d.spend, 0);
+  const leads = Math.max(Math.round(daily.reduce((s, d) => s + d.leads, 0)), 1);
+  const clicks = Math.max(Math.round(spend / 7.4), 1);
+  const k = daily.length / 14; // מונחי החיפוש כוילו ל-14 יום
+  const term = (t: string, c: number, l: number, cpl: number) => ({ term: t, clicks: Math.round(c * k), leads: Math.round(l * k), cpl });
+  return {
+    hasData: true,
+    totals: {
+      spend, impressions: clicks * 19, clicks,
+      cpc: spend / clicks, leads, cpl: spend / leads,
+      convRate: (leads / clicks) * 100,
+    },
+    daily,
+    campaigns: [
+      { name: "חיפוש · ביטויי שירות", spend: Math.round(spend * 0.52), clicks: Math.round(clicks * 0.48), leads: Math.round(leads * 0.58), cpl: 48 },
+      { name: "חיפוש · ביטויי מחיר", spend: Math.round(spend * 0.31), clicks: Math.round(clicks * 0.34), leads: Math.round(leads * 0.3), cpl: 56 },
+      { name: "מיקוד מתחרים", spend: Math.round(spend * 0.17), clicks: Math.round(clicks * 0.18), leads: Math.round(leads * 0.12), cpl: 74 },
+    ],
+    terms: [
+      term("עורך דין מקרקעין", 212, 21, 44),
+      term("עורך דין נדלן מחיר", 150, 14, 52),
+      term("עו\"ד מקרקעין תל אביב", 118, 11, 49),
+      term("ליווי משפטי קניית דירה", 96, 8, 61),
+      term("עורך דין קבוצת רכישה", 64, 5, 70),
+      term("בדיקת חוזה דירה", 51, 4, 58),
+    ],
+  };
+}
+
+/** מדדי העסק של הדמו לאותו טווח — המכירות נגזרות מההשקעה כך שה-ROI נשאר עקבי */
+export function demoBusinessMetrics(spend: number) {
+  return {
+    relevantPct: 85.7,
+    closeRate: 37.5,
+    sales: Math.round((spend * 9.8) / 100) * 100,
+    roi: 9.8,
+  };
+}
 
 // ==================== דמו: אסקלציות ====================
 export interface DemoEscalation {
@@ -175,11 +193,3 @@ export const DEMO_ESCALATIONS: DemoEscalation[] = [
     answer: "כן, יש התחייבות לשלושה חודשים ראשונים בלבד, ואחרי זה אפשר להפסיק בהודעה של 30 יום מראש.",
     question: "הליד שאל אם יש התחייבות לתקופה מינימלית בשירות החודשי" },
 ];
-
-// ==================== דמו: מדדי עסק ====================
-export const DEMO_BUSINESS_METRICS = {
-  relevantPct: 85.7,  // 6 מתוך 7 שסומנו
-  closeRate: 37.5,    // 3 לקוחות מתוך 8 לידים עם פרטים
-  salesMonth: 31200,  // 2 הקמות + 2 ריטיינרים
-  roiMonth: 9.8,      // מול כ-3,200 ₪ הוצאת פרסום
-};

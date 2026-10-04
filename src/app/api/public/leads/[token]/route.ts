@@ -5,7 +5,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { loadFunnel, loadFunnelDetail, loadResults, loadBusinessMetrics, FUNNEL_STATUS_OPTIONS, CUSTOMER_STAGES } from "@/lib/prospect/funnel-data";
-import { DEMO_ROWS, DEMO_STATS, demoDetail, DEMO_CUSTOMERS, DEMO_RESULTS, DEMO_ESCALATIONS, DEMO_BUSINESS_METRICS } from "@/lib/prospect/demo-data";
+import { DEMO_ROWS, DEMO_STATS, demoDetail, DEMO_CUSTOMERS, DEMO_ESCALATIONS, demoResults, demoBusinessMetrics } from "@/lib/prospect/demo-data";
+import { todayIL, monthStartIL, shiftYmd } from "@/lib/utils/ildate";
 
 export const dynamic = "force-dynamic";
 
@@ -44,12 +45,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   }
 
   if (view === "results") {
-    if (portal.demo) return NextResponse.json({ ...DEMO_RESULTS, business: DEMO_BUSINESS_METRICS });
-    const business = await loadBusinessMetrics(portal.id, portal.clientId, days);
-    if (!portal.clientId) {
-      return NextResponse.json({ hasData: false, totals: { spend: 0, impressions: 0, clicks: 0, cpc: 0, leads: 0, cpl: 0, convRate: 0 }, daily: [], campaigns: [], terms: [], business });
+    // טווח תאריכים: from/to בפורמט YYYY-MM-DD; ברירת מחדל = החודש הנוכחי. תקרה של שנה.
+    const YMD = /^\d{4}-\d{2}-\d{2}$/;
+    let to = url.searchParams.get("to") ?? "";
+    let from = url.searchParams.get("from") ?? "";
+    if (!YMD.test(to)) to = todayIL();
+    if (!YMD.test(from)) from = monthStartIL();
+    if (from > to) from = to;
+    if (from < shiftYmd(to, -365)) from = shiftYmd(to, -365);
+
+    if (portal.demo) {
+      const r = demoResults(from, to);
+      return NextResponse.json({ ...r, from, to, business: demoBusinessMetrics(r.totals.spend) });
     }
-    return NextResponse.json({ ...(await loadResults(portal.clientId, days)), business });
+    const business = await loadBusinessMetrics(portal.id, portal.clientId, from, to);
+    if (!portal.clientId) {
+      return NextResponse.json({ hasData: false, totals: { spend: 0, impressions: 0, clicks: 0, cpc: 0, leads: 0, cpl: 0, convRate: 0 }, daily: [], campaigns: [], terms: [], from, to, business });
+    }
+    return NextResponse.json({ ...(await loadResults(portal.clientId, from, to)), from, to, business });
   }
 
   if (view === "escalations") {

@@ -3,7 +3,7 @@
 // פורטל הלקוח — המוצר העצמאי: מערכת CRM מצומצמת בשחור-זהב.
 // תפריט צד ימני עם שלושה מסכים: דשבורד תוצאות (קידום ממומן), CRM (לידים מהצ'אט),
 // וניהול לקוחות (מי שנסגר: שלב, תשלום, הערות). /leads/demo מציג נתוני הדגמה.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Mail, MailOpen, MousePointerClick, Calendar, FileText, ExternalLink, X, Loader2, Search,
@@ -46,7 +46,8 @@ interface Results {
   daily: Array<{ date: string; spend: number; leads: number }>;
   campaigns: Array<{ name: string; spend: number; clicks: number; leads: number; cpl: number }>;
   terms: Array<{ term: string; clicks: number; leads: number; cpl: number }>;
-  business?: { relevantPct: number | null; closeRate: number | null; salesMonth: number; roiMonth: number | null };
+  business?: { relevantPct: number | null; closeRate: number | null; sales: number; roi: number | null };
+  from?: string; to?: string;
 }
 interface Escalation {
   id: string; chatId: string; chatName: string; question: string;
@@ -91,6 +92,31 @@ const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("he-IL"
 const fmtFull = (d: string | null) => d ? new Date(d).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
 const ils = (n: number) => `${Math.round(n).toLocaleString("he-IL")} ₪`;
 
+// ---- טווחי תאריכים לדשבורד התוצאות ----
+type RangePreset = "month" | "last_month" | "7" | "30" | "90" | "custom";
+interface DateRange { preset: RangePreset; from: string; to: string }
+const RANGE_PRESETS: Array<{ key: RangePreset; label: string }> = [
+  { key: "month", label: "החודש" },
+  { key: "last_month", label: "חודש קודם" },
+  { key: "7", label: "7 ימים" },
+  { key: "30", label: "30 ימים" },
+  { key: "90", label: "90 ימים" },
+  { key: "custom", label: "טווח מותאם" },
+];
+const ymdLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function presetRange(preset: RangePreset, prev?: DateRange): DateRange {
+  const now = new Date();
+  const to = ymdLocal(now);
+  if (preset === "month") return { preset, from: ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1)), to };
+  if (preset === "last_month") {
+    return { preset, from: ymdLocal(new Date(now.getFullYear(), now.getMonth() - 1, 1)), to: ymdLocal(new Date(now.getFullYear(), now.getMonth(), 0)) };
+  }
+  if (preset === "custom") return { preset, from: prev?.from ?? to, to: prev?.to ?? to };
+  const n = Number(preset);
+  return { preset, from: ymdLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (n - 1))), to };
+}
+const fmtYmd = (ymd: string) => `${ymd.slice(8, 10)}/${ymd.slice(5, 7)}/${ymd.slice(0, 4)}`;
+
 const inputCls = "rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-brand-gold focus:outline-none";
 const cardCls = "rounded-xl border border-white/10 bg-white/[0.04]";
 
@@ -123,6 +149,8 @@ export default function LeadsPortalPage() {
   // --- תוצאות ---
   const [results, setResults] = useState<Results | null>(null);
   const [resultsLoading, setResultsLoading] = useState(false);
+  const [range, setRange] = useState<DateRange>(() => presetRange("month"));
+  const demoInit = useRef(false);
 
   // --- לקוח בפופאפ ---
   const [custPopup, setCustPopup] = useState<Customer | null>(null);
@@ -140,7 +168,11 @@ export default function LeadsPortalPage() {
       if (res.status === 404) { setNotFound(true); setLoading(false); return; }
       const d = await res.json();
       setName(d.name ?? ""); setRows(d.rows ?? []); setStats(d.stats ?? null);
-      if (d.demo) { setDemo(true); setTab((t) => (t === "crm" ? "results" : t)); }
+      if (d.demo) {
+        setDemo(true); setTab((t) => (t === "crm" ? "results" : t));
+        // בדמו ברירת המחדל היא 30 ימים, שלא ייראה דל בתחילת חודש
+        if (!demoInit.current) { demoInit.current = true; setRange(presetRange("30")); }
+      }
     } catch { /* רענון ידני */ }
     setLoading(false);
   }, [token, days]);
@@ -156,13 +188,14 @@ export default function LeadsPortalPage() {
   }, [token]);
 
   const loadResults = useCallback(async () => {
+    if (!range.from || !range.to || range.from > range.to) return; // טווח מותאם שעוד לא הושלם
     setResultsLoading(true);
     try {
-      const res = await fetch(`/api/public/leads/${token}?view=results&days=${days}`);
+      const res = await fetch(`/api/public/leads/${token}?view=results&from=${range.from}&to=${range.to}`);
       if (res.ok) setResults(await res.json());
     } catch { /* רענון ידני */ }
     setResultsLoading(false);
-  }, [token, days]);
+  }, [token, range.from, range.to]);
 
   useEffect(() => { if (tab === "customers") loadCustomers(); }, [tab, loadCustomers]);
   useEffect(() => { if (tab === "results") loadResults(); }, [tab, loadResults]);
@@ -347,14 +380,24 @@ export default function LeadsPortalPage() {
                   <h1 className="text-2xl font-semibold text-white">דשבורד תוצאות</h1>
                   <p className="mt-1 text-sm text-white/50">הקידום הממומן שלך במספרים: כמה יצא, כמה חזר, ומה עובד הכי טוב</p>
                 </div>
-                {!demo && (
-                  <select value={days} onChange={(e) => setDays(Number(e.target.value))} className={inputCls}>
-                    <option value={7} className="bg-black">7 ימים</option>
-                    <option value={30} className="bg-black">30 ימים</option>
-                    <option value={90} className="bg-black">90 ימים</option>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select value={range.preset} onChange={(e) => setRange((r) => presetRange(e.target.value as RangePreset, r))} className={inputCls}>
+                    {RANGE_PRESETS.map((p) => <option key={p.key} value={p.key} className="bg-black">{p.label}</option>)}
                   </select>
-                )}
+                  {range.preset === "custom" && (
+                    <>
+                      <input type="date" value={range.from} max={range.to || undefined}
+                        onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
+                        className={`${inputCls} [color-scheme:dark]`} aria-label="מתאריך" />
+                      <span className="text-sm text-white/40">עד</span>
+                      <input type="date" value={range.to} min={range.from || undefined}
+                        onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
+                        className={`${inputCls} [color-scheme:dark]`} aria-label="עד תאריך" />
+                    </>
+                  )}
+                </div>
               </div>
+              <div className="-mt-3 text-xs text-white/35">מציג: {fmtYmd(range.from)} עד {fmtYmd(range.to)}</div>
 
               {resultsLoading && <div className="py-16 text-center text-white/40"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></div>}
 
@@ -381,8 +424,8 @@ export default function LeadsPortalPage() {
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                       {kpi("לידים רלוונטיים", results.business.relevantPct !== null ? `${results.business.relevantPct.toFixed(0)}%` : "-", "מתוך מי שסומן ב-CRM")}
                       {kpi("אחוז סגירה", results.business.closeRate !== null ? `${results.business.closeRate.toFixed(0)}%` : "-", "לקוחות מתוך לידים שהשאירו פרטים")}
-                      {kpi("מכירות החודש", ils(results.business.salesMonth), "לקוחות ששילמו החודש")}
-                      {kpi("החזר על השקעה", results.business.roiMonth !== null ? `פי ${results.business.roiMonth.toFixed(1)}` : "-", "מכירות מול הוצאת פרסום, החודש")}
+                      {kpi("מכירות בתקופה", ils(results.business.sales), "לקוחות ששילמו בטווח שנבחר")}
+                      {kpi("החזר על השקעה", results.business.roi !== null ? `פי ${results.business.roi.toFixed(1)}` : "-", "מכירות מול הוצאת פרסום, בתקופה")}
                     </div>
                   )}
 
