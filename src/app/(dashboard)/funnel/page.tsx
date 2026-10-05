@@ -5,6 +5,7 @@
 // תמליל, דוח, מיילים ופתיחות, מקור הגעה, סטטוס ידני.
 import { useCallback, useEffect, useState } from "react";
 import { Inbox, Mail, MailOpen, Calendar, FileText, ExternalLink, X, Loader2, MousePointerClick } from "lucide-react";
+import PortalsManager from "@/components/funnel/PortalsManager";
 
 interface Row {
   id: string; createdAt: string; updatedAt: string;
@@ -128,6 +129,8 @@ export default function FunnelPage() {
           <option value={0}>הכל</option>
         </select>
       </div>
+
+      <PortalsManager />
 
       {/* מספרי המשפך */}
       {stats && (

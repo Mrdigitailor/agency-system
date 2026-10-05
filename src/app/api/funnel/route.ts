@@ -12,6 +12,6 @@ export async function GET(req: Request) {
 
   const days = Number(new URL(req.url).searchParams.get("days")) || 0;
   const appBase = process.env.APP_BASE_URL ?? new URL(req.url).origin;
-  const data = await loadFunnel(days, appBase);
+  const data = await loadFunnel(null, days, appBase);
   return NextResponse.json(data);
 }

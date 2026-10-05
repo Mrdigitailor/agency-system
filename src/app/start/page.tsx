@@ -58,7 +58,7 @@ export default function ProspectChatPage() {
     } catch { /* לא קריטי */ }
     const res = await fetch("/api/public/chat", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source }),
+      body: JSON.stringify({ source, portal: (() => { try { return new URLSearchParams(window.location.search).get("p") ?? ""; } catch { return ""; } })() }),
     });
     const d = await res.json();
     if (d.sessionToken) {

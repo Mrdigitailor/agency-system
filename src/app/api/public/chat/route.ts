@@ -70,8 +70,13 @@ export async function POST(req: Request) {
         if (typeof v === "string" && v.trim()) source[k] = v.trim().slice(0, 200);
       }
     }
+    // לאיזה פורטל השיחה שייכת: מזהה ציבורי (?p=) מדף הצ'אט, אחרת פורטל ברירת המחדל
+    const slug = typeof body.portal === "string" && /^[a-z0-9-]{2,40}$/i.test(body.portal) ? body.portal.toLowerCase() : "";
+    const owner = (slug ? await prisma.funnelPortal.findFirst({ where: { slug, deletedAt: null }, select: { id: true } }) : null)
+      ?? await prisma.funnelPortal.findFirst({ where: { isDefault: true, deletedAt: null }, select: { id: true } });
     const chat = await prisma.prospectChat.create({
       data: {
+        portalId: owner?.id ?? null,
         lastIp: ip,
         source: JSON.stringify(source),
         messages: JSON.stringify([{ role: "assistant", content: OPENING_MESSAGE, at: new Date().toISOString() }]),

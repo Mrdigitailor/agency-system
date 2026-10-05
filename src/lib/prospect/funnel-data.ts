@@ -17,6 +17,19 @@ export interface FunnelRow {
   reportLink: string; reportStatus: string;
   meetingAt: Date | string | null; cancelledAt: Date | string | null; leadId: string | null;
   emailsSent: number; emailsOpened: number; emailsClicked: number;
+  nextActionAt: Date | string | null; nextActionNote: string;
+  customerId: string | null; // הליד כבר נסגר והפך ללקוח
+}
+
+export interface LeadNote { id: string; kind: string; text: string; createdAt: Date | string }
+
+/** היקף הנתונים של פורטל: null = הכל (הטאב הפנימי של הסוכנות) */
+export type PortalScope = { id: string; isDefault: boolean } | null;
+
+/** תנאי השייכות של שיחות לפורטל. פורטל ברירת המחדל כולל גם שיחות ישנות בלי שיוך. */
+export function chatScope(scope: PortalScope): Record<string, unknown> {
+  if (!scope) return {};
+  return scope.isDefault ? { OR: [{ portalId: scope.id }, { portalId: null }] } : { portalId: scope.id };
 }
 
 export interface FunnelStats {
@@ -33,6 +46,9 @@ export interface FunnelDetail {
   report: { status: string; link: string; headline: string; budget: number; meetingAt: Date | string | null; bookedAt: Date | string | null; cancelledAt: Date | string | null } | null;
   emails: Array<{ key: string; subject: string; sentAt: Date | string; deliveredAt: Date | string | null; openedAt: Date | string | null; clickedAt: Date | string | null; bouncedAt: Date | string | null }>;
   lead: { id: string; stage: string; status: string; nextActionNote: string; notes: string } | null;
+  nextActionAt: Date | string | null; nextActionNote: string;
+  notes: LeadNote[];
+  customerId: string | null;
 }
 
 export const FUNNEL_STATUS_OPTIONS = ["חדש", "בטיפול", "חם", "קבע פגישה", "נסגר", "לא רלוונטי"];
@@ -78,10 +94,10 @@ function derivedStatus(f: ChatFieldsLite, r?: PotentialReport | null): string {
 }
 
 /** שולף ובונה את רשימת המשפך + המספרים לתקופה נתונה */
-export async function loadFunnel(days: number, appBase: string): Promise<{ rows: FunnelRow[]; stats: FunnelStats }> {
+export async function loadFunnel(scope: PortalScope, days: number, appBase: string): Promise<{ rows: FunnelRow[]; stats: FunnelStats }> {
   const since = days > 0 ? new Date(Date.now() - days * 24 * 3600_000) : null;
   const chats = await prisma.prospectChat.findMany({
-    where: since ? { createdAt: { gte: since } } : undefined,
+    where: { ...chatScope(scope), ...(since ? { createdAt: { gte: since } } : {}) },
     orderBy: { updatedAt: "desc" },
     take: 300,
   });
@@ -96,7 +112,16 @@ export async function loadFunnel(days: number, appBase: string): Promise<{ rows:
     logsByReport.get(log.reportId)!.push(log);
   }
 
-  const rows = chats.map((c) => buildRow(c, c.reportId ? reportById.get(c.reportId) : undefined, c.reportId ? (logsByReport.get(c.reportId) ?? []) : [], appBase));
+  // אילו לידים כבר נסגרו והפכו ללקוחות
+  const customers = scope && chats.length
+    ? await prisma.portalCustomer.findMany({ where: { portalId: scope.id, sourceChatId: { in: chats.map((c) => c.id) } }, select: { id: true, sourceChatId: true } })
+    : [];
+  const customerByChat = new Map(customers.map((c) => [c.sourceChatId, c.id]));
+
+  const rows = chats.map((c) => ({
+    ...buildRow(c, c.reportId ? reportById.get(c.reportId) : undefined, c.reportId ? (logsByReport.get(c.reportId) ?? []) : [], appBase),
+    customerId: customerByChat.get(c.id) ?? null,
+  }));
   return { rows, stats: computeStats(rows) };
 }
 
@@ -118,6 +143,8 @@ export function buildRow(c: ProspectChat, r: PotentialReport | undefined | null,
     emailsSent: logs.length,
     emailsOpened: logs.filter((l) => l.openedAt).length,
     emailsClicked: logs.filter((l) => l.clickedAt).length,
+    nextActionAt: c.nextActionAt ?? null, nextActionNote: c.nextActionNote ?? "",
+    customerId: null,
   };
 }
 
@@ -142,13 +169,34 @@ export function computeStats(rows: FunnelRow[]): FunnelStats {
 }
 
 /** פירוט ליד מלא: תמליל, דוח, מיילים, מקור, CRM */
-export async function loadFunnelDetail(chatId: string, appBase: string): Promise<FunnelDetail | null> {
-  const chat = await prisma.prospectChat.findUnique({ where: { id: chatId } });
+export async function loadFunnelDetail(chatId: string, appBase: string, scope: PortalScope = null): Promise<FunnelDetail | null> {
+  // השיחה נשלפת רק אם היא שייכת לפורטל שמבקש אותה
+  const chat = await prisma.prospectChat.findFirst({ where: { id: chatId, ...chatScope(scope) } });
   if (!chat) return null;
   const report = chat.reportId ? await prisma.potentialReport.findUnique({ where: { id: chat.reportId } }) : null;
   const emailLogs = chat.reportId ? await prisma.prospectEmailLog.findMany({ where: { reportId: chat.reportId }, orderBy: { sentAt: "asc" } }) : [];
-  const lead = report?.leadId ? await prisma.lead.findUnique({ where: { id: report.leadId } }) : null;
-  return buildDetail(chat, report, emailLogs, lead, appBase);
+  // הליד ב-CRM של הסוכנות הוא מידע פנימי — מוצג רק בטאב הפנימי, לא בפורטל לקוח
+  const lead = !scope && report?.leadId ? await prisma.lead.findUnique({ where: { id: report.leadId } }) : null;
+  const notes = scope
+    ? await prisma.portalLeadNote.findMany({ where: { chatId: chat.id, portalId: scope.id, deletedAt: null }, orderBy: { createdAt: "desc" } })
+    : [];
+  const customer = scope
+    ? await prisma.portalCustomer.findFirst({ where: { portalId: scope.id, sourceChatId: chat.id }, select: { id: true } })
+    : null;
+  return {
+    ...buildDetail(chat, report, emailLogs, lead, appBase),
+    notes: notes.map((n) => ({ id: n.id, kind: n.kind, text: n.text, createdAt: n.createdAt })),
+    customerId: customer?.id ?? null,
+  };
+}
+
+/** שיחה שבה הליד השאיר מייל או טלפון (הפרטים נשמרים כ-JSON בשדה fields) */
+export const HAS_CONTACT = { OR: [{ fields: { contains: '"email":"' } }, { fields: { contains: '"phone":"' } }] };
+
+/** האם השיחה שייכת לפורטל — שער לכל פעולת עדכון על ליד */
+export async function chatInScope(chatId: string, scope: PortalScope): Promise<boolean> {
+  const n = await prisma.prospectChat.count({ where: { id: chatId, ...chatScope(scope) } });
+  return n > 0;
 }
 
 export function buildDetail(chat: ProspectChat, report: PotentialReport | null, emailLogs: ProspectEmailLog[], lead: Lead | null, appBase: string): FunnelDetail {
@@ -183,6 +231,8 @@ export function buildDetail(chat: ProspectChat, report: PotentialReport | null, 
       deliveredAt: l.deliveredAt, openedAt: l.openedAt, clickedAt: l.clickedAt, bouncedAt: l.bouncedAt,
     })),
     lead: lead ? { id: lead.id, stage: lead.stage, status: lead.status, nextActionNote: lead.nextActionNote, notes: lead.notes } : null,
+    nextActionAt: chat.nextActionAt ?? null, nextActionNote: chat.nextActionNote ?? "",
+    notes: [], customerId: null,
   };
 }
 
@@ -255,7 +305,7 @@ export async function loadResults(clientId: string, from: string, to: string): P
 export interface BusinessMetrics {
   relevantPct: number | null;  // אחוז רלוונטיים מתוך מי שסומן
   closeRate: number | null;    // לקוחות שנסגרו ביחס ללידים עם פרטי קשר
-  sales: number;               // שווי מכירות בתקופה (הקמות + ריטיינרים של לקוחות ששילמו)
+  sales: number;               // שווי העסקאות שנסגרו בתקופה
   roi: number | null;          // החזר על השקעה בתקופה: מכירות חלקי הוצאת פרסום
 }
 
@@ -268,20 +318,23 @@ function ilMidnight(ymd: string): Date {
 }
 
 /** מדדי עסק לטווח התאריכים שנבחר (כולל שני הקצוות, בשעון ישראל) */
-export async function loadBusinessMetrics(portalId: string, clientId: string | null, from: string, to: string): Promise<BusinessMetrics> {
+export async function loadBusinessMetrics(scope: { id: string; isDefault: boolean }, clientId: string | null, from: string, to: string): Promise<BusinessMetrics> {
+  const portalId = scope.id;
+  const chats = chatScope(scope);
   const start = ilMidnight(from);
   const end = new Date(ilMidnight(to).getTime() + 24 * 3600_000);
   const inRange = { createdAt: { gte: start, lt: end } };
 
-  const [relevantYes, relevantNo, withContactChats, customers, paidCustomers] = await Promise.all([
-    prisma.prospectChat.count({ where: { relevant: "yes", ...inRange } }),
-    prisma.prospectChat.count({ where: { relevant: "no", ...inRange } }),
-    prisma.prospectChat.count({ where: { fields: { contains: "@" }, ...inRange } }),
-    prisma.portalCustomer.count({ where: { portalId, ...inRange } }),
-    prisma.portalCustomer.findMany({ where: { portalId, paid: true, ...inRange } }),
+  const [relevantYes, relevantNo, withContactChats, closedCustomers] = await Promise.all([
+    prisma.prospectChat.count({ where: { ...chats, relevant: "yes", ...inRange } }),
+    prisma.prospectChat.count({ where: { ...chats, relevant: "no", ...inRange } }),
+    prisma.prospectChat.count({ where: { AND: [chats, HAS_CONTACT], ...inRange } }),
+    prisma.portalCustomer.findMany({ where: { portalId, ...inRange } }),
   ]);
+  const customers = closedCustomers.length;
 
-  const sales = paidCustomers.reduce((s, c) => s + c.amountPaid + c.monthlyFee, 0);
+  // שווי העסקאות שנסגרו בתקופה (בין אם כבר שולמו ובין אם לא): חד פעמי/הקמה + חודש ריטיינר ראשון
+  const sales = closedCustomers.reduce((s, c) => s + c.amountPaid + c.monthlyFee, 0);
 
   let roi: number | null = null;
   if (clientId && sales > 0) {

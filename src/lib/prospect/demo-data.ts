@@ -15,6 +15,7 @@ const base = {
   cancelledAt: null as string | null, meetingAt: null as string | null,
   emailsSent: 0, emailsOpened: 0, emailsClicked: 0, budget: 0,
   utmSource: "google", utmMedium: "cpc", utmCampaign: "קמפיין חיפוש ראשי", utmContent: "קבוצת מודעות - שירות", relevant: "",
+  nextActionAt: null as string | null, nextActionNote: "", customerId: null as string | null,
 };
 
 export const DEMO_ROWS: FunnelRow[] = [
@@ -24,10 +25,10 @@ export const DEMO_ROWS: FunnelRow[] = [
   { ...base, id: "demo-2", relevant: "yes", createdAt: h(8), updatedAt: h(7), name: "מיכל אדן", email: "michal@example.co.il", phone: "052-7654321",
     business: "מרפאת אסתטיקה", budget: 8000, msgCount: 19, status: "קבע פגישה", derivedStatus: "קבע פגישה",
     source: "הזרקות בוטוקס מחיר", reportStatus: "ready", meetingAt: inDays(1, 13), emailsSent: 2, emailsOpened: 2, emailsClicked: 1 },
-  { ...base, id: "demo-3", relevant: "yes", createdAt: h(26), updatedAt: h(25), name: "יוסי מזרחי", email: "yossi@example.co.il", phone: "",
+  { ...base, id: "demo-3", relevant: "yes", nextActionAt: h(5), nextActionNote: "להתקשר ולשאול אם עבר על הדוח", createdAt: h(26), updatedAt: h(25), name: "יוסי מזרחי", email: "yossi@example.co.il", phone: "",
     business: "אינסטלציה ותיקוני צנרת", budget: 3500, msgCount: 16, status: "קיבל דוח", derivedStatus: "קיבל דוח",
     source: "אינסטלטור בחיפה", reportStatus: "ready", emailsSent: 2, emailsOpened: 1 },
-  { ...base, id: "demo-4", relevant: "yes", createdAt: h(30), updatedAt: h(29), name: "רונית שגב", email: "ronit@example.co.il", phone: "054-9876543",
+  { ...base, id: "demo-4", relevant: "yes", nextActionAt: inDays(1, 11), nextActionNote: "לשלוח הצעת מחיר", createdAt: h(30), updatedAt: h(29), name: "רונית שגב", email: "ronit@example.co.il", phone: "054-9876543",
     business: "סטודיו לעיצוב פנים", budget: 5000, msgCount: 21, status: "חם", derivedStatus: "קיבל דוח", manualStatus: "חם",
     source: "מעצבת פנים תל אביב", reportStatus: "ready", emailsSent: 2, emailsOpened: 2, emailsClicked: 1 },
   { ...base, id: "demo-5", createdAt: h(50), updatedAt: h(49), name: "דנה לוי", email: "dana@example.co.il", phone: "",
@@ -36,13 +37,13 @@ export const DEMO_ROWS: FunnelRow[] = [
   { ...base, id: "demo-6", createdAt: h(54), updatedAt: h(54), name: "", email: "", phone: "",
     business: "שיפוצים", budget: 0, msgCount: 4, status: "שיחה", derivedStatus: "שיחה",
     source: "קבלן שיפוצים מרכז", reportStatus: "" },
-  { ...base, id: "demo-7", relevant: "yes", createdAt: h(76), updatedAt: h(70), name: "אבי כהן", email: "avi@example.co.il", phone: "053-1112233",
+  { ...base, id: "demo-7", relevant: "yes", nextActionAt: inDays(21, 10), nextActionNote: "לחזור אליו בעוד חודש, ביקש זמן", createdAt: h(76), updatedAt: h(70), name: "אבי כהן", email: "avi@example.co.il", phone: "053-1112233",
     business: "הובלות ומשלוחים", budget: 4000, msgCount: 18, status: "סירב לפגישה", derivedStatus: "סירב לפגישה", declineReason: "אין לי זמן כרגע, אולי בעוד חודש",
     source: "הובלות דירה מחיר", reportStatus: "ready", emailsSent: 3, emailsOpened: 2 },
   { ...base, id: "demo-8", relevant: "no", createdAt: h(120), updatedAt: h(96), name: "נועם פרץ", email: "noam@example.co.il", phone: "058-4455667",
     business: "מכון כושר אישי", budget: 3000, msgCount: 20, status: "ביטל פגישה", derivedStatus: "ביטל פגישה",
     source: "מאמן כושר אישי", reportStatus: "ready", cancelledAt: h(96), emailsSent: 4, emailsOpened: 3, emailsClicked: 2 },
-  { ...base, id: "demo-9", relevant: "yes", createdAt: h(200), updatedAt: h(140), name: "שירה גולן", email: "shira@example.co.il", phone: "050-7788990",
+  { ...base, id: "demo-9", relevant: "yes", customerId: "dc-1", createdAt: h(200), updatedAt: h(140), name: "שירה גולן", email: "shira@example.co.il", phone: "050-7788990",
     business: "משרד רואי חשבון", budget: 7000, msgCount: 24, status: "נסגר", derivedStatus: "קבע פגישה", manualStatus: "נסגר",
     source: "רואה חשבון לעצמאיים", reportStatus: "ready", meetingAt: h(150), emailsSent: 2, emailsOpened: 2, emailsClicked: 2 },
   // שיחות אנונימיות קצרות — כדי שיחסי ההמרה בדמו ייראו אמינים
@@ -100,6 +101,12 @@ export function demoDetail(id: string): FunnelDetail | null {
     } : null,
     emails: row.emailsSent > 0 ? demoEmails(row.emailsOpened > 0, row.emailsClicked > 0) : [],
     lead: null,
+    nextActionAt: row.nextActionAt, nextActionNote: row.nextActionNote,
+    notes: row.email ? [
+      { id: `${row.id}-n2`, kind: "call", text: "דיברנו 5 דקות. מעוניין, ביקש לראות דוגמאות מהתחום שלו לפני הפגישה.", createdAt: h(1.5) },
+      { id: `${row.id}-n1`, kind: "whatsapp", text: "שלחתי הודעת היכרות קצרה עם קישור לדוח.", createdAt: h(2.4) },
+    ] : [],
+    customerId: row.customerId,
   };
 }
 
@@ -107,14 +114,15 @@ export function demoDetail(id: string): FunnelDetail | null {
 export interface DemoCustomer {
   id: string; name: string; business: string; email: string; phone: string;
   stage: string; dealType: string; paid: boolean; amountPaid: number; monthlyFee: number; percentRate: number; notes: string; createdAt: string;
+  sourceChatId?: string | null;
 }
 export const DEMO_CUSTOMERS: DemoCustomer[] = [
   { id: "dc-1", name: "שירה גולן", business: "משרד רואי חשבון", email: "shira@example.co.il", phone: "050-7788990",
-    stage: "קמפיין באוויר", dealType: "setup_retainer", paid: true, amountPaid: 14800, monthlyFee: 800, percentRate: 0, notes: "נסגרה אחרי פגישה ראשונה. הקמפיין עלה ב-01 לחודש.", createdAt: h(140) },
-  { id: "dc-2", name: "אורי ברק", business: "עורך דין מקרקעין", email: "uri@example.co.il", phone: "050-1234567",
-    stage: "הקמה", dealType: "setup_retainer", paid: true, amountPaid: 14800, monthlyFee: 800, percentRate: 0, notes: "דף הנחיתה באישור אצלו, ממתינים לחומרים.", createdAt: h(60) },
-  { id: "dc-3", name: "מיכל אדן", business: "מרפאת אסתטיקה", email: "michal@example.co.il", phone: "052-7654321",
-    stage: "אפיון", dealType: "percent", paid: false, amountPaid: 0, monthlyFee: 0, percentRate: 12, notes: "חתמה על הצעה, תשלום ביום ההקמה.", createdAt: h(20) },
+    stage: "קמפיין באוויר", dealType: "setup_retainer", paid: true, amountPaid: 14800, monthlyFee: 800, percentRate: 0, notes: "נסגרה אחרי פגישה ראשונה. הקמפיין עלה ב-01 לחודש.", createdAt: h(140), sourceChatId: "demo-9" },
+  { id: "dc-2", name: "גיא רוזן", business: "משרד אדריכלות", email: "guy@example.co.il", phone: "054-3344556",
+    stage: "הקמה", dealType: "setup_retainer", paid: true, amountPaid: 14800, monthlyFee: 800, percentRate: 0, notes: "דף הנחיתה באישור אצלו, ממתינים לחומרים.", createdAt: h(900) },
+  { id: "dc-3", name: "טל שחר", business: "סוכנות ביטוח", email: "tal@example.co.il", phone: "052-9988776",
+    stage: "אפיון", dealType: "percent", paid: false, amountPaid: 0, monthlyFee: 0, percentRate: 12, notes: "חתמה על הצעה, תשלום ביום ההקמה.", createdAt: h(1100) },
 ];
 
 // ==================== דמו: דשבורד תוצאות ====================
@@ -193,3 +201,38 @@ export const DEMO_ESCALATIONS: DemoEscalation[] = [
     answer: "כן, יש התחייבות לשלושה חודשים ראשונים בלבד, ואחרי זה אפשר להפסיק בהודעה של 30 יום מראש.",
     question: "הליד שאל אם יש התחייבות לתקופה מינימלית בשירות החודשי" },
 ];
+
+// ==================== דמו: הידע של הסוכן ====================
+export interface DemoKnowledge { id: string; title: string; content: string; source: string; updatedAt: string }
+export const DEMO_KNOWLEDGE: DemoKnowledge[] = [
+  { id: "kn-1", source: "manual", updatedAt: h(300), title: "מחירון", content: "הקמה חד פעמית 14,800 ₪, ולאחר מכן 800 ₪ בחודש לניהול שוטף. המחירים לפני מע\"מ." },
+  { id: "kn-2", source: "manual", updatedAt: h(300), title: "שעות פעילות", content: "ראשון עד חמישי, 09:30 עד 16:30. פגישות בזום בלבד, 30 דקות." },
+  { id: "kn-3", source: "manual", updatedAt: h(200), title: "באילו תחומים אנחנו עובדים", content: "עסקים שנותנים שירות ושווי עסקה ממוצע של 1,500 ₪ ומעלה. לא עובדים עם חנויות אונליין קטנות." },
+  { id: "kn-4", source: "escalation", updatedAt: h(90), title: "האם יש התחייבות לתקופה מינימלית בשירות החודשי", content: "כן, יש התחייבות לשלושה חודשים ראשונים בלבד, ואחרי זה אפשר להפסיק בהודעה של 30 יום מראש." },
+];
+
+// ==================== דמו: תובנות מהשיחות ====================
+export const DEMO_INSIGHT = {
+  id: "ins-demo", from: h(24 * 7).slice(0, 10), to: h(0).slice(0, 10), chatCount: 16, createdAt: h(6),
+  summary: "רוב הגולשים מגיעים עם שאלה אחת: כמה זה עולה ותוך כמה זמן רואים תוצאות. מי שקיבל את הדוח ועבר עליו ממשיך לפגישה בשיעור גבוה, ומי שנוטש עושה את זה בעיקר בשלב שאלת התקציב.",
+  topQuestions: [
+    { text: "כמה זה עולה בחודש ומה כלול במחיר", count: 9 },
+    { text: "תוך כמה זמן מתחילים לקבל פניות", count: 6 },
+    { text: "האם יש התחייבות לתקופה", count: 4 },
+    { text: "האם אתם עובדים עם התחום שלי", count: 3 },
+  ],
+  objections: [
+    { text: "אין לי זמן כרגע, אולי בעוד חודש", count: 3 },
+    { text: "כבר ניסיתי גוגל בעבר וזה לא עבד", count: 2 },
+    { text: "רוצה לחשוב על זה ולהתייעץ עם השותף", count: 2 },
+  ],
+  dropoffs: [
+    { text: "בשאלה כמה היית רוצה להשקיע בפרסום בחודש", count: 5 },
+    { text: "אחרי קבלת הדוח, לפני הצעת הפגישה", count: 2 },
+  ],
+  recommendations: [
+    "להוסיף למסך הידע תשובה ברורה על לוח הזמנים עד לפניות ראשונות, זו השאלה השנייה הנפוצה ביותר",
+    "לרכך את שאלת התקציב: להציע טווחים נמוכים יותר או אפשרות עוד לא החלטתי בולטת יותר",
+    "לחזור טלפונית למי שסירב בגלל זמן, שלושה מהם ביקשו במפורש שיחזרו אליהם",
+  ],
+};

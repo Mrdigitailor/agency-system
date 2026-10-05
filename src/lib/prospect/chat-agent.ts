@@ -7,6 +7,7 @@ import { createAndRunReport } from "./create-report";
 import { getFreeSlots, bookSlot } from "./scheduling";
 import { maybeSendReportEmail } from "./emails";
 import { upsertProspectLead } from "./crm-lead";
+import { notifyNewLead, notifyMeetingBooked } from "./portal-notify";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const AI_MODEL = process.env.CHAT_AI_MODEL ?? "claude-sonnet-4-6";
@@ -133,6 +134,10 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
       if (typeof input[k] === "number" && input[k] as number >= 0) f[k] = input[k] as number;
     }
     if (f.email) f.email = f.email.toLowerCase();
+    // פרט קשר ראשון = ליד חדש: התראה מיידית לבעל הפורטל (נשלחת פעם אחת לשיחה)
+    if (f.email || f.phone) {
+      await notifyNewLead(chatId, { name: f.name, email: f.email, phone: f.phone, business: f.businessName || f.serviceField }).catch(() => {});
+    }
     // עדכון פרטי קשר גם על הדוח אם כבר נוצר
     const report = await prisma.potentialReport.findFirst({ where: { token: f.reportToken ?? "" } });
     if (report) {
@@ -237,14 +242,20 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
     if (!f.name || !f.email) return { result: JSON.stringify({ error: "חסרים שם או אימייל" }), fields: f };
     const report = f.reportToken ? await prisma.potentialReport.findFirst({ where: { token: f.reportToken } }) : null;
     const r = await bookSlot({ startIso, name: f.name, email: f.email, phone: f.phone, reportId: report?.id, business: f.businessName || f.serviceField });
-    if (r.ok) { f.meetingAt = r.meetingAt; f.slots = undefined; }
+    if (r.ok) {
+      f.meetingAt = r.meetingAt; f.slots = undefined;
+      if (r.meetingAt) {
+        await notifyMeetingBooked(chatId, { name: f.name, email: f.email, phone: f.phone, business: f.businessName || f.serviceField }, r.meetingAt).catch(() => {});
+      }
+    }
     return { result: JSON.stringify(r), fields: f };
   }
 
   if (name === "escalate_question") {
     const question = String(input.question ?? "").trim().slice(0, 500);
     if (question) {
-      await prisma.chatEscalation.create({ data: { chatId, question } }).catch(() => {});
+      const owner = await prisma.prospectChat.findUnique({ where: { id: chatId }, select: { portalId: true } }).catch(() => null);
+      await prisma.chatEscalation.create({ data: { chatId, portalId: owner?.portalId ?? null, question } }).catch(() => {});
       console.log(`[ChatAgent] escalation logged: ${question.slice(0, 80)}`);
     }
     return { result: JSON.stringify({ noted: true, guidance: "ענה בכנות שאין לך תשובה מדויקת כרגע, שהשאלה הועברה לסער והוא יחזור עם תשובה, והמשך את השיחה מאיפה שהייתם." }), fields: f };
@@ -316,13 +327,19 @@ export async function runChatTurn(chatId: string, userMessage: string): Promise<
   const slotsLine = fields.slots?.length
     ? `\nהמועדים שהוצגו למשתמש (תווית ← startIso עבור book_meeting):\n${fields.slots.map((s) => `"${s.label}" ← ${s.startIso}`).join("\n")}`
     : "";
-  // ידע נלמד: תשובות שהמנהל נתן לשאלות שהסוכן לא ידע לענות עליהן בעבר
-  const learned = await prisma.chatEscalation.findMany({
-    where: { status: "answered", answer: { not: "" } },
-    orderBy: { answeredAt: "desc" }, take: 20,
-  }).catch(() => []);
+  // הידע של הסוכן: מה שבעל הפורטל הזין במסך "הידע של הסוכן" + תשובות לאסקלציות.
+  // רק ידע של הפורטל שהשיחה שייכת אליו.
+  const knowledgePortalId = chat.portalId
+    ?? (await prisma.funnelPortal.findFirst({ where: { isDefault: true, deletedAt: null }, select: { id: true } }).catch(() => null))?.id
+    ?? "";
+  const learned = knowledgePortalId
+    ? await prisma.portalKnowledge.findMany({
+        where: { portalId: knowledgePortalId, deletedAt: null },
+        orderBy: { updatedAt: "desc" }, take: 40,
+      }).catch(() => [])
+    : [];
   const learnedBlock = learned.length
-    ? `\n\n## ידע שנצבר מתשובות המנהל (השתמש בו כשנשאלת שאלה דומה)\n${learned.map((e) => `ש: ${e.question}\nת: ${e.answer}`).join("\n---\n")}`
+    ? `\n\n## ידע של העסק (המקור המוסמך: השתמש בו כשנשאלת שאלה שהוא מכסה)\n${learned.map((e) => `נושא: ${e.title}\nמידע: ${e.content}`).join("\n---\n").slice(0, 8000)}`
     : "";
   const system = `${SYSTEM_PROMPT}${learnedBlock}\n\n## מצב נוכחי\nפרטים שכבר נאספו: ${known || "עדיין כלום"}${reportLine}${slotsLine}`;
 

@@ -1329,9 +1329,66 @@ model FunnelPortal {
   token     String   @unique @default(cuid()) // הקישור: /leads/<token>
   name      String   // שם הלקוח/העסק שמוצג בכותרת
   clientId  String?  // חיבור ללקוח במערכת — ממנו נמשכים נתוני הקמפיינים לדשבורד התוצאות
+  slug      String?  @unique // מזהה ציבורי לדף הצ'אט (?p=slug) — לא סוד, בשונה מה-token
+  isDefault Boolean  @default(false) // הפורטל שמקבל שיחות בלי מזהה (המשפך שלנו)
+  // כניסה בסיסמה: הקישור הוא ההזמנה, הביקור הראשון קובע סיסמה
+  passwordHash String   @default("")
+  failedLogins Int      @default(0)
+  lockedUntil  DateTime?
+  // התראות ודוחות לבעל הפורטל
+  ownerEmail    String  @default("")
+  notifyLead    Boolean @default(true)
+  notifyMeeting Boolean @default(true)
+  weeklyReport  Boolean @default(true)
+  deletedAt DateTime?
   createdAt DateTime @default(now())
 
   @@map("funnel_portals")
+}
+
+// תיעוד על ליד — הערה, שיחת טלפון, וואטסאפ או מייל שבעל העסק רושם בכרטיס הליד
+model PortalLeadNote {
+  id        String    @id @default(cuid())
+  portalId  String
+  chatId    String
+  kind      String    @default("note") // note | call | whatsapp | email
+  text      String
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([chatId])
+  @@map("portal_lead_notes")
+}
+
+// הידע של הסוכן — פריטים שבעל העסק מזין (מחירים, שעות, שאלות נפוצות) + תשובות לאסקלציות.
+// נכנס להנחיות הסוכן בכל שיחה של אותו פורטל.
+model PortalKnowledge {
+  id           String    @id @default(cuid())
+  portalId     String
+  title        String    // השאלה או הנושא
+  content      String    // התשובה או המידע
+  source       String    @default("manual") // manual | escalation
+  escalationId String?
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([portalId])
+  @@map("portal_knowledge")
+}
+
+// תובנות מהשיחות — סיכום שנוצר על ידי AI מתמלילי השיחות של תקופה
+model PortalInsight {
+  id        String   @id @default(cuid())
+  portalId  String
+  from      String   // YYYY-MM-DD
+  to        String   // YYYY-MM-DD
+  chatCount Int      @default(0)
+  content   String   @default("{}") // JSON: summary, topQuestions, objections, dropoffs, recommendations
+  createdAt DateTime @default(now())
+
+  @@index([portalId, createdAt])
+  @@map("portal_insights")
 }
 
 // לקוח של בעל הפורטל — מי שנסגר מהמשפך ועכשיו מנהלים את התהליך שלו:
@@ -1364,6 +1421,7 @@ model PortalCustomer {
 model ChatEscalation {
   id         String    @id @default(cuid())
   chatId     String    // השיחה שבה עלתה השאלה
+  portalId   String?   // הפורטל שהשיחה שייכת אליו
   question   String    // השאלה כפי שהסוכן ניסח אותה
   status     String    @default("open") // open | answered
   answer     String    @default("")
@@ -1404,10 +1462,15 @@ model ProspectChat {
   source    String   @default("{}")     // JSON: מקור הגעה — utm_*, gclid, referrer
   funnelStatus String @default("")      // סטטוס ידני שסער מעדכן בממשק המשפך
   relevant  String   @default("")       // סימון ידני: "yes" | "no" | "" — לאחוז לידים רלוונטיים
+  portalId  String?                     // הפורטל (הלקוח) שהשיחה שייכת אליו
+  nextActionAt   DateTime?              // משימת המשך: מתי
+  nextActionNote String   @default("")  // משימת המשך: מה
+  leadNotifiedAt DateTime?              // מתי נשלחה לבעל העסק התראת "ליד חדש" (פעם אחת)
   lastIp    String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([lastIp, createdAt])
+  @@index([portalId, createdAt])
   @@map("prospect_chats")
 }

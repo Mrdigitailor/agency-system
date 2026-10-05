@@ -1,45 +1,55 @@
-// ה-API של פורטל הלידים העצמאי — המוצר שהלקוח מקבל.
-// גישה לפי טוקן בלתי ניתן לניחוש (כמו הדשבורד הציבורי); "demo" מגיש נתוני הדגמה.
-// GET: ?view=leads (ברירת מחדל) | customers | results, או ?id= לפירוט ליד.
-// POST: יצירת לקוח. PATCH: עדכון סטטוס ליד או עדכון לקוח (kind=customer).
+// ה-API של פורטל הלקוח העצמאי — המוצר שהלקוח מקבל.
+// גישה: קישור ייחודי + סיסמה (ראו portal-auth). "demo" פתוח ומגיש נתוני הדגמה, בלי לשמור כלום.
+// כל שאילתה ועדכון מוגבלים לפורטל שמבקש: לקוח רואה ומשנה רק את הנתונים שלו.
+// GET:   ?view=leads|customers|results|escalations|knowledge|insights|settings, או ?id= לפירוט ליד
+// POST:  kind=customer (ברירת מחדל) | note | knowledge | insights
+// PATCH: kind=status (ברירת מחדל) | customer | relevant | escalation | nextAction | note | knowledge | settings
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { loadFunnel, loadFunnelDetail, loadResults, loadBusinessMetrics, FUNNEL_STATUS_OPTIONS, CUSTOMER_STAGES } from "@/lib/prospect/funnel-data";
-import { DEMO_ROWS, DEMO_STATS, demoDetail, DEMO_CUSTOMERS, DEMO_ESCALATIONS, demoResults, demoBusinessMetrics } from "@/lib/prospect/demo-data";
+import {
+  loadFunnel, loadFunnelDetail, loadResults, loadBusinessMetrics, chatInScope,
+  FUNNEL_STATUS_OPTIONS, CUSTOMER_STAGES,
+} from "@/lib/prospect/funnel-data";
+import {
+  DEMO_ROWS, DEMO_STATS, demoDetail, DEMO_CUSTOMERS, DEMO_ESCALATIONS, DEMO_KNOWLEDGE, DEMO_INSIGHT,
+  demoResults, demoBusinessMetrics,
+} from "@/lib/prospect/demo-data";
+import { requirePortal } from "@/lib/prospect/portal-auth";
+import { generateInsights, latestInsight, MIN_CHATS_FOR_INSIGHTS, REGENERATE_HOURS } from "@/lib/prospect/portal-insights";
 import { todayIL, monthStartIL, shiftYmd } from "@/lib/utils/ildate";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // יצירת תובנות קוראת ל-Claude
 
-interface Portal { id: string; name: string; demo: boolean; clientId: string | null }
-
-async function resolvePortal(token: string): Promise<Portal | null> {
-  if (token === "demo") return { id: "demo", name: "העסק שלך", demo: true, clientId: null };
-  if (!/^[a-z0-9-]{16,40}$/i.test(token)) return null;
-  const portal = await prisma.funnelPortal.findUnique({ where: { token } });
-  return portal ? { id: portal.id, name: portal.name, demo: false, clientId: portal.clientId } : null;
-}
+const DEAL_TYPES = ["one_time", "retainer", "setup_retainer", "percent"];
+const NOTE_KINDS = ["note", "call", "whatsapp", "email"];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : 0; };
+const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
+const EMPTY_RESULTS = { hasData: false, totals: { spend: 0, impressions: 0, clicks: 0, cpc: 0, leads: 0, cpl: 0, convRate: 0 }, daily: [], campaigns: [], terms: [] };
 
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const portal = await resolvePortal(token);
-  if (!portal) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const access = await requirePortal(req, token);
+  if (!access.ok) return access.response;
+  const { demo, portal } = access;
 
   const url = new URL(req.url);
+  const appBase = process.env.APP_BASE_URL ?? url.origin;
   const id = url.searchParams.get("id");
   const view = url.searchParams.get("view") ?? "leads";
   const days = Number(url.searchParams.get("days")) || 30;
 
   if (id) {
-    const detail = portal.demo ? demoDetail(id) : await loadFunnelDetail(id, process.env.APP_BASE_URL ?? url.origin);
-    if (!detail) return NextResponse.json({ error: "not found" }, { status: 404 });
+    const detail = demo ? demoDetail(id) : await loadFunnelDetail(id, appBase, portal);
+    if (!detail) return bad("not found", 404);
     return NextResponse.json(detail);
   }
 
   if (view === "customers") {
-    if (portal.demo) return NextResponse.json({ customers: DEMO_CUSTOMERS, stages: CUSTOMER_STAGES });
+    if (demo) return NextResponse.json({ customers: DEMO_CUSTOMERS, stages: CUSTOMER_STAGES });
     const customers = await prisma.portalCustomer.findMany({ where: { portalId: portal.id }, orderBy: { createdAt: "desc" } });
     return NextResponse.json({ customers, stages: CUSTOMER_STAGES });
   }
@@ -54,21 +64,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     if (from > to) from = to;
     if (from < shiftYmd(to, -365)) from = shiftYmd(to, -365);
 
-    if (portal.demo) {
+    if (demo) {
       const r = demoResults(from, to);
       return NextResponse.json({ ...r, from, to, business: demoBusinessMetrics(r.totals.spend) });
     }
-    const business = await loadBusinessMetrics(portal.id, portal.clientId, from, to);
-    if (!portal.clientId) {
-      return NextResponse.json({ hasData: false, totals: { spend: 0, impressions: 0, clicks: 0, cpc: 0, leads: 0, cpl: 0, convRate: 0 }, daily: [], campaigns: [], terms: [], from, to, business });
-    }
-    return NextResponse.json({ ...(await loadResults(portal.clientId, from, to)), from, to, business });
+    const business = await loadBusinessMetrics(portal, portal.clientId, from, to);
+    const results = portal.clientId ? await loadResults(portal.clientId, from, to) : EMPTY_RESULTS;
+    return NextResponse.json({ ...results, from, to, business });
   }
 
   if (view === "escalations") {
-    if (portal.demo) return NextResponse.json({ escalations: DEMO_ESCALATIONS });
-    const rows = await prisma.chatEscalation.findMany({ orderBy: [{ status: "desc" }, { createdAt: "desc" }], take: 100 });
-    // שם הליד מהשיחה — כדי שהמנהל ידע על מי מדובר
+    if (demo) return NextResponse.json({ escalations: DEMO_ESCALATIONS });
+    const rows = await prisma.chatEscalation.findMany({
+      where: portal.isDefault ? { OR: [{ portalId: portal.id }, { portalId: null }] } : { portalId: portal.id },
+      orderBy: [{ status: "desc" }, { createdAt: "desc" }], take: 100,
+    });
     const chatIds = [...new Set(rows.map((r) => r.chatId))];
     const chats = chatIds.length ? await prisma.prospectChat.findMany({ where: { id: { in: chatIds } } }) : [];
     const nameByChat = new Map(chats.map((c) => {
@@ -83,61 +93,150 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     });
   }
 
-  // view=leads
-  if (portal.demo) {
-    return NextResponse.json({ name: portal.name, demo: true, rows: DEMO_ROWS, stats: DEMO_STATS });
+  if (view === "knowledge") {
+    if (demo) return NextResponse.json({ items: DEMO_KNOWLEDGE });
+    const items = await prisma.portalKnowledge.findMany({ where: { portalId: portal.id, deletedAt: null }, orderBy: { updatedAt: "desc" } });
+    return NextResponse.json({ items: items.map((k) => ({ id: k.id, title: k.title, content: k.content, source: k.source, updatedAt: k.updatedAt })) });
   }
-  const data = await loadFunnel(days, process.env.APP_BASE_URL ?? url.origin);
-  return NextResponse.json({ name: portal.name, demo: false, ...data });
+
+  if (view === "insights") {
+    if (demo) return NextResponse.json({ insight: DEMO_INSIGHT, canGenerate: false, minChats: MIN_CHATS_FOR_INSIGHTS });
+    const insight = await latestInsight(portal.id);
+    const canGenerate = !insight || Date.now() - new Date(insight.createdAt).getTime() > REGENERATE_HOURS * 3600_000;
+    return NextResponse.json({ insight, canGenerate, minChats: MIN_CHATS_FOR_INSIGHTS });
+  }
+
+  if (view === "settings") {
+    if (demo) return NextResponse.json({ ownerEmail: "you@example.co.il", notifyLead: true, notifyMeeting: true, weeklyReport: true });
+    return NextResponse.json({ ownerEmail: portal.ownerEmail, notifyLead: portal.notifyLead, notifyMeeting: portal.notifyMeeting, weeklyReport: portal.weeklyReport });
+  }
+
+  // view=leads
+  if (demo) return NextResponse.json({ name: "העסק שלך", demo: true, rows: DEMO_ROWS, stats: DEMO_STATS, openEscalations: DEMO_ESCALATIONS.filter((e) => e.status === "open").length });
+  const data = await loadFunnel(portal, days, appBase);
+  const openEscalations = await prisma.chatEscalation.count({
+    where: { status: "open", ...(portal.isDefault ? { OR: [{ portalId: portal.id }, { portalId: null }] } : { portalId: portal.id }) },
+  });
+  return NextResponse.json({ name: portal.name, demo: false, ...data, openEscalations });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const portal = await resolvePortal(token);
-  if (!portal) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const access = await requirePortal(req, token);
+  if (!access.ok) return access.response;
+  const { demo, portal } = access;
 
   let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return NextResponse.json({ error: "bad request" }, { status: 400 }); }
+  try { body = await req.json(); } catch { return bad("bad request"); }
+  const kind = str(body.kind, 20) || "customer";
 
+  // תיעוד על ליד: הערה, שיחה, וואטסאפ או מייל
+  if (kind === "note") {
+    const chatId = str(body.chatId, 40);
+    const text = str(body.text, 2000);
+    const noteKind = NOTE_KINDS.includes(String(body.noteKind)) ? String(body.noteKind) : "note";
+    if (!chatId || !text) return bad("חסר תוכן");
+    if (demo) return NextResponse.json({ ok: true, note: { id: `n-tmp-${Date.now()}`, kind: noteKind, text, createdAt: new Date().toISOString() } });
+    if (!(await chatInScope(chatId, portal))) return bad("not found", 404);
+    const note = await prisma.portalLeadNote.create({ data: { portalId: portal.id, chatId, kind: noteKind, text } });
+    return NextResponse.json({ ok: true, note: { id: note.id, kind: note.kind, text: note.text, createdAt: note.createdAt } });
+  }
+
+  // פריט ידע חדש לסוכן
+  if (kind === "knowledge") {
+    const title = str(body.title, 200);
+    const content = str(body.content, 2000);
+    if (!title || !content) return bad("חסרים נושא ותוכן");
+    if (demo) return NextResponse.json({ ok: true, item: { id: `kn-tmp-${Date.now()}`, title, content, source: "manual", updatedAt: new Date().toISOString() } });
+    const item = await prisma.portalKnowledge.create({ data: { portalId: portal.id, title, content } });
+    return NextResponse.json({ ok: true, item: { id: item.id, title: item.title, content: item.content, source: item.source, updatedAt: item.updatedAt } });
+  }
+
+  // יצירת תובנות מהשיחות של 30 הימים האחרונים (מוגבל בתדירות)
+  if (kind === "insights") {
+    if (demo) return NextResponse.json({ ok: true, insight: DEMO_INSIGHT });
+    const last = await latestInsight(portal.id);
+    if (last && Date.now() - new Date(last.createdAt).getTime() < REGENERATE_HOURS * 3600_000) {
+      return bad("התובנות עודכנו לאחרונה, אפשר לרענן שוב מאוחר יותר", 429);
+    }
+    try {
+      const to = todayIL();
+      const insight = await generateInsights(portal, shiftYmd(to, -29), to);
+      if (!insight) return NextResponse.json({ ok: false, tooFew: true, minChats: MIN_CHATS_FOR_INSIGHTS });
+      return NextResponse.json({ ok: true, insight });
+    } catch (err) {
+      console.error("[PortalInsights] generate failed:", err instanceof Error ? err.message : err);
+      return bad("יצירת התובנות נכשלה, נסו שוב בעוד כמה דקות", 502);
+    }
+  }
+
+  // סגירת עסקה / לקוח חדש
   const name = str(body.name);
-  if (!name) return NextResponse.json({ error: "חסר שם" }, { status: 400 });
+  if (!name) return bad("חסר שם");
   const stage = str(body.stage) || "חדש";
-  if (!CUSTOMER_STAGES.includes(stage)) return NextResponse.json({ error: "שלב לא מוכר" }, { status: 400 });
+  if (!CUSTOMER_STAGES.includes(stage)) return bad("שלב לא מוכר");
+  const dealType = DEAL_TYPES.includes(String(body.dealType)) ? String(body.dealType) : "one_time";
+  const sourceChatId = str(body.sourceChatId, 40) || null;
+  const deal = {
+    dealType,
+    amountPaid: dealType === "one_time" || dealType === "setup_retainer" ? num(body.amountPaid) : 0,
+    monthlyFee: dealType === "retainer" || dealType === "setup_retainer" ? num(body.monthlyFee) : 0,
+    percentRate: dealType === "percent" ? Math.min(num(body.percentRate), 100) : 0,
+    paid: body.paid === true,
+  };
+  const base = { name, business: str(body.business), email: str(body.email), phone: str(body.phone, 50), stage, notes: str(body.notes, 2000) };
 
   // בדמו מאשרים בלי לשמור — ההדגמה חוזרת נקייה
-  if (portal.demo) return NextResponse.json({ ok: true, customer: { id: `dc-tmp-${Date.now()}`, name, business: str(body.business), email: str(body.email), phone: str(body.phone, 50), stage, paid: false, amountPaid: 0, monthlyFee: 0, notes: str(body.notes, 2000), createdAt: new Date().toISOString() } });
+  if (demo) return NextResponse.json({ ok: true, customer: { id: `dc-tmp-${Date.now()}`, ...base, ...deal, createdAt: new Date().toISOString(), sourceChatId } });
 
-  const customer = await prisma.portalCustomer.create({
-    data: {
-      portalId: portal.id, name,
-      business: str(body.business), email: str(body.email), phone: str(body.phone, 50),
-      stage, notes: str(body.notes, 2000),
-      dealType: ["one_time", "retainer", "setup_retainer", "percent"].includes(String(body.dealType)) ? String(body.dealType) : "setup_retainer",
-      sourceChatId: str(body.sourceChatId, 40) || null,
-    },
-  });
+  if (sourceChatId) {
+    if (!(await chatInScope(sourceChatId, portal))) return bad("not found", 404);
+    const existing = await prisma.portalCustomer.findFirst({ where: { portalId: portal.id, sourceChatId } });
+    if (existing) return NextResponse.json({ ok: true, customer: existing, existed: true });
+  }
+  const customer = await prisma.portalCustomer.create({ data: { portalId: portal.id, ...base, ...deal, sourceChatId } });
+  // ליד שהפך ללקוח מסומן אוטומטית כ"נסגר" במשפך
+  if (sourceChatId) await prisma.prospectChat.update({ where: { id: sourceChatId }, data: { funnelStatus: "נסגר" } }).catch(() => {});
   return NextResponse.json({ ok: true, customer });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const portal = await resolvePortal(token);
-  if (!portal) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const access = await requirePortal(req, token);
+  if (!access.ok) return access.response;
+  const { demo, portal } = access;
 
   let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return NextResponse.json({ error: "bad request" }, { status: 400 }); }
+  try { body = await req.json(); } catch { return bad("bad request"); }
+  const kind = str(body.kind, 20) || "status";
   const id = str(body.id, 40);
-  if (!id) return NextResponse.json({ error: "חסר מזהה" }, { status: 400 });
 
-  // עדכון לקוח
-  if (body.kind === "customer") {
+  // הגדרות הפורטל: מייל להתראות ומתגים
+  if (kind === "settings") {
+    const data: Record<string, unknown> = {};
+    if (typeof body.ownerEmail === "string") {
+      const email = body.ownerEmail.trim().toLowerCase().slice(0, 200);
+      if (email && !EMAIL_RE.test(email)) return bad("כתובת מייל לא תקינה");
+      data.ownerEmail = email;
+    }
+    for (const k of ["notifyLead", "notifyMeeting", "weeklyReport"] as const) {
+      if (typeof body[k] === "boolean") data[k] = body[k];
+    }
+    if (demo) return NextResponse.json({ ok: true });
+    await prisma.funnelPortal.update({ where: { id: portal.id }, data: data as never });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!id) return bad("חסר מזהה");
+
+  if (kind === "customer") {
     const data: Record<string, unknown> = {};
     if (typeof body.stage === "string") {
-      if (!CUSTOMER_STAGES.includes(body.stage)) return NextResponse.json({ error: "שלב לא מוכר" }, { status: 400 });
+      if (!CUSTOMER_STAGES.includes(body.stage)) return bad("שלב לא מוכר");
       data.stage = body.stage;
     }
     if (typeof body.dealType === "string") {
-      if (!["one_time", "retainer", "setup_retainer", "percent"].includes(body.dealType)) return NextResponse.json({ error: "סוג עסקה לא מוכר" }, { status: 400 });
+      if (!DEAL_TYPES.includes(body.dealType)) return bad("סוג עסקה לא מוכר");
       data.dealType = body.dealType;
     }
     if (typeof body.paid === "boolean") data.paid = body.paid;
@@ -149,42 +248,77 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ token:
     if (typeof body.business === "string") data.business = str(body.business);
     if (typeof body.phone === "string") data.phone = str(body.phone, 50);
     if (typeof body.email === "string") data.email = str(body.email);
-
-    if (portal.demo) return NextResponse.json({ ok: true });
-    const customer = await prisma.portalCustomer.updateMany({ where: { id, portalId: portal.id }, data: data as never });
-    if (customer.count === 0) return NextResponse.json({ error: "not found" }, { status: 404 });
+    if (demo) return NextResponse.json({ ok: true });
+    const res = await prisma.portalCustomer.updateMany({ where: { id, portalId: portal.id }, data: data as never });
+    if (res.count === 0) return bad("not found", 404);
     return NextResponse.json({ ok: true });
   }
 
-  // סימון רלוונטיות של ליד
-  if (body.kind === "relevant") {
+  // תשובת מנהל לאסקלציה — נשמרת גם כפריט ידע, וכך נכנסת לסוכן בשיחות הבאות
+  if (kind === "escalation") {
+    const answer = str(body.answer, 2000);
+    if (!answer) return bad("חסרה תשובה");
+    if (demo) return NextResponse.json({ ok: true });
+    const esc = await prisma.chatEscalation.findFirst({
+      where: { id, ...(portal.isDefault ? { OR: [{ portalId: portal.id }, { portalId: null }] } : { portalId: portal.id }) },
+    });
+    if (!esc) return bad("not found", 404);
+    await prisma.chatEscalation.update({ where: { id }, data: { answer, status: "answered", answeredAt: new Date() } });
+    const existing = await prisma.portalKnowledge.findFirst({ where: { portalId: portal.id, escalationId: id } });
+    if (existing) await prisma.portalKnowledge.update({ where: { id: existing.id }, data: { content: answer, deletedAt: null } });
+    else await prisma.portalKnowledge.create({ data: { portalId: portal.id, title: esc.question.slice(0, 200), content: answer, source: "escalation", escalationId: id } });
+    return NextResponse.json({ ok: true });
+  }
+
+  // עריכה או הסרה (רכה) של פריט ידע
+  if (kind === "knowledge") {
+    const data: Record<string, unknown> = {};
+    if (body.remove === true) data.deletedAt = new Date();
+    else {
+      const title = str(body.title, 200);
+      const content = str(body.content, 2000);
+      if (!title || !content) return bad("חסרים נושא ותוכן");
+      data.title = title; data.content = content;
+    }
+    if (demo) return NextResponse.json({ ok: true });
+    const res = await prisma.portalKnowledge.updateMany({ where: { id, portalId: portal.id }, data: data as never });
+    if (res.count === 0) return bad("not found", 404);
+    return NextResponse.json({ ok: true });
+  }
+
+  // הסרה (רכה) של תיעוד על ליד
+  if (kind === "note") {
+    if (demo) return NextResponse.json({ ok: true });
+    const res = await prisma.portalLeadNote.updateMany({ where: { id, portalId: portal.id }, data: { deletedAt: new Date() } });
+    if (res.count === 0) return bad("not found", 404);
+    return NextResponse.json({ ok: true });
+  }
+
+  // מכאן: פעולות על ליד (שיחה). כולן מותנות בכך שהשיחה שייכת לפורטל.
+  if (!demo && !(await chatInScope(id, portal))) return bad("not found", 404);
+
+  if (kind === "relevant") {
     const relevant = typeof body.relevant === "string" && ["yes", "no", ""].includes(body.relevant) ? body.relevant : null;
-    if (relevant === null) return NextResponse.json({ error: "ערך לא תקין" }, { status: 400 });
-    if (portal.demo) return NextResponse.json({ ok: true, relevant });
-    const chat = await prisma.prospectChat.update({ where: { id }, data: { relevant } }).catch(() => null);
-    if (!chat) return NextResponse.json({ error: "not found" }, { status: 404 });
+    if (relevant === null) return bad("ערך לא תקין");
+    if (!demo) await prisma.prospectChat.update({ where: { id }, data: { relevant } });
     return NextResponse.json({ ok: true, relevant });
   }
 
-  // תשובת מנהל לאסקלציה — נכנסת לידע של הסוכן בשיחות הבאות
-  if (body.kind === "escalation") {
-    const answer = typeof body.answer === "string" ? body.answer.trim().slice(0, 2000) : "";
-    if (!answer) return NextResponse.json({ error: "חסרה תשובה" }, { status: 400 });
-    if (portal.demo) return NextResponse.json({ ok: true });
-    const esc = await prisma.chatEscalation.update({
-      where: { id }, data: { answer, status: "answered", answeredAt: new Date() },
-    }).catch(() => null);
-    if (!esc) return NextResponse.json({ error: "not found" }, { status: 404 });
-    return NextResponse.json({ ok: true });
+  // משימת המשך: מתי ומה. תאריך ריק מנקה את המשימה.
+  if (kind === "nextAction") {
+    const note = str(body.note, 300);
+    let at: Date | null = null;
+    if (typeof body.at === "string" && body.at) {
+      at = new Date(body.at);
+      if (isNaN(at.getTime())) return bad("תאריך לא תקין");
+    }
+    if (!demo) await prisma.prospectChat.update({ where: { id }, data: { nextActionAt: at, nextActionNote: at ? note : "" } });
+    return NextResponse.json({ ok: true, nextActionAt: at, nextActionNote: at ? note : "" });
   }
 
-  // עדכון סטטוס ליד במשפך
+  // kind=status
   const funnelStatus = typeof body.funnelStatus === "string" ? body.funnelStatus.trim().slice(0, 40) : null;
-  if (funnelStatus === null || (funnelStatus !== "" && !FUNNEL_STATUS_OPTIONS.includes(funnelStatus))) {
-    return NextResponse.json({ error: "בקשה לא תקינה" }, { status: 400 });
-  }
-  if (portal.demo) return NextResponse.json({ ok: true, funnelStatus });
-  const chat = await prisma.prospectChat.update({ where: { id }, data: { funnelStatus } }).catch(() => null);
-  if (!chat) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (funnelStatus === null || (funnelStatus !== "" && !FUNNEL_STATUS_OPTIONS.includes(funnelStatus))) return bad("בקשה לא תקינה");
+  if (!demo) await prisma.prospectChat.update({ where: { id }, data: { funnelStatus } });
   return NextResponse.json({ ok: true, funnelStatus });
 }
