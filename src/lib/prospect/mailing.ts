@@ -61,7 +61,7 @@ function computeStats(logs: ProspectEmailLog[], reports: Map<string, PotentialRe
 }
 
 /** מיילים שמטרתם להביא לפגישה: רק אצלם "התקדמו" (קבעו פגישה אחרי המייל) הוא מדד רלוונטי */
-const countsAdvance = (key: EmailKey) => ["report", "nurture1", "nurture3", "nurture7", "cancelled"].includes(key);
+const countsAdvance = (key: EmailKey) => key === "report" || key === "cancelled" || key.startsWith("nurture");
 
 async function loadLogs(portal: FunnelPortal, key?: EmailKey) {
   const logs = await prisma.prospectEmailLog.findMany({

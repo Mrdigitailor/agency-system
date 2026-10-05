@@ -1,9 +1,10 @@
 // קרון שעתי — רצף המיילים של משפך דוח הפוטנציאל + זיהוי ביטולי פגישות.
-// מסלולים: לא קבע (חימום 1/3/7 ימים) · קבע (תזכורת 24 שעות לפני) · ביטל (מייל החזרה).
+// מסלולים: לא קבע (רצף המשך לפי NURTURE_SCHEDULE) · קבע (תזכורת 24 שעות לפני) · ביטל (מייל החזרה).
 // Auth: CRON_SECRET, כמו שאר הקרונים.
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { sendProspectEmail, type EmailKey } from "@/lib/prospect/emails";
+import { NURTURE_SCHEDULE } from "@/lib/prospect/email-templates";
 import { sendTelegramMessage } from "@/lib/api/telegram/client";
 import { ownerChatId } from "@/lib/performance/approval";
 
@@ -11,6 +12,7 @@ export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
 const DAY = 24 * 3600_000;
+const SEND_WINDOW = 2 * DAY;
 
 async function calendarToken(): Promise<string | null> {
   const conn = await prisma.googleCalendarConnection.findFirst({ where: { refreshToken: { not: "" } } });
@@ -90,9 +92,11 @@ async function run(req: Request) {
 
     // מסלול לא קבע: חימום לפי גיל הדוח (רק אם הדוח מוכן ומייל הדוח כבר נשלח)
     if (r.status !== "ready" || !sentKeys.includes("report")) continue;
-    const due: Array<[EmailKey, number]> = [["nurture1", DAY], ["nurture3", 3 * DAY], ["nurture7", 7 * DAY]];
+    // התזמון מגיע מהגדרת הרצף. לכל מייל חלון של יומיים: ליד שפספס את החלון
+    // (למשל כשמייל חדש נוסף לרצף) לא מקבל אותו באיחור, שלא ייצאו כמה מיילים ברצף.
+    const due: Array<[EmailKey, number]> = NURTURE_SCHEDULE.map((n) => [n.key, n.afterDays * DAY]);
     for (const [key, afterMs] of due) {
-      if (age >= afterMs && !sentKeys.includes(key)) {
+      if (age >= afterMs && age < afterMs + SEND_WINDOW && !sentKeys.includes(key)) {
         if (await sendProspectEmail(r.id, key)) sent.push(`${key}→${r.contactEmail}`);
         break; // מייל אחד לכל היותר בריצה, שלא יקבל שניים באותה שעה
       }

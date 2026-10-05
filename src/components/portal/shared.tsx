@@ -85,7 +85,8 @@ export const NOTE_KINDS: Array<{ value: string; label: string }> = [
 export const noteLabel = (k: string) => NOTE_KINDS.find((n) => n.value === k)?.label ?? k;
 
 export const EMAIL_LABELS: Record<string, string> = {
-  report: "מייל הדוח", nurture1: "מייל מעקב 1", nurture3: "מייל מעקב 2", nurture7: "מייל מעקב 3",
+  report: "מייל הדוח", nurture1: "יום 1: איך בוחרים ספק", nurture3: "יום 3: סיפור לקוח", nurture5: "יום 5: כמה להשקיע",
+  nurture8: "יום 8: מי מאחורי העסק", nurture12: "יום 12: סגירת מעגל", nurture7: "מעקב יום 7 (רצף קודם)",
   reminder: "תזכורת יום לפני", reminder1h: "תזכורת שעה לפני", cancelled: "מייל ביטול", test: "מייל בדיקה",
 };
 export const STATUS_CLS: Record<string, string> = {
