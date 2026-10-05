@@ -1,9 +1,9 @@
 // ה-API של פורטל הלקוח העצמאי — המוצר שהלקוח מקבל.
 // גישה: קישור ייחודי + סיסמה (ראו portal-auth). "demo" פתוח ומגיש נתוני הדגמה, בלי לשמור כלום.
 // כל שאילתה ועדכון מוגבלים לפורטל שמבקש: לקוח רואה ומשנה רק את הנתונים שלו.
-// GET:   ?view=leads|customers|results|escalations|knowledge|insights|settings, או ?id= לפירוט ליד
-// POST:  kind=customer (ברירת מחדל) | note | knowledge | insights
-// PATCH: kind=status (ברירת מחדל) | customer | relevant | escalation | nextAction | note | knowledge | settings
+// GET:   ?view=leads|customers|results|escalations|knowledge|insights|settings|mailing(&key=), או ?id= לפירוט ליד
+// POST:  kind=customer (ברירת מחדל) | note | knowledge | insights | emailVersion | emailPreview | emailAdvice
+// PATCH: kind=status (ברירת מחדל) | customer | relevant | escalation | nextAction | note | knowledge | settings | emailEnabled
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -17,6 +17,11 @@ import {
 import { requirePortal } from "@/lib/prospect/portal-auth";
 import { generateInsights, latestInsight, MIN_CHATS_FOR_INSIGHTS, REGENERATE_HOURS } from "@/lib/prospect/portal-insights";
 import { todayIL, monthStartIL, shiftYmd } from "@/lib/utils/ildate";
+import {
+  loadMailing, loadMailingDetail, saveEmailVersion, setEmailEnabled, previewEmail, generateEmailAdvice, ADVICE_HOURS,
+} from "@/lib/prospect/mailing";
+import { specOf, type EmailKey } from "@/lib/prospect/email-templates";
+import { DEMO_MAILING, demoMailingDetail } from "@/lib/prospect/demo-mailing";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // יצירת תובנות קוראת ל-Claude
@@ -106,6 +111,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     return NextResponse.json({ insight, canGenerate, minChats: MIN_CHATS_FOR_INSIGHTS });
   }
 
+  if (view === "mailing") {
+    const key = url.searchParams.get("key");
+    if (key) {
+      if (!specOf(key)) return bad("not found", 404);
+      const detail = demo ? demoMailingDetail(key as EmailKey) : await loadMailingDetail(portal, key as EmailKey);
+      if (!detail) return bad("not found", 404);
+      return NextResponse.json(detail);
+    }
+    return NextResponse.json({ emails: demo ? DEMO_MAILING : await loadMailing(portal) });
+  }
+
   if (view === "settings") {
     if (demo) return NextResponse.json({ ownerEmail: "you@example.co.il", notifyLead: true, notifyMeeting: true, weeklyReport: true });
     return NextResponse.json({ ownerEmail: portal.ownerEmail, notifyLead: portal.notifyLead, notifyMeeting: portal.notifyMeeting, weeklyReport: portal.weeklyReport });
@@ -150,6 +166,39 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     if (demo) return NextResponse.json({ ok: true, item: { id: `kn-tmp-${Date.now()}`, title, content, source: "manual", updatedAt: new Date().toISOString() } });
     const item = await prisma.portalKnowledge.create({ data: { portalId: portal.id, title, content } });
     return NextResponse.json({ ok: true, item: { id: item.id, title: item.title, content: item.content, source: item.source, updatedAt: item.updatedAt } });
+  }
+
+  // ---- דיוור ----
+  if (kind === "emailPreview" || kind === "emailVersion" || kind === "emailAdvice") {
+    const key = str(body.key, 20);
+    const spec = specOf(key);
+    if (!spec) return bad("מייל לא מוכר", 404);
+    const fields = (body.fields && typeof body.fields === "object" ? body.fields : {}) as Record<string, unknown>;
+
+    // תצוגה מקדימה של טיוטה, עם ליד לדוגמה. לא שומרת כלום.
+    if (kind === "emailPreview") {
+      const base = demo ? demoMailingDetail(spec.key)!.fields : (await loadMailingDetail(portal, spec.key))!.fields;
+      const mail = previewEmail(spec.key, fields, base);
+      return NextResponse.json({ ok: true, subject: mail?.subject ?? "", html: mail?.html ?? "" });
+    }
+
+    // שמירת נוסח חדש כגרסה
+    if (kind === "emailVersion") {
+      if (demo) return NextResponse.json({ ok: true, version: demoMailingDetail(spec.key)!.version + 1, demo: true });
+      const res = await saveEmailVersion(portal, spec.key, fields, str(body.changeNote, 300));
+      return NextResponse.json({ ok: true, ...res });
+    }
+
+    // המלצות לשיפור (מוגבל בתדירות, אלא אם הנוסח השתנה)
+    if (demo) return NextResponse.json({ ok: true, items: demoMailingDetail(spec.key)!.advice?.items ?? [] });
+    const current = await loadMailingDetail(portal, spec.key);
+    if (current && !current.canAdvise) return bad(`ההמלצות עודכנו לאחרונה. אפשר לבקש חדשות אחרי שינוי בנוסח, או בעוד ${ADVICE_HOURS} שעות.`, 429);
+    try {
+      return NextResponse.json({ ok: true, items: await generateEmailAdvice(portal, spec.key) });
+    } catch (err) {
+      console.error("[Mailing] advice failed:", err instanceof Error ? err.message : err);
+      return bad("הפקת ההמלצות נכשלה, נסו שוב בעוד כמה דקות", 502);
+    }
   }
 
   // יצירת תובנות מהשיחות של 30 הימים האחרונים (מוגבל בתדירות)
@@ -225,6 +274,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ token:
     if (demo) return NextResponse.json({ ok: true });
     await prisma.funnelPortal.update({ where: { id: portal.id }, data: data as never });
     return NextResponse.json({ ok: true });
+  }
+
+  // הפעלה או כיבוי של מייל ברצף
+  if (kind === "emailEnabled") {
+    const spec = specOf(str(body.key, 20));
+    if (!spec || typeof body.enabled !== "boolean") return bad("בקשה לא תקינה");
+    if (!demo) await setEmailEnabled(portal, spec.key, body.enabled);
+    return NextResponse.json({ ok: true, enabled: body.enabled });
   }
 
   if (!id) return bad("חסר מזהה");

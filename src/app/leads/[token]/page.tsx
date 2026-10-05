@@ -5,7 +5,7 @@
 // כל מסך הוא רכיב נפרד ב-components/portal. /leads/demo מציג נתוני הדגמה בלי כניסה.
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { BarChart3, Inbox, Users, MessagesSquare, AlertTriangle, Lightbulb, BookOpen, Settings, Loader2 } from "lucide-react";
+import { BarChart3, Inbox, Users, MessagesSquare, AlertTriangle, Lightbulb, BookOpen, Settings, Loader2, Mail } from "lucide-react";
 import { type Tab, type Row, type DealSeed, type Customer, AUTH_LOST_EVENT, portalApi } from "@/components/portal/shared";
 import LoginGate from "@/components/portal/LoginGate";
 import ResultsTab from "@/components/portal/ResultsTab";
@@ -16,6 +16,7 @@ import EscalationsTab from "@/components/portal/EscalationsTab";
 import InsightsTab from "@/components/portal/InsightsTab";
 import KnowledgeTab from "@/components/portal/KnowledgeTab";
 import SettingsTab from "@/components/portal/SettingsTab";
+import MailingTab from "@/components/portal/MailingTab";
 import LeadModal from "@/components/portal/LeadModal";
 import CloseDealModal from "@/components/portal/CloseDealModal";
 
@@ -25,13 +26,14 @@ const NAV: Array<{ key: Tab; label: string; icon: typeof Inbox; group?: string }
   { key: "results", label: "דשבורד תוצאות", icon: BarChart3 },
   { key: "crm", label: "CRM · לידים", icon: Inbox },
   { key: "customers", label: "ניהול לקוחות", icon: Users },
+  { key: "mailing", label: "דיוור", icon: Mail },
   { key: "conversations", label: "שיחות", icon: MessagesSquare, group: "הסוכן" },
   { key: "insights", label: "תובנות", icon: Lightbulb },
   { key: "escalations", label: "אסקלציות", icon: AlertTriangle },
   { key: "knowledge", label: "הידע של הסוכן", icon: BookOpen },
   { key: "settings", label: "הגדרות", icon: Settings, group: "המערכת" },
 ];
-const WIDE_TABS: Tab[] = ["crm", "conversations"];
+const WIDE_TABS: Tab[] = ["crm", "conversations", "mailing"];
 
 export default function LeadsPortalPage() {
   const { token } = useParams<{ token: string }>();
@@ -147,6 +149,7 @@ export default function LeadsPortalPage() {
           {tab === "crm" && <CrmTab rows={rows} loading={loading} days={days} setDays={setDays} demo={demo} onOpen={setOpenLead} onRelevant={setRelevant} />}
           {tab === "customers" && <CustomersTab key={customersVersion} token={token} rows={rows} onOpenLead={setOpenLead} unsaved={demoCustomers} />}
           {tab === "conversations" && <ConversationsTab rows={rows} loading={loading} days={days} setDays={setDays} demo={demo} onOpen={setOpenLead} />}
+          {tab === "mailing" && <MailingTab token={token} demo={demo} />}
           {tab === "escalations" && <EscalationsTab token={token} onOpenCount={setOpenEscalations} />}
           {tab === "insights" && <InsightsTab token={token} demo={demo} />}
           {tab === "knowledge" && <KnowledgeTab token={token} />}

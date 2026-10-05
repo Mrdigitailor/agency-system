@@ -1,6 +1,6 @@
 // בסיס משותף לרכיבי פורטל הלקוח: טיפוסים, קבועי עיצוב, עזרי תאריך וקריאות ל-API.
 
-export type Tab = "results" | "crm" | "customers" | "conversations" | "escalations" | "insights" | "knowledge" | "settings";
+export type Tab = "results" | "crm" | "customers" | "mailing" | "conversations" | "escalations" | "insights" | "knowledge" | "settings";
 
 export interface Row {
   id: string; createdAt: string; name: string; email: string; phone: string;
@@ -42,6 +42,31 @@ export interface Insight {
   topQuestions: Array<{ text: string; count: number }>; objections: Array<{ text: string; count: number }>;
   dropoffs: Array<{ text: string; count: number }>; recommendations: string[];
 }
+// ---- דיוור ----
+export interface EmailStats {
+  sent: number; tracked: number; opened: number; clicked: number; bounced: number; advanced: number;
+  openRate: number | null; clickRate: number | null; advanceRate: number | null;
+}
+export interface MailingRow extends EmailStats {
+  key: string; label: string; when: string; job: string; enabled: boolean; version: number; subject: string;
+}
+export interface EmailFields { subject: string; preheader: string; bodyBefore: string; bodyAfter: string; buttonLabel: string; footnote: string }
+export type EmailFieldKey = keyof EmailFields;
+export interface EmailVersionRow extends EmailStats { version: number; createdAt: string | null; changeNote: string; current: boolean }
+export interface EmailAdvice { title: string; why: string; field: EmailFieldKey; suggestion: string }
+export interface MailingDetail {
+  key: string; label: string; when: string; job: string; tokens: string[]; hasBlock: boolean; blockLabel: string;
+  enabled: boolean; version: number; fields: EmailFields; defaults: EmailFields;
+  versions: EmailVersionRow[];
+  advice: { items: EmailAdvice[]; createdAt: string; version: number } | null;
+  canAdvise: boolean;
+}
+export const EMAIL_FIELD_LABELS: Record<EmailFieldKey, string> = {
+  subject: "נושא המייל", preheader: "כותרת משנית", bodyBefore: "פתיחה", bodyAfter: "המשך", buttonLabel: "טקסט הכפתור", footnote: "שורת סיום",
+};
+/** אחוז להצגה: מקף כשעוד אין מספיק שליחות מדודות */
+export const pct = (v: number | null) => (v === null ? "-" : `${Math.round(v)}%`);
+
 /** פרטי ליד שממלאים מראש את טופס סגירת העסקה */
 export interface DealSeed { chatId?: string; name: string; business: string; phone: string; email: string }
 

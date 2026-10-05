@@ -126,6 +126,16 @@ export const QUESTIONS: Question[] = [
     input: { kind: "choice", options: ["שיחת ייעוץ חינם", "פגישת היכרות", "בדיקת התאמה", "הצעת מחיר", "אחר"], detail: { showFor: ["אחר"], field: { key: "otherOffer", label: "פרט", type: "text", max: 300 } } },
   },
   {
+    id: "q26", chapter: 3, title: "יש לך הצעה שקשה לסרב לה?",
+    why: "אחריות, בונוס, מחיר מיוחד, ליווי צמוד: כל מה שגורם ללקוח להגיד \"שווה לי\". הצעה חזקה נכנסת לדף ולמיילים, והיא מה שמכריע כשהלקוח משווה אותך למתחרים.",
+    example: "אחריות להחזר מלא אם לא חסכנו לך לפחות 50,000 ₪ במשכנתא · פגישה ראשונה ללא עלות ובלי התחייבות",
+    input: { kind: "fields", fields: [
+      { key: "winningOffer", label: "ההצעה", type: "textarea", optional: true, max: 800 },
+      { key: "offerLimits", label: "תנאים או הגבלות שחשוב לציין", type: "text", optional: true, max: 300 },
+    ] },
+    optional: true,
+  },
+  {
     id: "q10", chapter: 3, title: "להציג מחירים בדף?",
     why: "מחיר גלוי מסנן פניות לא רציניות אבל מקטין את הכמות. אין תשובה נכונה — יש העדפה שלך, ואנחנו נתאים.",
     input: { kind: "choice", options: ["כן", "לא", "רק \"החל מ־\""] },
@@ -169,6 +179,18 @@ export const QUESTIONS: Question[] = [
     input: { kind: "repeater", itemLabel: "המלצה", addLabel: "+ הוסף המלצה", maxRows: 15, fields: [
       { key: "url", label: "קישור", type: "url", placeholder: "https://..." },
       { key: "type", label: "סוג", type: "select", options: ["סרטון", "טקסט", "ביקורת גוגל", "צילום מסך", "אחר"] },
+    ] },
+    optional: true,
+  },
+  {
+    id: "q27", chapter: 5, title: "ספר לנו על שניים או שלושה לקוחות",
+    why: "סיפור אמיתי של לקוח דומה הוא המייל שהכי בונה אמון. לא צריך שמות: מספיק מה היה המצב, מה עשיתם, ומה יצא מזה.",
+    example: "זוג צעיר מחיפה שקיבל סירוב משני בנקים · בנינו תמהיל חדש והגשנו מחדש · אישור תוך שבועיים וחיסכון של 180,000 ₪",
+    input: { kind: "repeater", itemLabel: "סיפור לקוח", addLabel: "+ הוסף סיפור", maxRows: 5, fields: [
+      { key: "who", label: "מי הלקוח (בלי שם, רק תיאור)", type: "text", max: 200 },
+      { key: "before", label: "מה היה המצב לפני", type: "textarea", max: 600 },
+      { key: "what", label: "מה עשיתם", type: "textarea", optional: true, max: 600 },
+      { key: "result", label: "מה התוצאה", type: "textarea", max: 600 },
     ] },
     optional: true,
   },
@@ -448,6 +470,10 @@ export async function applyV2ToProfile(clientId: string, a: AnswersV2): Promise<
   push("🎯 מוצר לקידום ראשון", [promote.product, promote.reason].filter(Boolean).join(" — "));
   const offer = choiceOf(a, "q09");
   push("🎁 ההצעה בדף", [offer.choice, offer.detail].filter(Boolean).join(": "));
+  const winning = fieldsOf(a, "q26");
+  push("🏆 ההצעה המנצחת", [winning.winningOffer, winning.offerLimits && `תנאים: ${winning.offerLimits}`].filter(Boolean).join(" · "));
+  push("📖 סיפורי לקוחות", rowsOf(a, "q27").filter((c) => c.who?.trim() || c.result?.trim())
+    .map((c) => [c.who, c.before && `לפני: ${c.before}`, c.what && `מה עשינו: ${c.what}`, c.result && `תוצאה: ${c.result}`].filter(Boolean).join(" | ")).join("\n"));
   push("💰 הצגת מחירים בדף", choiceOf(a, "q10").choice);
   push("⚡ הטריגר לחיפוש", fieldsOf(a, "q11").trigger);
   push("📈 התוצאה ללקוח", fieldsOf(a, "q12").results);

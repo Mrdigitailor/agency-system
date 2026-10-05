@@ -1316,6 +1316,7 @@ model PotentialReport {
 
   leadId    String?
   sourceJson String @default("{}") // JSON: מקור הגעה (utm, gclid, referrer) — מועתק מהשיחה
+  unsubscribedAt DateTime? // הליד ביקש להפסיק לקבל מיילי המשך
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1340,6 +1341,7 @@ model FunnelPortal {
   notifyLead    Boolean @default(true)
   notifyMeeting Boolean @default(true)
   weeklyReport  Boolean @default(true)
+  disabledEmails String @default("[]") // JSON: מפתחות מיילים ברצף שבעל הפורטל כיבה
   deletedAt DateTime?
   createdAt DateTime @default(now())
 
@@ -1375,6 +1377,39 @@ model PortalKnowledge {
 
   @@index([portalId])
   @@map("portal_knowledge")
+}
+
+// גרסה של מייל ברצף הדיוור. כל שמירת עריכה יוצרת גרסה חדשה, וכך אפשר להשוות
+// את המספרים לפני ואחרי השינוי. בלי שורה = הנוסח המקורי שבקוד (גרסה 1).
+model PortalEmailVersion {
+  id          String   @id @default(cuid())
+  portalId    String
+  key         String   // report | nurture1 | nurture3 | nurture7 | reminder | reminder1h | cancelled
+  version     Int      // 2 ומעלה; 1 הוא הנוסח המקורי
+  subject     String
+  preheader   String   @default("") // הכותרת המשנית שמופיעה ליד הנושא בתיבת הדואר
+  bodyBefore  String   @default("")
+  bodyAfter   String   @default("")
+  buttonLabel String   @default("")
+  footnote    String   @default("")
+  changeNote  String   @default("") // מה שונה בגרסה הזאת
+  createdAt   DateTime @default(now())
+
+  @@unique([portalId, key, version])
+  @@map("portal_email_versions")
+}
+
+// המלצות לשיפור מייל, שנוצרו על ידי AI מהנוסח, מהמספרים ומהתובנות של הפורטל
+model PortalEmailAdvice {
+  id        String   @id @default(cuid())
+  portalId  String
+  key       String
+  version   Int      @default(1) // הגרסה שעליה ניתנו ההמלצות
+  content   String   @default("[]") // JSON: [{title, why, field, suggestion}]
+  createdAt DateTime @default(now())
+
+  @@index([portalId, key, createdAt])
+  @@map("portal_email_advice")
 }
 
 // תובנות מהשיחות — סיכום שנוצר על ידי AI מתמלילי השיחות של תקופה
@@ -1439,6 +1474,8 @@ model ProspectEmailLog {
   reportId    String
   key         String    // report | nurture1 | nurture3 | nurture7 | reminder | reminder1h | cancelled
   resendId    String    @default("") // מזהה המייל אצל Resend — לזיהוי אירועי webhook
+  portalId    String?   // הפורטל שהמייל שייך אליו
+  version     Int       @default(1) // גרסת הנוסח שנשלחה, להשוואת לפני ואחרי
   subject     String    @default("")
   sentAt      DateTime  @default(now())
   deliveredAt DateTime?

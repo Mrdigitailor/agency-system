@@ -1,17 +1,19 @@
 // רצף המיילים של משפך דוח הפוטנציאל — שכבה א'.
 // שלושה מסלולים: קבע פגישה (תזכורת) / לא קבע (חימום) / ביטל (החזרה).
 // כלל בית: בלי מקפים ארוכים. טון: חם, ישיר, בלי לחץ.
+// הנוסח של כל מייל מגיע מ-email-templates (ברירת מחדל) או מגרסה שנערכה בטאב הדיוור.
 import { Resend } from "resend";
 import { prisma } from "@/lib/db/prisma";
 import type { PotentialReport } from "@/generated/prisma";
 import { ZOOM_LINK } from "./scheduling";
+import { type EmailKey, type EmailFields, specOf, fillTokens, textToParagraphs, plainText } from "./email-templates";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const APP_BASE = process.env.APP_BASE_URL ?? "https://agency.mr-digitailor.co.il";
 const FROM = "סער מ-Mr.digitailor <noreply@mr-digitailor.co.il>";
 const REPLY_TO = "saar@digitailors.co.il";
 
-export type EmailKey = "report" | "nurture1" | "nurture3" | "nurture7" | "reminder" | "reminder1h" | "cancelled";
+export type { EmailKey } from "./email-templates";
 
 const parseSent = (raw: string): EmailKey[] => { try { return JSON.parse(raw || "[]"); } catch { return []; } };
 
@@ -62,7 +64,7 @@ const SIGNATURE = `
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid #efede8;text-align:center;color:#9a958c;font-size:10.5px;letter-spacing:3px;font-family:${FONT}">BETTER BUSINESSES &nbsp;·&nbsp; BRIGHTER TOMORROW</div>
   </div>`;
 
-function shell(inner: string): string {
+function shell(inner: string, opts: { preheader?: string; unsubscribeUrl?: string } = {}): string {
   return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 @font-face{font-family:'Ploni';src:url('${APP_BASE}/fonts/ploni-light-aaa.woff') format('woff');font-weight:300}
@@ -71,10 +73,12 @@ function shell(inner: string): string {
 @font-face{font-family:'Ploni';src:url('${APP_BASE}/fonts/ploni-demibold-aaa.woff') format('woff');font-weight:600}
 </style></head>
 <body dir="rtl" style="margin:0;background:#ffffff;padding:30px 18px;direction:rtl;font-family:${FONT}">
+${opts.preheader ? `<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:#ffffff">${opts.preheader}</div>` : ""}
 <div dir="rtl" style="max-width:560px;margin:0 auto;direction:rtl;font-family:${FONT}">
   <div dir="rtl" style="color:#111111;font-size:16.5px;line-height:1.8;direction:rtl;text-align:right;font-family:${FONT}">${inner}
   <p style="margin-top:26px">בברכה,<br>סער</p></div>
   ${SIGNATURE}
+  ${opts.unsubscribeUrl ? `<div dir="rtl" style="margin-top:14px;text-align:center;color:#b0aba2;font-size:11.5px;font-family:${FONT}">לא רוצה לקבל מאיתנו מיילים נוספים? <a href="${opts.unsubscribeUrl}" style="color:#9a958c;text-decoration:underline">להסרה מרשימת התפוצה</a></div>` : ""}
 </div></body></html>`;
 }
 
@@ -100,102 +104,70 @@ function teaser(r: PotentialReport): string {
 }
 
 // ---------- המיילים עצמם ----------
-function buildEmail(key: EmailKey, r: PotentialReport): { subject: string; html: string } | null {
-  const name = firstName(r);
-  const hi = name ? `היי ${name},` : "היי,";
-  const reportUrl = `${APP_BASE}/report/${r.token}`;
-  const startUrl = `${APP_BASE}/start`;
+const SMALL = "color:#666666;font-size:14px";
 
-  if (key === "report") {
-    return {
-      subject: name ? `${name}, דוח הפוטנציאל שלך מוכן` : "דוח הפוטנציאל שלך מוכן",
-      html: shell(`<p>${hi}</p>
-<p>כמו שהבטחתי בשיחה, הנה הדוח המלא על ${r.serviceField ? `תחום ${r.serviceField}` : "העסק שלך"}: הביקוש בגוגל, המחירים האמיתיים, וכל שלב בחישוב.</p>
-${teaser(r)}
-${btn(reportUrl, "לצפייה בדוח המלא")}
-<p style="color:#666666;font-size:14px">הדוח שמור אצלנו על השם שלך, אפשר לחזור אליו מתי שרוצים.</p>`),
-    };
-  }
+/** בונה מייל מהמבנה הקבוע של המפתח ומהנוסח שנבחר (ברירת מחדל או גרסה ערוכה) */
+export function buildEmail(key: EmailKey, r: PotentialReport, fields?: EmailFields): { subject: string; html: string } | null {
+  const spec = specOf(key);
+  if (!spec) return null;
+  const f = fields ?? spec.defaults;
 
-  if (key === "nurture1") {
-    return {
-      subject: name ? `${name}, הספקת לעבור על המספרים?` : "הספקת לעבור על המספרים?",
-      html: shell(`<p>${hi}</p>
-<p>אתמול הכנו לך דוח פוטנציאל על העסק. רציתי לוודא שהוא הגיע ושהספקת להציץ.</p>
-${teaser(r)}
-<p>אם משהו במספרים לא ברור, או שאתה רוצה להבין איך מגיעים אליהם בפועל, בפגישת זום קצרה של 30 דקות עם סער עוברים על הכל יחד: הניתוח, המתחרים שלך בשידור חי, והצעדים. בלי עלות ובלי מחויבות.</p>
-${btn(startUrl, "לקביעת פגישה")}
-<p style="color:#666666;font-size:14px">ואם עכשיו לא הזמן, הכל טוב. הדוח נשאר שלך.</p>`),
-    };
-  }
+  const meeting = r.meetingAt ? new Date(r.meetingAt) : null;
+  const values = {
+    name: firstName(r),
+    field: r.serviceField ?? "",
+    when: meeting ? meeting.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "",
+    time: meeting ? meeting.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" }) : "",
+  };
+  const t = (text: string) => fillTokens(text, values);
 
-  if (key === "nurture3") {
-    return {
-      subject: "למה לידים לבד לא מספיקים",
-      html: shell(`<p>${hi}</p>
-<p>משהו שלמדנו אחרי שנים עם עשרות עסקים: ההבדל בין קמפיין שמרוויח לקמפיין ששורף כסף הוא כמעט אף פעם לא הלידים עצמם. זה מה שקורה להם אחרי.</p>
-<p>ליד שמקבל מענה תוך שעה שווה פי כמה מליד שמחכה ליום המחרת. ליד שמגיע לפגישה מוכן שווה פי כמה ממי שצריך לשכנע מאפס. בדיוק בשביל זה בנינו מערכת שמטפלת בכל השרשרת, לא רק בקליקים.</p>
-<p>בדוח שלך ראית מה הפוטנציאל. בפגישה מראים איך הופכים אותו למציאות אצלך:</p>
-${btn(startUrl, "לתיאום 30 דקות עם סער")}`),
-    };
-  }
+  const block = spec.block === "teaser" ? teaser(r)
+    : spec.block === "meeting" ? `<p dir="rtl" style="background:#faf6e9;border-radius:10px;padding:14px 18px;text-align:right"><b style="color:#8a6a15">📅 ${plainText(values.when)}</b><br>
+<a href="${ZOOM_LINK}" style="color:#8a6a15;font-weight:bold">קישור הזום לפגישה</a></p>`
+    : "";
+  const href = spec.button === "report" ? `${APP_BASE}/report/${r.token}` : spec.button === "zoom" ? ZOOM_LINK : `${APP_BASE}/start`;
+  const label = plainText(t(f.buttonLabel)).trim();
 
-  if (key === "nurture7") {
-    return {
-      subject: name ? `${name}, הדוח שלך עדיין שמור` : "הדוח שלך עדיין שמור",
-      html: shell(`<p>${hi}</p>
-<p>לפני שבוע הכנו לך דוח פוטנציאל, והוא עדיין שמור אצלנו על השם שלך.</p>
-${teaser(r)}
-<p>אני לא אציף אותך במיילים. רק אגיד שאם תרצה לעבור על המספרים יחד, בזמן שנוח לך, הדלת פתוחה. ואם נוח לך יותר בטלפון, פשוט השב למייל הזה עם המספר ונחזור אליך.</p>
-${btn(reportUrl, "לדוח שלך")}`),
-    };
-  }
+  const inner = [
+    textToParagraphs(t(f.bodyBefore)),
+    block,
+    textToParagraphs(t(f.bodyAfter)),
+    label ? btn(href, label) : "",
+    spec.button === "zoom" ? `<p style="${SMALL}">${ZOOM_LINK}</p>` : "",
+    textToParagraphs(t(f.footnote), SMALL),
+  ].filter(Boolean).join("\n");
 
-  if (key === "reminder") {
-    const when = r.meetingAt
-      ? new Date(r.meetingAt).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-      : "";
-    return {
-      subject: `מחר נפגשים 👋 ${when}`,
-      html: shell(`<p>${hi}</p>
-<p>תזכורת קטנה: מחר בשעה שקבענו נפגשים בזום לעבור על דוח הפוטנציאל שלך.</p>
-<p dir="rtl" style="background:#faf6e9;border-radius:10px;padding:14px 18px;text-align:right"><b style="color:#8a6a15">📅 ${when}</b><br>
-<a href="${ZOOM_LINK}" style="color:#8a6a15;font-weight:bold">קישור הזום לפגישה</a></p>
-<p>שווה לפתוח את הדוח לפני, ולהכין כל שאלה שעולה לך. סער יעבור איתך על הכל, כולל הצצה חיה למתחרים שלך.</p>
-${btn(reportUrl, "לרענון הדוח לפני הפגישה")}`),
-    };
-  }
-
-  if (key === "reminder1h") {
-    const when = r.meetingAt
-      ? new Date(r.meetingAt).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" })
-      : "";
-    return {
-      subject: `נפגשים בקרוב 🕐 היום ב-${when}`,
-      html: shell(`<p>${hi}</p>
-<p>הפגישה שלנו מתחילה בקרוב, היום ב-<b>${when}</b>. זה הקישור:</p>
-${btn(ZOOM_LINK, "להצטרפות לזום")}
-<p style="color:#666666;font-size:14px">${ZOOM_LINK}</p>
-<p>נתראה עוד מעט!</p>`),
-    };
-  }
-
-  if (key === "cancelled") {
-    return {
-      subject: name ? `${name}, נתפס לך משהו?` : "נתפס לך משהו?",
-      html: shell(`<p>${hi}</p>
-<p>ראיתי שהפגישה שלנו ירדה מהיומן. קורה, החיים דינמיים.</p>
-<p>הדוח שלך עדיין שמור, והיומן של סער פתוח. אפשר לקבוע מועד חדש בדקה, או פשוט להשיב למייל הזה עם זמן שנוח לך.</p>
-${btn(startUrl, "לקביעת מועד חדש")}`),
-    };
-  }
-
-  return null;
+  return {
+    subject: t(f.subject).replace(/[—–]/g, "-").trim(),
+    html: shell(inner, {
+      preheader: plainText(t(f.preheader)),
+      unsubscribeUrl: spec.marketing ? `${APP_BASE}/unsubscribe/${r.token}` : undefined,
+    }),
+  };
 }
 
 /** תצוגה מקדימה לבדיקות עיצוב — מחזיר את ה-HTML בלי לשלוח */
-export function previewProspectEmail(key: EmailKey, r: PotentialReport): { subject: string; html: string } | null {
-  return buildEmail(key, r);
+export function previewProspectEmail(key: EmailKey, r: PotentialReport, fields?: EmailFields): { subject: string; html: string } | null {
+  return buildEmail(key, r, fields);
+}
+
+/** הפורטל שהדוח שייך אליו: דרך השיחה שיצרה אותו, אחרת פורטל ברירת המחדל */
+async function portalOfReport(reportId: string) {
+  const chat = await prisma.prospectChat.findFirst({ where: { reportId }, select: { portalId: true } });
+  if (chat?.portalId) return prisma.funnelPortal.findUnique({ where: { id: chat.portalId } });
+  return prisma.funnelPortal.findFirst({ where: { isDefault: true, deletedAt: null } });
+}
+
+/** הנוסח הנוכחי של מייל בפורטל: הגרסה האחרונה שנשמרה, או ברירת המחדל (גרסה 1) */
+export async function currentEmailFields(portalId: string | null, key: EmailKey): Promise<{ fields: EmailFields; version: number }> {
+  const spec = specOf(key)!;
+  if (!portalId) return { fields: spec.defaults, version: 1 };
+  const v = await prisma.portalEmailVersion.findFirst({ where: { portalId, key }, orderBy: { version: "desc" } });
+  if (!v) return { fields: spec.defaults, version: 1 };
+  return {
+    version: v.version,
+    fields: { subject: v.subject, preheader: v.preheader, bodyBefore: v.bodyBefore, bodyAfter: v.bodyAfter, buttonLabel: v.buttonLabel, footnote: v.footnote },
+  };
 }
 
 /** שולח מייל אחד ומסמן אותו כנשלח. לא שולח פעמיים. */
@@ -205,7 +177,17 @@ export async function sendProspectEmail(reportId: string, key: EmailKey): Promis
   const sent = parseSent(r.emailsSent);
   if (sent.includes(key)) return false;
 
-  const email = buildEmail(key, r);
+  const spec = specOf(key);
+  if (!spec) return false;
+  // מי שביקש הסרה לא מקבל מיילי המשך (מיילים תפעוליים כמו תזכורת פגישה ממשיכים)
+  if (spec.marketing && r.unsubscribedAt) return false;
+
+  const portal = await portalOfReport(r.id).catch(() => null);
+  const disabled: string[] = (() => { try { return JSON.parse(portal?.disabledEmails || "[]"); } catch { return []; } })();
+  if (disabled.includes(key)) return false;
+
+  const { fields, version } = await currentEmailFields(portal?.id ?? null, key);
+  const email = buildEmail(key, r, fields);
   if (!email) return false;
 
   try {
@@ -218,11 +200,11 @@ export async function sendProspectEmail(reportId: string, key: EmailKey): Promis
       where: { id: r.id },
       data: { emailsSent: JSON.stringify([...sent, key]) },
     });
-    // תיעוד לממשק המשפך — אירועי פתיחה/הקלקה יתווספו דרך ה-webhook של Resend
+    // תיעוד לטאב הדיוור — אירועי פתיחה/הקלקה יתווספו דרך ה-webhook של Resend
     await prisma.prospectEmailLog.create({
-      data: { reportId: r.id, key, resendId: res.data?.id ?? "", subject: email.subject },
+      data: { reportId: r.id, key, resendId: res.data?.id ?? "", subject: email.subject, portalId: portal?.id ?? null, version },
     }).catch(() => {});
-    console.log(`[ProspectEmail] sent ${key} to ${r.contactEmail}`);
+    console.log(`[ProspectEmail] sent ${key} v${version} to ${r.contactEmail}`);
     return true;
   } catch (err) {
     console.error(`[ProspectEmail] ${key} exception:`, err instanceof Error ? err.message : err);
