@@ -1317,6 +1317,7 @@ model PotentialReport {
   leadId    String?
   sourceJson String @default("{}") // JSON: מקור הגעה (utm, gclid, referrer) — מועתק מהשיחה
   unsubscribedAt DateTime? // הליד ביקש להפסיק לקבל מיילי המשך
+  noShowAt       DateTime? // בעל העסק סימן שהליד לא הגיע לפגישה שקבע
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

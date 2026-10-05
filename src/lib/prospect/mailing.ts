@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db/prisma";
 import type { FunnelPortal, PotentialReport, ProspectEmailLog } from "@/generated/prisma";
 import {
-  EMAIL_SPECS, EMAIL_KEYS, EMAIL_FIELD_KEYS, BLOCK_LABELS, specOf, sanitizeFields,
+  EMAIL_SPECS, EMAIL_KEYS, EMAIL_FIELD_KEYS, BLOCK_LABELS, specOf, sanitizeFields, groupOf, type EmailGroup,
   type EmailKey, type EmailFields, type EmailFieldKey,
 } from "./email-templates";
 import { buildEmail, currentEmailFields } from "./emails";
@@ -25,7 +25,7 @@ export interface EmailStats {
   openRate: number | null; clickRate: number | null; advanceRate: number | null;
 }
 export interface MailingRow extends EmailStats {
-  key: EmailKey; label: string; when: string; job: string; enabled: boolean; version: number; subject: string;
+  key: EmailKey; group: EmailGroup; label: string; when: string; job: string; enabled: boolean; version: number; subject: string;
 }
 export interface VersionRow extends EmailStats { version: number; createdAt: Date | string | null; changeNote: string; current: boolean }
 export interface AdviceItem { title: string; why: string; field: EmailFieldKey; suggestion: string }
@@ -61,7 +61,7 @@ function computeStats(logs: ProspectEmailLog[], reports: Map<string, PotentialRe
 }
 
 /** מיילים שמטרתם להביא לפגישה: רק אצלם "התקדמו" (קבעו פגישה אחרי המייל) הוא מדד רלוונטי */
-const countsAdvance = (key: EmailKey) => key === "report" || key === "cancelled" || key.startsWith("nurture");
+const countsAdvance = (key: EmailKey) => key === "report" || key === "cancelled" || key === "noshow" || key.startsWith("nurture");
 
 async function loadLogs(portal: FunnelPortal, key?: EmailKey) {
   const logs = await prisma.prospectEmailLog.findMany({
@@ -84,7 +84,7 @@ export async function loadMailing(portal: FunnelPortal): Promise<MailingRow[]> {
     const version = latest?.version ?? 1;
     const mine = logs.filter((l) => l.key === spec.key && l.version === version);
     return {
-      key: spec.key, label: spec.label, when: spec.when, job: spec.job,
+      key: spec.key, group: groupOf(spec.key), label: spec.label, when: spec.when, job: spec.job,
       enabled: !disabled.includes(spec.key), version,
       subject: latest?.subject ?? spec.defaults.subject,
       ...computeStats(mine, reports, countsAdvance(spec.key)),

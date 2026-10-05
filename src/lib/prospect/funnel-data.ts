@@ -43,7 +43,7 @@ export interface FunnelDetail {
   fields: Record<string, unknown>; source: Record<string, string>;
   funnelStatus: string; statusOptions: string[];
   transcript: Array<{ role: string; text: string; at: string }>;
-  report: { status: string; link: string; headline: string; budget: number; meetingAt: Date | string | null; bookedAt: Date | string | null; cancelledAt: Date | string | null } | null;
+  report: { status: string; link: string; headline: string; budget: number; meetingAt: Date | string | null; bookedAt: Date | string | null; cancelledAt: Date | string | null; noShowAt: Date | string | null } | null;
   emails: Array<{ key: string; subject: string; sentAt: Date | string; deliveredAt: Date | string | null; openedAt: Date | string | null; clickedAt: Date | string | null; bouncedAt: Date | string | null }>;
   lead: { id: string; stage: string; status: string; nextActionNote: string; notes: string } | null;
   nextActionAt: Date | string | null; nextActionNote: string;
@@ -89,6 +89,7 @@ function derivedStatus(f: ChatFieldsLite, r?: PotentialReport | null): string {
   if (r?.status === "ready") derived = "קיבל דוח";
   if (f.declineReason) derived = "סירב לפגישה";
   if (r?.meetingAt && !r.cancelledAt) derived = "קבע פגישה";
+  if (r?.noShowAt && r.meetingAt && r.noShowAt > r.meetingAt) derived = "לא הגיע לפגישה";
   if (r?.cancelledAt) derived = "ביטל פגישה";
   return derived;
 }
@@ -225,6 +226,7 @@ export function buildDetail(chat: ProspectChat, report: PotentialReport | null, 
     report: report ? {
       status: report.status, link: `${appBase}/report/${report.token}`, headline,
       budget: report.budget, meetingAt: report.meetingAt, bookedAt: report.bookedAt, cancelledAt: report.cancelledAt,
+      noShowAt: report.noShowAt ?? null,
     } : null,
     emails: emailLogs.map((l) => ({
       key: l.key, subject: l.subject, sentAt: l.sentAt,

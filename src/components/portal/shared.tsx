@@ -18,7 +18,7 @@ export interface Detail {
   fields: Record<string, unknown>; source: Record<string, string>;
   funnelStatus: string; statusOptions: string[];
   transcript: Array<{ role: string; text: string; at: string }>;
-  report: { link: string; headline: string; meetingAt: string | null; cancelledAt: string | null } | null;
+  report: { link: string; headline: string; meetingAt: string | null; cancelledAt: string | null; noShowAt: string | null } | null;
   emails: Array<{ key: string; subject: string; sentAt: string; openedAt: string | null; clickedAt: string | null; bouncedAt: string | null }>;
   nextActionAt: string | null; nextActionNote: string; notes: LeadNote[]; customerId: string | null;
 }
@@ -48,8 +48,9 @@ export interface EmailStats {
   openRate: number | null; clickRate: number | null; advanceRate: number | null;
 }
 export interface MailingRow extends EmailStats {
-  key: string; label: string; when: string; job: string; enabled: boolean; version: number; subject: string;
+  key: string; group: string; label: string; when: string; job: string; enabled: boolean; version: number; subject: string;
 }
+export interface MailingGroup { key: string; title: string; sub: string }
 export interface EmailFields { subject: string; preheader: string; bodyBefore: string; bodyAfter: string; buttonLabel: string; footnote: string }
 export type EmailFieldKey = keyof EmailFields;
 export interface EmailVersionRow extends EmailStats { version: number; createdAt: string | null; changeNote: string; current: boolean }
@@ -87,7 +88,7 @@ export const noteLabel = (k: string) => NOTE_KINDS.find((n) => n.value === k)?.l
 export const EMAIL_LABELS: Record<string, string> = {
   report: "מייל הדוח", nurture1: "יום 1: איך בוחרים ספק", nurture3: "יום 3: סיפור לקוח", nurture5: "יום 5: כמה להשקיע",
   nurture8: "יום 8: מי מאחורי העסק", nurture12: "יום 12: סגירת מעגל", nurture7: "מעקב יום 7 (רצף קודם)",
-  reminder: "תזכורת יום לפני", reminder1h: "תזכורת שעה לפני", cancelled: "מייל ביטול", test: "מייל בדיקה",
+  reminder: "תזכורת יום לפני", reminder1h: "תזכורת שעה לפני", cancelled: "מייל ביטול", noshow: "לא הגיע לפגישה", test: "מייל בדיקה",
 };
 export const STATUS_CLS: Record<string, string> = {
   "שיחה": "bg-white/10 text-white/50",
@@ -95,6 +96,7 @@ export const STATUS_CLS: Record<string, string> = {
   "קיבל דוח": "bg-brand-gold/20 text-brand-gold",
   "קבע פגישה": "bg-emerald-400/15 text-emerald-300",
   "ביטל פגישה": "bg-red-400/15 text-red-300",
+  "לא הגיע לפגישה": "bg-red-400/15 text-red-300",
   "סירב לפגישה": "bg-amber-400/15 text-amber-300",
   "חם": "bg-orange-400/20 text-orange-300",
   "נסגר": "bg-emerald-400/20 text-emerald-300",

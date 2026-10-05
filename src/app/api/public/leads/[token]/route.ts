@@ -3,7 +3,7 @@
 // כל שאילתה ועדכון מוגבלים לפורטל שמבקש: לקוח רואה ומשנה רק את הנתונים שלו.
 // GET:   ?view=leads|customers|results|escalations|knowledge|insights|settings|mailing(&key=), או ?id= לפירוט ליד
 // POST:  kind=customer (ברירת מחדל) | note | knowledge | insights | emailVersion | emailPreview | emailAdvice
-// PATCH: kind=status (ברירת מחדל) | customer | relevant | escalation | nextAction | note | knowledge | settings | emailEnabled
+// PATCH: kind=status (ברירת מחדל) | customer | relevant | escalation | nextAction | noShow | note | knowledge | settings | emailEnabled
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -20,7 +20,8 @@ import { todayIL, monthStartIL, shiftYmd } from "@/lib/utils/ildate";
 import {
   loadMailing, loadMailingDetail, saveEmailVersion, setEmailEnabled, previewEmail, generateEmailAdvice, ADVICE_HOURS,
 } from "@/lib/prospect/mailing";
-import { specOf, type EmailKey } from "@/lib/prospect/email-templates";
+import { specOf, EMAIL_GROUPS, type EmailKey } from "@/lib/prospect/email-templates";
+import { sendProspectEmail } from "@/lib/prospect/emails";
 import { DEMO_MAILING, demoMailingDetail } from "@/lib/prospect/demo-mailing";
 
 export const dynamic = "force-dynamic";
@@ -119,7 +120,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       if (!detail) return bad("not found", 404);
       return NextResponse.json(detail);
     }
-    return NextResponse.json({ emails: demo ? DEMO_MAILING : await loadMailing(portal) });
+    return NextResponse.json({ emails: demo ? DEMO_MAILING : await loadMailing(portal), groups: EMAIL_GROUPS });
   }
 
   if (view === "settings") {
@@ -353,6 +354,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ token:
 
   // מכאן: פעולות על ליד (שיחה). כולן מותנות בכך שהשיחה שייכת לפורטל.
   if (!demo && !(await chatInScope(id, portal))) return bad("not found", 404);
+
+  // הליד לא הגיע לפגישה שקבע: מסמנים, ושולחים לו מייל לבחירת מועד חדש
+  if (kind === "noShow") {
+    if (demo) return NextResponse.json({ ok: true, emailed: true });
+    const chat = await prisma.prospectChat.findUnique({ where: { id }, select: { reportId: true } });
+    const report = chat?.reportId ? await prisma.potentialReport.findUnique({ where: { id: chat.reportId } }) : null;
+    if (!report?.meetingAt || report.cancelledAt) return bad("אין לליד הזה פגישה שנקבעה");
+    if (report.meetingAt.getTime() > Date.now()) return bad("הפגישה עוד לא התקיימה");
+    if (report.noShowAt && report.noShowAt > report.meetingAt) return NextResponse.json({ ok: true, emailed: false, already: true });
+    await prisma.potentialReport.update({ where: { id: report.id }, data: { noShowAt: new Date() } });
+    const emailed = await sendProspectEmail(report.id, "noshow");
+    return NextResponse.json({ ok: true, emailed });
+  }
 
   if (kind === "relevant") {
     const relevant = typeof body.relevant === "string" && ["yes", "no", ""].includes(body.relevant) ? body.relevant : null;

@@ -1,6 +1,6 @@
 // נתוני הדמו של טאב הדיוור: מספרים לכל מייל, שתי גרסאות למייל אחד (לפני ואחרי),
 // והמלצות לדוגמה. הנוסחים עצמם הם ברירות המחדל האמיתיות של הרצף.
-import { EMAIL_SPECS, BLOCK_LABELS, specOf, type EmailKey } from "./email-templates";
+import { EMAIL_SPECS, BLOCK_LABELS, specOf, groupOf, type EmailKey } from "./email-templates";
 import type { MailingRow, MailingDetail, EmailStats, AdviceItem } from "./mailing";
 
 const stats = (sent: number, openPct: number, clickPct: number, advPct: number | null): EmailStats => ({
@@ -20,13 +20,14 @@ const CURRENT: Record<EmailKey, EmailStats> = {
   reminder: stats(58, 83, 41, null),
   reminder1h: stats(55, 88, 69, null),
   cancelled: stats(17, 71, 35, 24),
+  noshow: stats(11, 73, 45, 36),
 };
 const NURTURE1_V1 = stats(88, 42, 13, 5);
 const NURTURE1_V2_SUBJECT = "{שם}, {חיפושים} חיפושים בחודש בתחום שלך. מה הם מקלידים?";
 const NURTURE1_V1_SUBJECT = "{שם}, הספקת לעבור על המספרים?";
 
 export const DEMO_MAILING: MailingRow[] = EMAIL_SPECS.map((spec) => ({
-  key: spec.key, label: spec.label, when: spec.when, job: spec.job, enabled: true,
+  key: spec.key, group: groupOf(spec.key), label: spec.label, when: spec.when, job: spec.job, enabled: true,
   version: spec.key === "nurture1" ? 2 : 1,
   subject: spec.key === "nurture1" ? NURTURE1_V2_SUBJECT : spec.defaults.subject,
   ...CURRENT[spec.key],

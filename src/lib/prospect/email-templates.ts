@@ -3,7 +3,7 @@
 // הנוסח (נושא, כותרת משנית, טקסטים, טקסט הכפתור) נערך בטאב הדיוור ונשמר כגרסאות.
 // הקובץ הזה טהור: בלי גישה לבסיס הנתונים, כדי שגם הדמו והתצוגה המקדימה ישתמשו בו.
 
-export type EmailKey = "report" | "nurture1" | "nurture3" | "nurture5" | "nurture8" | "nurture12" | "reminder" | "reminder1h" | "cancelled";
+export type EmailKey = "report" | "nurture1" | "nurture3" | "nurture5" | "nurture8" | "nurture12" | "reminder" | "reminder1h" | "cancelled" | "noshow";
 
 /** השדות שבעל הפורטל עורך */
 export interface EmailFields {
@@ -152,9 +152,35 @@ export const EMAIL_SPECS: EmailSpec[] = [
       footnote: "",
     },
   },
+  {
+    key: "noshow", label: "לא הגיע לפגישה", when: "כשמסמנים בכרטיס הליד שהוא לא הגיע לפגישה",
+    job: "להחזיר ליד שקבע ולא עלה לפגישה, בלי להאשים: לתת לו דרך קלה לבחור מועד חדש.",
+    block: "none", button: "start", marketing: false, tokens: ["{שם}", "{מועד}"],
+    defaults: {
+      subject: "{שם}, פספסנו אחד את השני",
+      preheader: "קורה. אפשר לבחור מועד אחר בדקה",
+      bodyBefore: "היי {שם},\n\nחיכיתי לך בזום ב{מועד} ולא יצא לנו להיפגש. קורה, ואין צורך להסביר.\n\nהדוח שלך עדיין שמור. אם הנושא עדיין רלוונטי, אפשר לבחור מועד חדש בדקה. ואם נוח לך יותר שאתקשר, השב למייל הזה עם שעה שמתאימה לך.",
+      bodyAfter: "",
+      buttonLabel: "לבחירת מועד חדש",
+      footnote: "",
+    },
+  },
 ];
 
 export const EMAIL_KEYS = EMAIL_SPECS.map((s) => s.key);
+
+/** שלוש קבוצות הדיוור: לכל אחת מטרה אחרת, ולכן מסתכלים על המספרים שלה בנפרד */
+export type EmailGroup = "content" | "meeting" | "recovery";
+export const EMAIL_GROUPS: Array<{ key: EmailGroup; title: string; sub: string }> = [
+  { key: "content", title: "רצף תוכן וערך", sub: "מה שהליד מקבל אחרי השיחה, עד שהוא קובע פגישה. המטרה: לבנות אמון ולהביא אותו לפגישה" },
+  { key: "meeting", title: "אחרי תיאום פגישה", sub: "מי שקבע פגישה יוצא מרצף התוכן ומקבל רק תזכורות. המטרה: שיגיע, ושיגיע מוכן" },
+  { key: "recovery", title: "שחזור: ביטל או לא הגיע", sub: "ליד שהפגישה איתו לא התקיימה. המטרה: להחזיר אותו לקבוע מועד חדש" },
+];
+export function groupOf(key: EmailKey): EmailGroup {
+  if (key === "reminder" || key === "reminder1h") return "meeting";
+  if (key === "cancelled" || key === "noshow") return "recovery";
+  return "content";
+}
 /** מיילי ההמשך לפי סדר השליחה, עם מספר הימים אחרי הדוח */
 export const NURTURE_SCHEDULE = EMAIL_SPECS.filter((s) => s.afterDays !== undefined)
   .map((s) => ({ key: s.key, afterDays: s.afterDays as number })).sort((x, y) => x.afterDays - y.afterDays);

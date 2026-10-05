@@ -32,7 +32,7 @@ interface Detail {
 }
 
 const EMAIL_LABELS: Record<string, string> = {
-  report: "מייל הדוח", nurture1: "חימום יום 1", nurture3: "חימום יום 3", nurture5: "חימום יום 5", nurture8: "חימום יום 8", nurture12: "חימום יום 12", nurture7: "חימום יום 7",
+  report: "מייל הדוח", nurture1: "חימום יום 1", nurture3: "חימום יום 3", nurture5: "חימום יום 5", nurture8: "חימום יום 8", nurture12: "חימום יום 12", nurture7: "חימום יום 7", noshow: "לא הגיע לפגישה",
   reminder: "תזכורת יום לפני", reminder1h: "תזכורת שעה לפני", cancelled: "מייל ביטול",
 };
 
