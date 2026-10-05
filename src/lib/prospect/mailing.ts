@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db/prisma";
 import type { FunnelPortal, PotentialReport, ProspectEmailLog } from "@/generated/prisma";
 import {
-  EMAIL_SPECS, EMAIL_KEYS, EMAIL_FIELD_KEYS, specOf, sanitizeFields,
+  EMAIL_SPECS, EMAIL_KEYS, EMAIL_FIELD_KEYS, BLOCK_LABELS, specOf, sanitizeFields,
   type EmailKey, type EmailFields, type EmailFieldKey,
 } from "./email-templates";
 import { buildEmail, currentEmailFields } from "./emails";
@@ -117,7 +117,7 @@ export async function loadMailingDetail(portal: FunnelPortal, key: EmailKey): Pr
 
   return {
     key, label: spec.label, when: spec.when, job: spec.job, tokens: spec.tokens,
-    hasBlock: spec.block !== "none", blockLabel: spec.block === "teaser" ? "קופסת המספרים" : spec.block === "meeting" ? "קופסת מועד הפגישה" : "",
+    hasBlock: spec.block !== "none", blockLabel: BLOCK_LABELS[spec.block],
     enabled: !disabledOf(portal).includes(key), version, fields, defaults: spec.defaults,
     versions, advice, canAdvise,
   };
@@ -150,7 +150,23 @@ export function sampleReport(): PotentialReport {
     businessName: "", serviceField: "ייעוץ משכנתאות", serviceArea: "", budget: 6000, paymentType: "one_time",
     dealFirst: 12000, monthlyFee: 0, lifetimeMonths: 12, contactName: "דנה לוי", contactPhone: "", contactEmail: "dana@example.co.il",
     bookedAt: null, meetingAt: meeting, calendarEventId: "", cancelledAt: null, emailsSent: "[]",
-    research: "{}", chain: JSON.stringify({ ok: true, dealValueFirst: 12000, revenueFirst: { head: 48000, best: 84000 }, revenueFull: { head: 48000, best: 84000 } }),
+    research: JSON.stringify({
+      totalVol: 24540,
+      kept: [
+        { text: "יועץ משכנתאות", vol: 6600, low: 6.1, high: 21.4, mid: 13.7 },
+        { text: "ייעוץ משכנתא", vol: 2900, low: 5.8, high: 19.9, mid: 12.8 },
+        { text: "יועץ משכנתאות מומלץ", vol: 1300, low: 7.2, high: 24.0, mid: 15.6 },
+        { text: "מחזור משכנתא", vol: 1000, low: 4.9, high: 17.3, mid: 11.1 },
+        { text: "יועץ משכנתאות מחיר", vol: 720, low: 6.4, high: 20.8, mid: 13.6 },
+        ...Array.from({ length: 58 }, (_, i) => ({ text: `ביטוי ${i + 1}`, vol: 200 - i * 2, low: 4, high: 18, mid: 11 })),
+      ],
+    }),
+    chain: JSON.stringify({
+      ok: true, closeRate: 0.05, pageConv: 0.05, cpcMid: 12.5,
+      clicks: { head: 480, best: 840 }, leads: { head: 24, best: 42 }, deals: { head: 1.2, best: 2.1 },
+      dealValueFirst: 12000, dealValueFull: 12000,
+      revenueFirst: { head: 14400, best: 25200 }, revenueFull: { head: 14400, best: 25200 },
+    }),
     error: "", leadId: null, sourceJson: "{}", unsubscribedAt: null, createdAt: new Date(), updatedAt: new Date(),
   } as PotentialReport;
 }
@@ -206,7 +222,8 @@ export async function generateEmailAdvice(portal: FunnelPortal, key: EmailKey): 
   const res = await anthropic.messages.create({
     model: AI_MODEL, max_tokens: 3000,
     system: `אתה עורך מיילים לרצף טיפוח לידים של עסק ישראלי. המטרה של הרצף: לצבור אמון, לשדר מקצועיות וביטחון, לייצר קרבה, ולקצר את הדרך לרכישה. הליד הגיע מחיפוש בגוגל והשאיר פרטים כנראה גם אצל מתחרים.
-עקרונות: מייל שנראה כמו מייל מאדם, לא דיוור. רעיון אחד, פעולה אחת. עברית פשוטה וחמה, בלי סיסמאות מכירה, בלי הגזמות, בלי מקפים ארוכים. לא להמציא עובדות, מספרים, המלצות או הבטחות שלא מופיעים בחומר.
+עקרונות: מייל שנראה כמו מייל מאדם, לא דיוור. לכל מייל זווית אחת ופעולה אחת. עברית פשוטה וחמה, בלי סיסמאות מכירה, בלי הגזמות, בלי מקפים ארוכים. לא להמציא עובדות, מספרים, המלצות או הבטחות שלא מופיעים בחומר.
+הקוראים שבעים ממסרים גנריים. מייל טוב נותן ערך ממשי: תובנה, זווית חדשה, או משהו שהליד יכול להשתמש בו גם אם לא יקנה. מייל ארוך ועשיר עדיף על מייל קצר וכללי, ולכן אל תמליץ לקצר רק כדי לקצר. כן להמליץ להחליף משפט כללי בדוגמה, במספר מהנתונים של הליד, או בהסבר שמלמד משהו.
 לכל מייל יש תפקיד אחד. הצע רק שינויים שמקרבים את המייל לתפקיד שלו.
 אסור: טענות על מתחרים או על "רוב העסקים" שאינן בחומר, פיתיונות סקרנות ("לא תאמין", "מפתיע"), הבטחות, תארים או תפקידים של אנשים שלא מופיעים בחומר.
 המייל כבר מסתיים אוטומטית ב"בברכה" ובחתימה מלאה של בעל העסק, אז אל תוסיף שם, תפקיד או חתימה בשום שדה.
@@ -238,7 +255,7 @@ ${knowledge.map((k) => `${k.title}: ${k.content}`).join("\n").slice(0, 3000) || 
   const call = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
   const raw = Array.isArray((call?.input as { items?: unknown[] } | undefined)?.items) ? (call!.input as { items: unknown[] }).items : [];
   if (!raw.length) console.error(`[Mailing] advice: no items (stop=${res.stop_reason})`);
-  const allowed = new Set(["{שם}", "{תחום}", "{מועד}", "{שעה}"].filter((t) => detail.tokens.includes(t)));
+  const allowed = new Set(detail.tokens);
   const items: AdviceItem[] = [];
   for (const x of raw.slice(0, 4)) {
     const o = x as Record<string, unknown>;

@@ -103,6 +103,84 @@ function teaser(r: PotentialReport): string {
   } catch { return ""; }
 }
 
+// ---------- נתוני המחקר של הליד: משמשים את הקופסאות ואת המשתנים ----------
+interface KeptTerm { text: string; vol: number; mid: number }
+interface LeadData {
+  totalVol: number; termCount: number; top: KeptTerm[];
+  budget: number; cpc: number; clicks: number; leads: number; deals: number; closeRate: number; pageConv: number;
+}
+
+function leadData(r: PotentialReport): LeadData | null {
+  try {
+    const q = JSON.parse(r.research || "{}");
+    const c = JSON.parse(r.chain || "{}");
+    const kept: KeptTerm[] = Array.isArray(q.kept) ? q.kept.filter((k: KeptTerm) => k?.text && k.vol > 0) : [];
+    if (!c?.ok || kept.length === 0) return null;
+    // מחיר קליק חריג (פי 4 מהחציון ומעלה) הוא רעש בנתוני גוגל, לא מציגים אותו בטבלה
+    const mids = kept.map((k) => k.mid).filter((m) => m > 0).sort((x, y) => x - y);
+    const median = mids[Math.floor(mids.length / 2)] ?? 0;
+    const sane = kept.filter((k) => !median || k.mid <= median * 4);
+    // ביטויים כפולים (יחיד ורבים עם אותו נפח) מופיעים פעם אחת
+    const top: KeptTerm[] = [];
+    for (const k of [...sane].sort((x, y) => y.vol - x.vol)) {
+      if (top.some((t) => t.vol === k.vol && Math.abs(t.mid - k.mid) < 0.01)) continue;
+      top.push(k);
+      if (top.length === 5) break;
+    }
+    return {
+      totalVol: Math.round(q.totalVol ?? 0), termCount: kept.length, top,
+      budget: Math.round(r.budget), cpc: c.cpcMid ?? 0,
+      clicks: c.clicks?.head ?? 0, leads: c.leads?.head ?? 0, deals: c.deals?.head ?? 0,
+      closeRate: c.closeRate ?? 0, pageConv: c.pageConv ?? 0.05,
+    };
+  } catch { return null; }
+}
+
+const nis = (n: number) => `${Math.round(n).toLocaleString("he-IL")} ₪`;
+const int = (n: number) => Math.round(n).toLocaleString("he-IL");
+const TD = `padding:9px 0;border-bottom:1px solid #efede8;font-size:15px;font-family:${FONT}`;
+const boxTitle = (text: string) => `<div style="color:#8c8777;font-size:13.5px;margin-bottom:6px;font-family:${FONT}">${text}</div>`;
+const box = (inner: string) => `<div dir="rtl" style="border-right:3px solid #eed89b;padding:4px 18px 6px 0;margin:22px 0;direction:rtl;text-align:right">${inner}</div>`;
+
+/** טבלת חמשת הביטויים המובילים של הליד: ביטוי, חיפושים בחודש, מחיר קליק ממוצע */
+function termsBlock(d: LeadData | null): string {
+  if (!d || d.top.length < 3) return "";
+  const rows = d.top.map((k) => `<tr>
+      <td style="${TD};color:#111111">${plainText(k.text)}</td>
+      <td style="${TD};color:#b8860b;font-weight:600;white-space:nowrap;padding-right:14px">${int(k.vol)}</td>
+      <td style="${TD};color:#666666;white-space:nowrap;padding-right:14px">${k.mid > 0 ? `כ-${k.mid < 10 ? k.mid.toFixed(1) : Math.round(k.mid)} ₪` : ""}</td>
+    </tr>`).join("");
+  return box(`${boxTitle("חמשת הביטויים המובילים בתחום שלך")}
+    <table dir="rtl" style="direction:rtl;border-collapse:collapse;width:100%"><tr>
+      <td style="padding:4px 0;color:#8c8777;font-size:12.5px">מה מקלידים</td>
+      <td style="padding:4px 14px 4px 0;color:#8c8777;font-size:12.5px;white-space:nowrap">חיפושים בחודש</td>
+      <td style="padding:4px 14px 4px 0;color:#8c8777;font-size:12.5px;white-space:nowrap">מחיר לקליק</td>
+    </tr>${rows}</table>
+    <div style="color:#8c8777;font-size:13px;margin-top:8px;font-family:${FONT}">בסך הכל ${int(d.termCount)} ביטויים רלוונטיים, ${int(d.totalVol)} חיפושים בחודש</div>`);
+}
+
+/** החשבון המלא של הליד: מתקציב לקליקים, לפניות ולעסקאות, ומה קורה כשהדף ממיר אחרת */
+function chainBlock(d: LeadData | null): string {
+  if (!d || d.clicks <= 0 || d.cpc <= 0) return "";
+  const clicks = Math.ceil(d.clicks / 10) * 10;
+  const leads = Math.max(Math.round(d.leads), 1);
+  const dealsText = d.deals >= 1.5 ? `כ-${int(Math.round(d.deals))} בחודש` : d.deals >= 0.75 ? "בערך אחת בחודש" : `אחת בערך כל ${Math.round(1 / d.deals)} חודשים`;
+  const row = (label: string, value: string, note: string) => `<tr>
+      <td style="${TD};color:#111111">${label}<div style="color:#8c8777;font-size:12.5px">${note}</div></td>
+      <td style="${TD};color:#b8860b;font-weight:600;white-space:nowrap;padding-right:14px;vertical-align:top">${value}</td>
+    </tr>`;
+  const alt = (pct: number) => int(Math.max(Math.round(d.clicks * pct), 1));
+  return box(`${boxTitle("החשבון של הדוח שלך")}
+    <table dir="rtl" style="direction:rtl;border-collapse:collapse;width:100%">
+      ${row("תקציב פרסום בחודש", nis(d.budget), "הסכום שבחרת בשיחה")}
+      ${row("קליקים למודעה", `כ-${int(clicks)}`, `לפי מחיר ממוצע של כ-${d.cpc < 10 ? d.cpc.toFixed(1) : Math.round(d.cpc)} ₪ לקליק בתחום שלך`)}
+      ${row("פניות", `כ-${int(leads)}`, `כשהדף הופך ${Math.round(d.pageConv * 100)} מכל 100 מבקרים לפנייה`)}
+      ${row("עסקאות", dealsText, `כש-${Math.round(d.closeRate * 100)}% מהפניות נסגרות`)}
+      ${row("ואם הדף ממיר רק 3%", `כ-${alt(0.03)} פניות`, "אותו תקציב, דף חלש יותר")}
+      ${row("ואם הדף ממיר 8%", `כ-${alt(0.08)} פניות`, "אותו תקציב, דף חזק יותר")}
+    </table>`);
+}
+
 // ---------- המיילים עצמם ----------
 const SMALL = "color:#666666;font-size:14px";
 
@@ -119,9 +197,23 @@ export function buildEmail(key: EmailKey, r: PotentialReport, fields?: EmailFiel
     when: meeting ? meeting.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "",
     time: meeting ? meeting.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" }) : "",
   };
-  const t = (text: string) => fillTokens(text, values);
+  const data = leadData(r);
+  const withData = {
+    ...values,
+    extra: {
+      "{חיפושים}": data ? int(data.totalVol) : "",
+      "{ביטויים}": data ? int(data.termCount) : "",
+      "{ביטוי}": data?.top[0]?.text ?? "",
+      "{תקציב}": int(r.budget),
+      "{פניות}": data ? int(Math.max(Math.round(data.leads), 1)) : "",
+      "{סגירה}": data ? `${Math.round(data.closeRate * 100)}%` : "",
+    },
+  };
+  const t = (text: string) => fillTokens(text, withData);
 
   const block = spec.block === "teaser" ? teaser(r)
+    : spec.block === "terms" ? termsBlock(data)
+    : spec.block === "chain" ? chainBlock(data)
     : spec.block === "meeting" ? `<p dir="rtl" style="background:#faf6e9;border-radius:10px;padding:14px 18px;text-align:right"><b style="color:#8a6a15">📅 ${plainText(values.when)}</b><br>
 <a href="${ZOOM_LINK}" style="color:#8a6a15;font-weight:bold">קישור הזום לפגישה</a></p>`
     : "";
