@@ -6,6 +6,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Msg { role: "user" | "bot"; text: string }
 
+// Tag Manager של המשפך שלנו. לכל לקוח יהיה מכל משלו, לכן נטען רק כשאין מזהה לקוח בכתובת.
+const GTM_ID = "GTM-5BP74DF5";
+const OWN_SLUG = "mrdigitailor";
+
+// אבני הדרך של המשפך נשלחות ל-dataLayer; התגים וההמרות עצמם מוגדרים ב-Tag Manager
+function pushEvents(events?: string[]) {
+  if (!events?.length) return;
+  const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> };
+  w.dataLayer = w.dataLayer ?? [];
+  for (const event of events) w.dataLayer.push({ event });
+}
+
 const TESTIMONIALS = [
   { name: "הדס מליק", biz: "חברת חדרי בריחה ניידים", img: "/images/testimonials/t4.png", quote: "ממליצה בחום, סער אלוף. יודע לדייק את הפרסומים באופן מקצועי, וכל ההתנהלות נעימה וחברית. הקפיץ לי את הפרסום והשיווק כמה רמות למעלה" },
   { name: "נועה טויטו", biz: "יוצרת המופע \"בלבוסטע\"", img: "/images/testimonials/t1.png", quote: "כל קמפיין עם מאות פניות. בחודש ימים בלבד סגרתי 16 מופעים, כשהיעד היה חמישה" },
@@ -41,6 +53,20 @@ export default function ProspectChatPage() {
   const tokenRef = useRef<string>("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const researchTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // טעינת Tag Manager פעם אחת, רק במשפך שלנו
+  useEffect(() => {
+    let slug = "";
+    try { slug = new URLSearchParams(window.location.search).get("p") ?? ""; } catch { /* לא קריטי */ }
+    if ((slug && slug !== OWN_SLUG) || document.getElementById("gtm-loader")) return;
+    const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> };
+    w.dataLayer = w.dataLayer ?? [];
+    w.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
+    const s = document.createElement("script");
+    s.id = "gtm-loader"; s.async = true;
+    s.src = `https://www.googletagmanager.com/gtm.js?id=${GTM_ID}`;
+    document.head.appendChild(s);
+  }, []);
 
   const scroll = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 60);
 
@@ -122,6 +148,7 @@ export default function ProspectChatPage() {
       const d = await res.json();
       setMsgs((m) => [...m, { role: "bot", text: d.reply ?? d.error ?? "משהו השתבש, נסו שוב" }]);
       setQuick(d.quickReplies ?? []);
+      pushEvents(d.events);
     } catch {
       setMsgs((m) => [...m, { role: "bot", text: "החיבור נפל באמצע המחקר. כתבו משהו ונמשיך מאיפה שעצרנו." }]);
     } finally {
@@ -144,6 +171,7 @@ export default function ProspectChatPage() {
       const d = await res.json();
       setMsgs((m) => [...m, { role: "bot", text: d.reply ?? d.error ?? "משהו השתבש, נסו שוב" }]);
       setQuick(d.quickReplies ?? []);
+      pushEvents(d.events);
       if (d.researching) {
         // הסוכן הכריז על המחקר; עכשיו הוא באמת רץ, עם שורות ההתקדמות האמיתיות
         scroll();

@@ -274,7 +274,9 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
 }
 
 // ---------- תור שיחה מלא ----------
-export interface TurnResult { reply: string; quickReplies: string[]; researching: boolean }
+// events: אבני הדרך שהושגו בתור הזה. הדף שולח אותן ל-Tag Manager, ומשם להמרות בגוגל אדס.
+export type FunnelEvent = "funnel_numbers_shown" | "funnel_lead" | "funnel_meeting_booked";
+export interface TurnResult { reply: string; quickReplies: string[]; researching: boolean; events: FunnelEvent[] }
 
 /** מפריד את שורת הכפתורים מהטקסט */
 function splitQuickReplies(text: string): { reply: string; quickReplies: string[] } {
@@ -316,6 +318,7 @@ export async function runChatTurn(chatId: string, userMessage: string): Promise<
 
   const history = parse<StoredMessage[]>(chat.messages, []);
   let fields = parse<ChatFields>(chat.fields, {});
+  const before = { reportReady: fields.reportStatus === "ready", email: Boolean(fields.email), meeting: Boolean(fields.meetingAt) };
 
   // שלב ב' של המחקר: הדפדפן שלח את הודעת ההמשך, עכשיו המחקר באמת רץ
   if (userMessage === RESEARCH_TRIGGER && fields.pendingResearch) {
@@ -436,5 +439,10 @@ export async function runChatTurn(chatId: string, userMessage: string): Promise<
     data: { messages: JSON.stringify(history.slice(-120)), fields: JSON.stringify(fields) },
   });
 
-  return { reply, quickReplies, researching };
+  const events: FunnelEvent[] = [];
+  if (!before.reportReady && fields.reportStatus === "ready") events.push("funnel_numbers_shown");
+  if (!before.email && fields.email) events.push("funnel_lead");
+  if (!before.meeting && fields.meetingAt) events.push("funnel_meeting_booked");
+
+  return { reply, quickReplies, researching, events };
 }
