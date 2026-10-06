@@ -1,10 +1,11 @@
 // קרון שעתי — רצף המיילים של משפך דוח הפוטנציאל + זיהוי ביטולי פגישות.
-// מסלולים: לא קבע (רצף המשך לפי NURTURE_SCHEDULE) · קבע (תזכורת 24 שעות לפני) · ביטל (מייל החזרה).
+// מסלולים: לא קבע (רצף המשך לפי NURTURE_SCHEDULE) · קבע (תזכורת 24 שעות לפני) · ביטל (מייל החזרה)
+// · הפגישה התקיימה ולא נסגר (POST_MEETING_SCHEDULE). ליד נמצא תמיד במסלול אחד בלבד.
 // Auth: CRON_SECRET, כמו שאר הקרונים.
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { sendProspectEmail, type EmailKey } from "@/lib/prospect/emails";
-import { NURTURE_SCHEDULE } from "@/lib/prospect/email-templates";
+import { NURTURE_SCHEDULE, POST_MEETING_SCHEDULE } from "@/lib/prospect/email-templates";
 import { sendTelegramMessage } from "@/lib/api/telegram/client";
 import { ownerChatId } from "@/lib/performance/approval";
 
@@ -47,8 +48,14 @@ async function run(req: Request) {
 
   // דוחות פעילים מהחודש האחרון עם אימייל
   const reports = await prisma.potentialReport.findMany({
-    where: { contactEmail: { not: "" }, createdAt: { gte: new Date(now - 30 * DAY) } },
+    where: { contactEmail: { not: "" }, createdAt: { gte: new Date(now - 45 * DAY) } },
   });
+  // לידים שכבר נסגרו או סומנו כלא רלוונטיים לא מקבלים את רצף "אחרי הפגישה"
+  const doneChats = await prisma.prospectChat.findMany({
+    where: { reportId: { in: reports.map((r) => r.id) }, funnelStatus: { in: ["נסגר", "לא רלוונטי"] } },
+    select: { reportId: true },
+  });
+  const doneReports = new Set(doneChats.map((c) => c.reportId));
 
   // --- זיהוי ביטולים: אירוע שנוצר על ידינו ונמחק/בוטל ביומן ---
   const withEvents = reports.filter((r) => r.calendarEventId && r.bookedAt && !r.cancelledAt);
@@ -76,6 +83,19 @@ async function run(req: Request) {
   for (const r of reports) {
     const sentKeys: EmailKey[] = (() => { try { return JSON.parse(r.emailsSent || "[]"); } catch { return []; } })();
     const age = now - r.createdAt.getTime();
+
+    // מסלול אחרי הפגישה: הפגישה סומנה כהתקיימה. המייל הראשון נשלח עם הסימון, כאן ממשיכים את הרצף
+    if (r.meetingHeldAt && r.meetingAt && r.meetingHeldAt > r.meetingAt && !r.cancelledAt) {
+      if (doneReports.has(r.id)) continue;
+      const since = now - r.meetingHeldAt.getTime();
+      for (const p of POST_MEETING_SCHEDULE) {
+        if (since >= p.afterDays * DAY && since < p.afterDays * DAY + SEND_WINDOW && !sentKeys.includes(p.key)) {
+          if (await sendProspectEmail(r.id, p.key)) sent.push(`${p.key}→${r.contactEmail}`);
+          break;
+        }
+      }
+      continue; // מי שנפגשנו איתו לא חוזר לרצף התוכן
+    }
 
     // מסלול קבע: תזכורת יום לפני (22-26 שעות) + תזכורת קצרה כשעה לפני
     if (r.meetingAt && !r.cancelledAt) {

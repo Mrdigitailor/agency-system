@@ -107,6 +107,7 @@ export default function MailingTab({ token, demo }: { token: string; demo: boole
         <div className="text-xs text-white/30">
           &quot;קבעו פגישה&quot; סופר לידים שקבעו פגישה עד שבוע אחרי שהמייל נשלח. &quot;נפתחו&quot; הוא מדד מקורב, &quot;הקליקו&quot; מדויק יותר.
           מייל &quot;לא הגיע לפגישה&quot; נשלח כשמסמנים את זה בכרטיס הליד, אחרי שמועד הפגישה עבר.
+          רצף &quot;אחרי הפגישה&quot; מתחיל כשמסמנים בכרטיס הליד שהפגישה התקיימה, ונעצר כשהליד נסגר או מסומן כלא רלוונטי.
         </div>
       )}
 

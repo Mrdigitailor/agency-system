@@ -12,9 +12,11 @@ export default function CrmTab({ rows, loading, days, setDays, demo, onOpen, onR
   const [search, setSearch] = useState("");
   const [onlyDue, setOnlyDue] = useState(false);
 
-  const dueCount = rows.filter((r) => isDue(r.nextActionAt)).length;
+  // "מחכים לי": פעולה שהגיע זמנה, או פגישה שמועדה עבר ועוד לא סומן מה קרה בה
+  const waiting = (r: Row) => isDue(r.nextActionAt) || Boolean(r.meetingPending && !r.customerId);
+  const dueCount = rows.filter(waiting).length;
   const filtered = rows.filter((r) => {
-    if (onlyDue && !isDue(r.nextActionAt)) return false;
+    if (onlyDue && !waiting(r)) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return [r.name, r.email, r.phone, r.business, r.source].some((v) => v.toLowerCase().includes(q));
@@ -86,6 +88,7 @@ export default function CrmTab({ rows, loading, days, setDays, demo, onOpen, onR
                 <td className="whitespace-nowrap px-3 py-3.5 text-xs">
                   {r.meetingAt && !r.cancelledAt && <span className="inline-flex items-center gap-1 text-emerald-300"><Calendar className="h-3.5 w-3.5" /> {fmtFull(r.meetingAt)}</span>}
                   {r.cancelledAt && <span className="text-red-300">בוטלה</span>}
+                  {r.meetingPending && !r.customerId && <div className="mt-1 font-medium text-brand-gold">התקיימה? לסמן בכרטיס</div>}
                 </td>
                 <td className="max-w-[170px] px-3 py-3.5 text-xs">
                   {r.nextActionAt ? (

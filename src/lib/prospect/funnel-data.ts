@@ -19,6 +19,7 @@ export interface FunnelRow {
   emailsSent: number; emailsOpened: number; emailsClicked: number;
   nextActionAt: Date | string | null; nextActionNote: string;
   customerId: string | null; // הליד כבר נסגר והפך ללקוח
+  meetingPending?: boolean;  // מועד הפגישה עבר ועוד לא סומן אם התקיימה או שהליד לא הגיע
 }
 
 export interface LeadNote { id: string; kind: string; text: string; createdAt: Date | string }
@@ -43,7 +44,7 @@ export interface FunnelDetail {
   fields: Record<string, unknown>; source: Record<string, string>;
   funnelStatus: string; statusOptions: string[];
   transcript: Array<{ role: string; text: string; at: string }>;
-  report: { status: string; link: string; headline: string; budget: number; meetingAt: Date | string | null; bookedAt: Date | string | null; cancelledAt: Date | string | null; noShowAt: Date | string | null } | null;
+  report: { status: string; link: string; headline: string; budget: number; meetingAt: Date | string | null; bookedAt: Date | string | null; cancelledAt: Date | string | null; noShowAt: Date | string | null; meetingHeldAt: Date | string | null } | null;
   emails: Array<{ key: string; subject: string; sentAt: Date | string; deliveredAt: Date | string | null; openedAt: Date | string | null; clickedAt: Date | string | null; bouncedAt: Date | string | null }>;
   lead: { id: string; stage: string; status: string; nextActionNote: string; notes: string } | null;
   nextActionAt: Date | string | null; nextActionNote: string;
@@ -89,6 +90,7 @@ function derivedStatus(f: ChatFieldsLite, r?: PotentialReport | null): string {
   if (r?.status === "ready") derived = "קיבל דוח";
   if (f.declineReason) derived = "סירב לפגישה";
   if (r?.meetingAt && !r.cancelledAt) derived = "קבע פגישה";
+  if (r?.meetingHeldAt && r.meetingAt && r.meetingHeldAt > r.meetingAt) derived = "הפגישה התקיימה";
   if (r?.noShowAt && r.meetingAt && r.noShowAt > r.meetingAt) derived = "לא הגיע לפגישה";
   if (r?.cancelledAt) derived = "ביטל פגישה";
   return derived;
@@ -146,6 +148,8 @@ export function buildRow(c: ProspectChat, r: PotentialReport | undefined | null,
     emailsClicked: logs.filter((l) => l.clickedAt).length,
     nextActionAt: c.nextActionAt ?? null, nextActionNote: c.nextActionNote ?? "",
     customerId: null,
+    meetingPending: Boolean(r?.meetingAt && !r.cancelledAt && r.meetingAt.getTime() < Date.now()
+      && !(r.noShowAt && r.noShowAt > r.meetingAt) && !(r.meetingHeldAt && r.meetingHeldAt > r.meetingAt)),
   };
 }
 
@@ -226,7 +230,7 @@ export function buildDetail(chat: ProspectChat, report: PotentialReport | null, 
     report: report ? {
       status: report.status, link: `${appBase}/report/${report.token}`, headline,
       budget: report.budget, meetingAt: report.meetingAt, bookedAt: report.bookedAt, cancelledAt: report.cancelledAt,
-      noShowAt: report.noShowAt ?? null,
+      noShowAt: report.noShowAt ?? null, meetingHeldAt: report.meetingHeldAt ?? null,
     } : null,
     emails: emailLogs.map((l) => ({
       key: l.key, subject: l.subject, sentAt: l.sentAt,

@@ -21,6 +21,9 @@ const CURRENT: Record<EmailKey, EmailStats> = {
   reminder1h: stats(55, 88, 69, null),
   cancelled: stats(17, 71, 35, 24),
   noshow: stats(11, 73, 45, 36),
+  post1: stats(41, 85, 49, null),
+  post3: stats(33, 67, 24, null),
+  post7: stats(27, 63, 19, null),
 };
 const NURTURE1_V1 = stats(88, 42, 13, 5);
 const NURTURE1_V2_SUBJECT = "{שם}, {חיפושים} חיפושים בחודש בתחום שלך. מה הם מקלידים?";

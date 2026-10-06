@@ -1318,6 +1318,7 @@ model PotentialReport {
   sourceJson String @default("{}") // JSON: מקור הגעה (utm, gclid, referrer) — מועתק מהשיחה
   unsubscribedAt DateTime? // הליד ביקש להפסיק לקבל מיילי המשך
   noShowAt       DateTime? // בעל העסק סימן שהליד לא הגיע לפגישה שקבע
+  meetingHeldAt  DateTime? // בעל העסק סימן שהפגישה התקיימה: מפעיל את רצף "אחרי הפגישה"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

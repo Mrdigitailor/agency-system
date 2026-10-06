@@ -3,7 +3,7 @@
 // כל שאילתה ועדכון מוגבלים לפורטל שמבקש: לקוח רואה ומשנה רק את הנתונים שלו.
 // GET:   ?view=leads|customers|results|escalations|knowledge|insights|settings|mailing(&key=), או ?id= לפירוט ליד
 // POST:  kind=customer (ברירת מחדל) | note | knowledge | insights | emailVersion | emailPreview | emailAdvice
-// PATCH: kind=status (ברירת מחדל) | customer | relevant | escalation | nextAction | noShow | note | knowledge | settings | emailEnabled
+// PATCH: kind=status (ברירת מחדל) | customer | relevant | escalation | nextAction | noShow | meetingHeld | note | knowledge | settings | emailEnabled
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -363,8 +363,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ token:
     if (!report?.meetingAt || report.cancelledAt) return bad("אין לליד הזה פגישה שנקבעה");
     if (report.meetingAt.getTime() > Date.now()) return bad("הפגישה עוד לא התקיימה");
     if (report.noShowAt && report.noShowAt > report.meetingAt) return NextResponse.json({ ok: true, emailed: false, already: true });
+    if (report.meetingHeldAt && report.meetingHeldAt > report.meetingAt) return bad("הפגישה כבר סומנה כהתקיימה");
     await prisma.potentialReport.update({ where: { id: report.id }, data: { noShowAt: new Date() } });
     const emailed = await sendProspectEmail(report.id, "noshow");
+    return NextResponse.json({ ok: true, emailed });
+  }
+
+  // הפגישה התקיימה: מסמנים, ושולחים את המייל הראשון של רצף "אחרי הפגישה". ההמשך נשלח מהקרון
+  if (kind === "meetingHeld") {
+    if (demo) return NextResponse.json({ ok: true, emailed: true });
+    const chat = await prisma.prospectChat.findUnique({ where: { id }, select: { reportId: true } });
+    const report = chat?.reportId ? await prisma.potentialReport.findUnique({ where: { id: chat.reportId } }) : null;
+    if (!report?.meetingAt || report.cancelledAt) return bad("אין לליד הזה פגישה שנקבעה");
+    if (report.meetingAt.getTime() > Date.now()) return bad("הפגישה עוד לא התקיימה");
+    if (report.noShowAt && report.noShowAt > report.meetingAt) return bad("הליד כבר סומן כמי שלא הגיע לפגישה");
+    if (report.meetingHeldAt && report.meetingHeldAt > report.meetingAt) return NextResponse.json({ ok: true, emailed: false, already: true });
+    await prisma.potentialReport.update({ where: { id: report.id }, data: { meetingHeldAt: new Date() } });
+    const emailed = await sendProspectEmail(report.id, "post1");
     return NextResponse.json({ ok: true, emailed });
   }
 

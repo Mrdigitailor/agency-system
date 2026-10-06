@@ -48,7 +48,7 @@ export const DEMO_ROWS: FunnelRow[] = [
     source: "רואה חשבון לעצמאיים", reportStatus: "ready", meetingAt: h(150), emailsSent: 2, emailsOpened: 2, emailsClicked: 2 },
   { ...base, id: "demo-10", relevant: "yes", createdAt: h(96), updatedAt: h(90), name: "עומר דיין", email: "omer@example.co.il", phone: "050-2233445",
     business: "סטודיו לצילום אירועים", budget: 4500, msgCount: 20, status: "קבע פגישה", derivedStatus: "קבע פגישה",
-    source: "צלם אירועים מחיר", reportStatus: "ready", meetingAt: h(26), emailsSent: 3, emailsOpened: 2, emailsClicked: 1 },
+    source: "צלם אירועים מחיר", reportStatus: "ready", meetingAt: h(26), meetingPending: true, emailsSent: 3, emailsOpened: 2, emailsClicked: 1 },
   // שיחות אנונימיות קצרות — כדי שיחסי ההמרה בדמו ייראו אמינים
   ...[14, 37, 62, 88, 110, 145, 170].map((hoursAgo, i) => ({
     ...base, id: `demo-a${i}`, createdAt: h(hoursAgo), updatedAt: h(hoursAgo), name: "", email: "", phone: "",
@@ -100,7 +100,7 @@ export function demoDetail(id: string): FunnelDetail | null {
     transcript: demoTranscript(row.business, row.name || "אנונימי"),
     report: row.reportStatus === "ready" ? {
       status: "ready", link: "", headline: "94,000 עד 168,000 ₪ בחודש",
-      budget: row.budget, meetingAt: row.meetingAt, bookedAt: row.meetingAt, cancelledAt: row.cancelledAt, noShowAt: null,
+      budget: row.budget, meetingAt: row.meetingAt, bookedAt: row.meetingAt, cancelledAt: row.cancelledAt, noShowAt: null, meetingHeldAt: null,
     } : null,
     emails: row.emailsSent > 0 ? demoEmails(row.emailsOpened > 0, row.emailsClicked > 0) : [],
     lead: null,

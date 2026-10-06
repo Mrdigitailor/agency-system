@@ -3,7 +3,7 @@
 // כרטיס ליד: חמישה טאבים. השיחה המלאה, פרטי הליד, הדוח שקיבל,
 // ניוזלטר ומד השלמת המשפך, ותיעוד ומשימות (משימת המשך + הערות ושיחות).
 import { useCallback, useEffect, useState } from "react";
-import { Calendar, ExternalLink, X, Loader2, MailOpen, MousePointerClick, Check, BadgeCheck, Mail, MessageCircle, Clock, Trash2, UserX } from "lucide-react";
+import { Calendar, ExternalLink, X, Loader2, MailOpen, MousePointerClick, Check, BadgeCheck, Mail, MessageCircle, Clock, Trash2, UserX, CalendarCheck } from "lucide-react";
 import {
   type Row, type Detail, type LeadNote, type DealSeed,
   EMAIL_LABELS, NOTE_KINDS, noteLabel, cardCls, inputCls, goldBtn, ghostBtn,
@@ -33,8 +33,9 @@ export default function LeadModal({ token, row, onClose, onRowChange, onCloseDea
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [openedAt] = useState(() => Date.now()); // "עכשיו" קבוע לכל חיי החלון
-  // לא הגיע לפגישה: אישור בשני שלבים, כי הסימון שולח מייל לליד
+  // מה קרה בפגישה (התקיימה / לא הגיע): אישור בשני שלבים, כי הסימון שולח מייל לליד
   const [noShow, setNoShow] = useState<"idle" | "confirm" | "busy" | "done" | "failed">("idle");
+  const [markKind, setMarkKind] = useState<"noShow" | "meetingHeld">("noShow");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,15 +85,18 @@ export default function LeadModal({ token, row, onClose, onRowChange, onCloseDea
   const rep0 = detail?.report;
   const meetingPassed = Boolean(rep0?.meetingAt && !rep0.cancelledAt && new Date(rep0.meetingAt).getTime() < openedAt);
   const alreadyNoShow = Boolean(rep0?.noShowAt && rep0.meetingAt && new Date(rep0.noShowAt) > new Date(rep0.meetingAt));
-  const canMarkNoShow = meetingPassed && !alreadyNoShow && !isCustomer;
+  const alreadyHeld = Boolean(rep0?.meetingHeldAt && rep0.meetingAt && new Date(rep0.meetingHeldAt) > new Date(rep0.meetingAt));
+  const canMarkNoShow = meetingPassed && !alreadyNoShow && !alreadyHeld && !isCustomer;
+  const held = markKind === "meetingHeld";
 
   const markNoShow = async () => {
     if (!detail?.report) return;
     setNoShow("busy");
-    const res = await portalApi<{ emailed?: boolean }>(token, { method: "PATCH", body: { kind: "noShow", id: detail.id } });
+    const res = await portalApi<{ emailed?: boolean }>(token, { method: "PATCH", body: { kind: markKind, id: detail.id } });
     if (!res.ok) { setNoShow("failed"); return; }
-    setDetail({ ...detail, report: { ...detail.report, noShowAt: new Date().toISOString() } });
-    if (!detail.funnelStatus) onRowChange({ status: "לא הגיע לפגישה" });
+    const nowIso = new Date().toISOString();
+    setDetail({ ...detail, report: { ...detail.report, ...(held ? { meetingHeldAt: nowIso } : { noShowAt: nowIso }) } });
+    onRowChange({ meetingPending: false, ...(detail.funnelStatus ? {} : { status: held ? "הפגישה התקיימה" : "לא הגיע לפגישה" }) });
     setNoShow("done");
   };
 
@@ -123,7 +127,10 @@ export default function LeadModal({ token, row, onClose, onRowChange, onCloseDea
             {wa && <a href={wa} target="_blank" rel="noreferrer" className={ghostBtn}><MessageCircle className="h-4 w-4 text-emerald-300" /> וואטסאפ</a>}
             {email && <a href={`mailto:${email}`} className={ghostBtn}><Mail className="h-4 w-4 text-sky-300" /> מייל</a>}
             {canMarkNoShow && noShow === "idle" && (
-              <button onClick={() => setNoShow("confirm")} className={ghostBtn}><UserX className="h-4 w-4 text-red-300" /> לא הגיע לפגישה</button>
+              <>
+                <button onClick={() => { setMarkKind("meetingHeld"); setNoShow("confirm"); }} className={ghostBtn}><CalendarCheck className="h-4 w-4 text-emerald-300" /> הפגישה התקיימה</button>
+                <button onClick={() => { setMarkKind("noShow"); setNoShow("confirm"); }} className={ghostBtn}><UserX className="h-4 w-4 text-red-300" /> לא הגיע לפגישה</button>
+              </>
             )}
             {isCustomer
               ? <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-400/15 px-3 py-1.5 text-sm font-medium text-emerald-300"><BadgeCheck className="h-4 w-4" /> לקוח</span>
@@ -136,13 +143,15 @@ export default function LeadModal({ token, row, onClose, onRowChange, onCloseDea
           <div className="flex flex-wrap items-center gap-3 border-b border-white/10 bg-white/[0.03] px-5 py-3 text-sm">
             {noShow === "confirm" && (
               <>
-                <span className="text-white/80">לסמן שהליד לא הגיע? יישלח אליו מייל עם הזמנה לבחור מועד חדש.</span>
+                <span className="text-white/80">{held
+                  ? "לסמן שהפגישה התקיימה? יישלח אליו עכשיו מייל סיכום, ועוד שני מיילים בשבוע הקרוב אם העסקה לא תיסגר."
+                  : "לסמן שהליד לא הגיע? יישלח אליו מייל עם הזמנה לבחור מועד חדש."}</span>
                 <button onClick={markNoShow} className={goldBtn}>כן, לסמן ולשלוח</button>
                 <button onClick={() => setNoShow("idle")} className="text-white/50 hover:text-white">ביטול</button>
               </>
             )}
             {noShow === "busy" && <span className="inline-flex items-center gap-2 text-white/60"><Loader2 className="h-4 w-4 animate-spin" /> מסמן ושולח...</span>}
-            {noShow === "done" && <span className="inline-flex items-center gap-1.5 text-emerald-300"><Check className="h-4 w-4" /> סומן שלא הגיע, ונשלח אליו מייל לבחירת מועד חדש.</span>}
+            {noShow === "done" && <span className="inline-flex items-center gap-1.5 text-emerald-300"><Check className="h-4 w-4" /> {held ? "סומן שהפגישה התקיימה, ונשלח אליו מייל סיכום." : "סומן שלא הגיע, ונשלח אליו מייל לבחירת מועד חדש."}</span>}
             {noShow === "failed" && <span className="text-red-300">הסימון נכשל. נסו שוב בעוד רגע.</span>}
           </div>
         )}
@@ -225,6 +234,7 @@ export default function LeadModal({ token, row, onClose, onRowChange, onCloseDea
                       )}
                       {detail.report.cancelledAt && <div className="mt-0.5 text-sm text-red-300">הפגישה בוטלה</div>}
                       {alreadyNoShow && <div className="mt-0.5 text-sm text-red-300">לא הגיע לפגישה</div>}
+                      {alreadyHeld && <div className="mt-0.5 text-sm text-sky-300">הפגישה התקיימה</div>}
                     </div>
                     {detail.report.link && (
                       <a href={detail.report.link} target="_blank" rel="noreferrer" className={ghostBtn}>פתיחה בחלון מלא <ExternalLink className="h-3.5 w-3.5" /></a>

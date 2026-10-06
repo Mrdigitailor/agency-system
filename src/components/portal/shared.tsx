@@ -11,6 +11,7 @@ export interface Row {
   meetingAt: string | null; cancelledAt: string | null;
   emailsSent: number; emailsOpened: number; emailsClicked: number;
   nextActionAt: string | null; nextActionNote: string; customerId: string | null;
+  meetingPending?: boolean;
 }
 export interface LeadNote { id: string; kind: string; text: string; createdAt: string }
 export interface Detail {
@@ -18,7 +19,7 @@ export interface Detail {
   fields: Record<string, unknown>; source: Record<string, string>;
   funnelStatus: string; statusOptions: string[];
   transcript: Array<{ role: string; text: string; at: string }>;
-  report: { link: string; headline: string; meetingAt: string | null; cancelledAt: string | null; noShowAt: string | null } | null;
+  report: { link: string; headline: string; meetingAt: string | null; cancelledAt: string | null; noShowAt: string | null; meetingHeldAt?: string | null } | null;
   emails: Array<{ key: string; subject: string; sentAt: string; openedAt: string | null; clickedAt: string | null; bouncedAt: string | null }>;
   nextActionAt: string | null; nextActionNote: string; notes: LeadNote[]; customerId: string | null;
 }
@@ -89,6 +90,7 @@ export const EMAIL_LABELS: Record<string, string> = {
   report: "מייל הדוח", nurture1: "יום 1: איך בוחרים ספק", nurture3: "יום 3: סיפור לקוח", nurture5: "יום 5: כמה להשקיע",
   nurture8: "יום 8: מי מאחורי העסק", nurture12: "יום 12: סגירת מעגל", nurture7: "מעקב יום 7 (רצף קודם)",
   reminder: "תזכורת יום לפני", reminder1h: "תזכורת שעה לפני", cancelled: "מייל ביטול", noshow: "לא הגיע לפגישה", test: "מייל בדיקה",
+  post1: "אחרי הפגישה: מה נשאר אצלך", post3: "3 ימים אחרי הפגישה", post7: "שבוע אחרי הפגישה",
 };
 export const STATUS_CLS: Record<string, string> = {
   "שיחה": "bg-white/10 text-white/50",
@@ -97,6 +99,7 @@ export const STATUS_CLS: Record<string, string> = {
   "קבע פגישה": "bg-emerald-400/15 text-emerald-300",
   "ביטל פגישה": "bg-red-400/15 text-red-300",
   "לא הגיע לפגישה": "bg-red-400/15 text-red-300",
+  "הפגישה התקיימה": "bg-sky-400/15 text-sky-300",
   "סירב לפגישה": "bg-amber-400/15 text-amber-300",
   "חם": "bg-orange-400/20 text-orange-300",
   "נסגר": "bg-emerald-400/20 text-emerald-300",
