@@ -40,7 +40,7 @@ export const CHAPTERS: Chapter[] = [
   { num: 3, title: "המוצרים וההצעה" },
   { num: 4, title: "הלקוחות שלך", milestone: "🔥 חצית את חצי הדרך! הפרק הזה הוא הסוד של קופי שמוכר" },
   { num: 5, title: "הוכחות ומתחרים" },
-  { num: 6, title: "שיחות המכירה שלך", milestone: "💪 עוד 7 וסיימנו — והשאלה הבאה שווה הכי הרבה כסף" },
+  { num: 6, title: "שיחות המכירה שלך", milestone: "💪 עוד 9 וסיימנו — והשאלה הבאה שווה הכי הרבה כסף" },
   { num: 7, title: "תפעול וטכני", sub: "שאלות קצרות וסגורות — בלי חשיבה, רק עובדות" },
 ];
 
@@ -105,7 +105,9 @@ export const QUESTIONS: Question[] = [
       { key: "name", label: "שם המוצר/שירות", type: "text", max: 200 },
       { key: "description", label: "תיאור קצר", type: "text", optional: true, max: 500 },
       { key: "price", label: "מחיר", type: "text", optional: true, placeholder: "למשל: 6,500 ₪", max: 100 },
-      { key: "margin", label: "שולי רווח אחרי הוצאות", type: "text", optional: true, placeholder: "למשל: ~70%", max: 100 },
+      { key: "vat", label: "המחיר כולל מע\"מ?", type: "select", options: ["כולל מע\"מ", "לא כולל מע\"מ", "פטור ממע\"מ"] },
+      { key: "costs", label: "כמה עולה לך לספק אותו?", type: "text", optional: true, placeholder: "מוצר: חומר, שילוח, עבודה. שירות: שעות עבודה וספקים חיצוניים", max: 300 },
+      { key: "margin", label: "שולי רווח אחרי הוצאות, אם ידוע", type: "text", optional: true, placeholder: "למשל: ~70%", max: 100 },
       { key: "delivery", label: "זמן אספקה", type: "text", optional: true, placeholder: "למשל: 6–8 שבועות", max: 100 },
       { key: "paymentType", label: "איך משלמים?", type: "select", options: ["תשלום חד פעמי", "ריטיינר חודשי", "משולב"] },
       { key: "avgLifetime", label: "אם ריטיינר — כמה זמן לקוח נשאר בממוצע?", type: "text", optional: true, placeholder: "למשל: שנה וחצי", max: 100 },
@@ -250,6 +252,27 @@ export const QUESTIONS: Question[] = [
     id: "q23", chapter: 7, title: "מי מנהל לך את הדומיין של האתר?",
     why: "דף הנחיתה יעלה על כתובת משלך (למשל go.העסק-שלך.co.il), והמיילים יישלחו מהדומיין שלך — לשניהם צריך גישה קצרה וחד-פעמית.",
     input: { kind: "choice", options: ["אני יודע לגשת", "יש איש טכני", "לא יודע"], detail: { showFor: ["יש איש טכני"], field: { key: "techContact", label: "פרטי קשר של איש הטכני", type: "text", max: 300 } } },
+  },
+  {
+    id: "q28", chapter: 7, title: "הפרטים הרשמיים של העסק",
+    why: "הפרטים האלה נכנסים למדיניות הפרטיות שתופיע בדף שלך. החוק מחייב שמי שמשאיר פרטים יידע מי העסק שמחזיק בהם ולמי פונים.",
+    example: "כהן ייעוץ משכנתאות בע\"מ · ח.פ 512345678 · הרצל 10, רמת גן · office@cohen.co.il",
+    input: { kind: "fields", fields: [
+      { key: "legalName", label: "השם הרשמי של העסק", type: "text", placeholder: "כפי שמופיע בחשבונית", max: 200 },
+      { key: "businessId", label: "ח.פ או מספר עוסק", type: "text", max: 20 },
+      { key: "address", label: "כתובת העסק", type: "text", max: 200 },
+      { key: "privacyEmail", label: "כתובת מייל לפניות בנושא פרטיות", type: "text", max: 200 },
+    ] },
+  },
+  {
+    id: "q29", chapter: 7, title: "מי חתום על המיילים שיישלחו למתעניינים?",
+    why: "המיילים יוצאים בשם אדם אמיתי מהעסק שלך, עם חתימה אישית. מייל מאדם נפתח ונענה הרבה יותר ממייל מ\"צוות החברה\".",
+    input: { kind: "fields", fields: [
+      { key: "signerName", label: "שם מלא", type: "text", max: 100 },
+      { key: "signerRole", label: "תפקיד", type: "text", placeholder: "למשל: מייסד ומנכ\"ל", max: 100 },
+      { key: "signerPhone", label: "טלפון שיופיע בחתימה", type: "text", max: 30 },
+      { key: "signerEmail", label: "מייל שאליו יגיעו תשובות של מתעניינים", type: "text", max: 200 },
+    ] },
   },
   {
     id: "q24", chapter: 7, title: "נכסי המותג — לוגו, פונטים, ספר מותג",
@@ -419,7 +442,7 @@ export async function applyV2ToProfile(clientId: string, a: AnswersV2): Promise<
   if (products.length && isEmptyJsonArray(profile.products)) {
     data.products = JSON.stringify(products.map((p) => ({
       name: p.name, description: p.description ?? "", priceRange: p.price ?? "",
-      pricingModel: p.margin ? `רווח: ${p.margin}` : "", seasonality: "",
+      pricingModel: [p.vat, p.costs && `עלות אספקה: ${p.costs}`, p.margin && `רווח: ${p.margin}`].filter(Boolean).join(" · "), seasonality: "",
       promotions: [p.delivery && `אספקה: ${p.delivery}`, p.followUp && `המשך: ${p.followUp}`].filter(Boolean).join(" · "),
     })));
   }
@@ -486,6 +509,10 @@ export async function applyV2ToProfile(clientId: string, a: AnswersV2): Promise<
   push("💳 חשבון גוגל אדס", choiceOf(a, "q22").choice);
   const dom = choiceOf(a, "q23");
   push("🔧 ניהול דומיין", [dom.choice, dom.detail].filter(Boolean).join(" · "));
+  const legal = fieldsOf(a, "q28");
+  push("🏢 פרטים רשמיים", [legal.legalName, legal.businessId && `ח.פ/עוסק: ${legal.businessId}`, legal.address, legal.privacyEmail && `פניות פרטיות: ${legal.privacyEmail}`].filter(Boolean).join(" · "));
+  const signer = fieldsOf(a, "q29");
+  push("✍️ חתום על המיילים", [signer.signerName, signer.signerRole, signer.signerPhone, signer.signerEmail].filter(Boolean).join(" · "));
   const fileList = (files: UploadedFile[]) => files.map((f) => `${f.name} — ${f.url}`).join("\n");
   push("🎨 נכסי מותג שהועלו", fileList(brand.files));
   if (!hexes.length) push("🎨 צבעי המותג (בתיאור)", brand.fields.colors);

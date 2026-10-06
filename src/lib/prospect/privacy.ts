@@ -17,6 +17,9 @@ export interface PrivacyProfile {
 
 const DEFAULT_PROFILE: PrivacyProfile = {
   brandName: "Mr.digitailor",
+  legalName: "מר דיגיטיילור בע\"מ",
+  businessId: "ח.פ 517112066",
+  address: "ספיר יוסף 1, חולון",
   contactEmail: "saar@digitailors.co.il",
   site: "https://www.mr-digitailor.co.il/",
   deliverable: "דוח פוטנציאל שיווקי",
