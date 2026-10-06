@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { createAndRunReport } from "./create-report";
 import { getFreeSlots, bookSlot } from "./scheduling";
 import { maybeSendReportEmail } from "./emails";
+import { PRIVACY_VERSION } from "./privacy";
 import { upsertProspectLead } from "./crm-lead";
 import { notifyNewLead, notifyMeetingBooked } from "./portal-notify";
 
@@ -17,6 +18,8 @@ const MAX_TURNS = 8;          // תקרת סבבי כלים בתוך תור אח
 const HISTORY_WINDOW = 40;    // כמה הודעות אחרונות נשלחות למודל
 
 // ---------- פרומפט המערכת: התסריט המאושר + כללי הברזל ----------
+const PRIVACY_URL = `${APP_BASE}/privacy`;
+
 const SYSTEM_PROMPT = `אתה העוזר הדיגיטלי של Mr.digitailor, סוכנות שיווק ישראלית. אתה מנהל שיחה עם בעל עסק שהגיע לדף הנחיתה שלנו, במטרה להראות לו במספרים אמיתיים מה גוגל יכולה לייצר לעסק שלו, ולקבוע איתו פגישת ניתוח של 30 דקות בזום עם סער, הבעלים.
 
 ## מהלך השיחה (בסדר הזה)
@@ -33,7 +36,10 @@ const SYSTEM_PROMPT = `אתה העוזר הדיגיטלי של Mr.digitailor, ס
    "[שם], יש לי את המספרים שלך 👇
    🔍 [monthlySearches] חיפושים בחודש של אנשים שמחפשים בדיוק את מה שאתה עושה
    💰 תקציב של [budget] ₪ יכול לייצר אצלך [revenueText בדיוק כפי שהתקבל] בחודש
-   הכנתי לך דוח מלא עם כל הפירוק של המספרים. לאיזה מייל לשלוח לך אותו?"
+   הכנתי לך דוח מלא עם כל הפירוק של המספרים. לאיזה מייל לשלוח לך אותו?
+
+   ודבר קטן, כי החוק מחייב אותי להגיד אותו (אני יודע, נשמע רשמי 🙂): כשמשאירים מייל מאשרים את מדיניות הפרטיות שלנו. בפועל זה אומר שאשלח לך את הדוח ועוד כמה מיילים עם תובנות על השיווק שלך, ואפשר להסיר את עצמך בלחיצה אחת מתי שרוצים. הכול כתוב כאן: ${PRIVACY_URL}"
+   את פסקת ההסכמה והקישור מציגים בדיוק כך, מילה במילה, ורק פעם אחת בשיחה. אם שואלים על פרטיות או על מה עושים עם הפרטים: ענה בקצרה ובכנות (הדוח, תיאום פגישה, כמה מיילים עם תובנות, הסרה בלחיצה, לא מוכרים מידע) והפנה שוב לקישור.
 9. כשנותן מייל: שמור עם save_profile, ובאותה הודעה חובה למסור את קישור הדוח (reportUrl): "מעולה, הדוח שלך כאן 👇
 [הקישור המלא]
 כנס, צפה בדוח, תבין את הפוטנציאל שלך ותראה בדיוק איך הגענו לכל מספר. ואז תחזור אליי לכאן, אני מחכה לך 😉
@@ -114,6 +120,7 @@ export interface ChatFields {
   dealFirst?: number; monthlyFee?: number; lifetimeMonths?: number; budget?: number;
   name?: string; email?: string; phone?: string; businessName?: string;
   declineReason?: string;
+  consentAt?: string; consentVersion?: string; // מתי הושאר המייל אחרי הודעת ההסכמה, ולאיזו גרסת מדיניות
   reportToken?: string; reportStatus?: string; pendingResearch?: boolean;
   slots?: Array<{ startIso: string; label: string }>;
   meetingAt?: string;
@@ -134,6 +141,8 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
       if (typeof input[k] === "number" && input[k] as number >= 0) f[k] = input[k] as number;
     }
     if (f.email) f.email = f.email.toLowerCase();
+    // תיעוד ההסכמה לדיוור: הרגע שבו נמסר המייל וגרסת המדיניות שהוצגה
+    if (f.email && !f.consentAt) { f.consentAt = new Date().toISOString(); f.consentVersion = PRIVACY_VERSION; }
     // פרט קשר ראשון = ליד חדש: התראה מיידית לבעל הפורטל (נשלחת פעם אחת לשיחה)
     if (f.email || f.phone) {
       await notifyNewLead(chatId, { name: f.name, email: f.email, phone: f.phone, business: f.businessName || f.serviceField }).catch(() => {});

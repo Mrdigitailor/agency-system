@@ -161,8 +161,8 @@ export default function ProspectChatPage() {
     const parts = t.split(/(https?:\/\/\S+)/g);
     return parts.map((p, i) =>
       /^https?:\/\//.test(p)
-        ? <a key={i} href={p} target="_blank" rel="noreferrer" className="font-semibold text-[#eed89b] underline">צפייה בדוח המלא</a>
-        : <span key={i}>{p}</span>
+        ? <a key={i} href={p} target="_blank" rel="noreferrer" className="font-semibold text-[#eed89b] underline">{/\/privacy(\?|$)/.test(p) ? "מדיניות הפרטיות" : "צפייה בדוח המלא"}</a>
+        : <span key={i}>{p.split(/\*\*(.+?)\*\*/g).map((b, j) => (j % 2 ? <strong key={j} className="font-semibold">{b}</strong> : b))}</span>
     );
   };
 
@@ -177,6 +177,7 @@ export default function ProspectChatPage() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/images/logo-mrdigitailors.svg" alt="Mr.digitailor" className="h-8" />
         <div className="mr-auto flex items-center gap-3">
+          <a href="/privacy" target="_blank" rel="noreferrer" className="text-xs text-[#7e776a] underline decoration-[#4e4227] hover:text-[#eed89b]">פרטיות</a>
           <button onClick={resetChat} className="text-xs text-[#7e776a] underline decoration-[#4e4227] hover:text-[#eed89b]">שיחה חדשה</button>
           <span className="flex items-center gap-1.5 text-xs text-[#7e776a]"><span className="inline-block h-2 w-2 rounded-full bg-[#22c55e]" /> זמין עכשיו</span>
         </div>

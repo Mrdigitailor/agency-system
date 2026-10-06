@@ -78,7 +78,7 @@ ${opts.preheader ? `<div style="display:none;max-height:0;max-width:0;overflow:h
   <div dir="rtl" style="color:#111111;font-size:16.5px;line-height:1.8;direction:rtl;text-align:right;font-family:${FONT}">${inner}
   <p style="margin-top:26px">בברכה,<br>סער</p></div>
   ${SIGNATURE}
-  ${opts.unsubscribeUrl ? `<div dir="rtl" style="margin-top:14px;text-align:center;color:#b0aba2;font-size:11.5px;font-family:${FONT}">לא רוצה לקבל מאיתנו מיילים נוספים? <a href="${opts.unsubscribeUrl}" style="color:#9a958c;text-decoration:underline">להסרה מרשימת התפוצה</a></div>` : ""}
+  ${opts.unsubscribeUrl ? `<div dir="rtl" style="margin-top:14px;text-align:center;color:#b0aba2;font-size:11.5px;font-family:${FONT}">לא רוצה לקבל מאיתנו מיילים נוספים? <a href="${opts.unsubscribeUrl}" style="color:#9a958c;text-decoration:underline">להסרה מרשימת התפוצה</a> · <a href="${APP_BASE}/privacy" style="color:#9a958c;text-decoration:underline">מדיניות פרטיות</a></div>` : ""}
 </div></body></html>`;
 }
 
