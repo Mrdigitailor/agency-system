@@ -217,7 +217,7 @@ export function buildEmail(key: EmailKey, r: PotentialReport, fields?: EmailFiel
     : spec.block === "meeting" ? `<p dir="rtl" style="background:#faf6e9;border-radius:10px;padding:14px 18px;text-align:right"><b style="color:#8a6a15">📅 ${plainText(values.when)}</b><br>
 <a href="${ZOOM_LINK}" style="color:#8a6a15;font-weight:bold">קישור הזום לפגישה</a></p>`
     : "";
-  const href = spec.button === "report" ? `${APP_BASE}/report/${r.token}` : spec.button === "zoom" ? ZOOM_LINK : `${APP_BASE}/start`;
+  const href = spec.button === "report" ? `${APP_BASE}/report/${r.token}` : spec.button === "zoom" ? ZOOM_LINK : `${APP_BASE}/book/${r.token}`; // "start" = קביעת פגישה ישירה ביומן, לא חזרה לצ'אט
   const label = plainText(t(f.buttonLabel)).trim();
 
   const inner = [
