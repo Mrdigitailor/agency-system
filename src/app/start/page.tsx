@@ -51,6 +51,7 @@ export default function ProspectChatPage() {
   const [busy, setBusy] = useState(false);
   const [researchStep, setResearchStep] = useState(-1);
   const tokenRef = useRef<string>("");
+  const pendingField = useRef<string>(""); // תחום שהוקלד בדף הנחיתה ומחכה להישלח כהודעה ראשונה
   const bottomRef = useRef<HTMLDivElement>(null);
   const researchTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -93,6 +94,8 @@ export default function ProspectChatPage() {
     }
     setMsgs([{ role: "bot", text: d.reply ?? "" }]);
     setQuick(d.quickReplies ?? []);
+    // הגולש הקליד את התחום שלו בדף הנחיתה: השיחה נפתחת ממנו, בלי לשאול שוב
+    try { pendingField.current = (new URLSearchParams(window.location.search).get("field") ?? "").trim().slice(0, 80); } catch { /* לא קריטי */ }
   }, []);
 
   useEffect(() => {
@@ -183,6 +186,13 @@ export default function ProspectChatPage() {
     }
     setBusy(false); scroll();
   }, [busy, continueResearch]);
+
+  useEffect(() => {
+    if (!pendingField.current || busy || msgs.length !== 1) return;
+    const field = pendingField.current;
+    pendingField.current = "";
+    send(`התחום שלי: ${field}`);
+  }, [msgs, busy, send]);
 
   // קישורים בתוך הודעות בוט הופכים ללחיצים
   const renderText = (t: string) => {
