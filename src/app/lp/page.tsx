@@ -1,13 +1,20 @@
 "use client";
 
-// דף הנחיתה של המשפך שלנו. כרגע: החלק העליון ומחשבון ההחזר (דוגמת עיצוב לאישור).
+// דף הנחיתה של המשפך שלנו: תשעה חלקים, כל אחד ברכיב משלו ב-components/lp.
 // המבנה המלא: docs/funnel-landing-page-blueprint.md. יעד יחיד: מעבר לצ'אט.
 import { useEffect } from "react";
+import FaqSection from "@/components/lp/FaqSection";
 import GoogleG from "@/components/lp/GoogleG";
+import HowItWorks from "@/components/lp/HowItWorks";
 import MeasuringTape from "@/components/lp/MeasuringTape";
+import PartnerChip from "@/components/lp/PartnerChip";
+import ProblemSection from "@/components/lp/ProblemSection";
+import ProofStrip from "@/components/lp/ProofStrip";
 import QueryWall from "@/components/lp/QueryWall";
+import ReportPreview from "@/components/lp/ReportPreview";
 import ReturnCalculator from "@/components/lp/ReturnCalculator";
 import SearchStage from "@/components/lp/SearchStage";
+import TestimonialsSection from "@/components/lp/TestimonialsSection";
 
 const GTM_ID = "GTM-5BP74DF5";
 
@@ -65,6 +72,9 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <ProofStrip />
+      <ProblemSection />
+
       <div className="pointer-events-none -mx-6 -rotate-1 overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
         <MeasuringTape className="h-10 w-full lg:h-12" />
       </div>
@@ -96,6 +106,30 @@ export default function LandingPage() {
           <ReturnCalculator />
         </div>
       </section>
+      <HowItWorks />
+      <ReportPreview onCta={() => goToChat("")} />
+      <TestimonialsSection />
+      <FaqSection />
+
+      {/* קריאה אחרונה: שורת החיפוש חוזרת, והפעם ריקה ומחכה לגולש */}
+      <section className="relative overflow-hidden bg-black">
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_70%,rgba(238,216,155,0.14),transparent_60%)]" />
+        <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center px-5 py-20 text-center lg:px-8 lg:py-28">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/tailor-character.png" alt="" className="h-28 w-28" />
+          <h2 className="mt-6 max-w-3xl text-balance text-3xl font-semibold leading-tight sm:text-5xl">עכשיו תורכם. מה התחום שלכם?</h2>
+          <p className="mt-4 max-w-xl text-lg leading-relaxed text-[#c9c2b3]">שתי דקות, ותדעו כמה הפרסום בגוגל אמור להחזיר לכם. לפני שהשקעתם שקל.</p>
+          <div className="mt-9 w-full"><SearchStage onSubmit={goToChat} demo={false} /></div>
+        </div>
+      </section>
+
+      <footer className="border-t border-[#1d1a14] bg-black">
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-[#7e776a] sm:flex-row lg:px-8">
+          <span>מר דיגיטיילור בע&quot;מ · ספיר יוסף 1, חולון</span>
+          <PartnerChip />
+          <a href="/privacy" className="underline transition-colors duration-200 hover:text-brand-gold">מדיניות פרטיות</a>
+        </div>
+      </footer>
       <div className="h-20 sm:hidden" />
 
       {/* כפתור צמוד לתחתית בנייד */}

@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import GoogleG from "./GoogleG";
+import { useCountUp } from "./useCountUp";
 
 // נתוני חיפוש אמיתיים (ממוצע חודשי בישראל, מחיר ממוצע לקליק) מתוך מחקרי מילות החיפוש שלנו
 const EXAMPLES = [
@@ -18,29 +19,12 @@ const EXAMPLES = [
 const BUDGET = 5000;
 type Phase = "typing" | "searching" | "results" | "erasing";
 
-/** מספר שרץ מ-0 עד היעד בכל פעם שהיעד מתחלף */
-function useCountUp(target: number, run: boolean, ms = 900): number {
-  const [value, setValue] = useState(0);
-  useEffect(() => {
-    if (!run) return;
-    let raf = 0;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const p = Math.min((now - start) / ms, 1);
-      setValue(target * (1 - Math.pow(1 - p, 3)));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, run, ms]);
-  return run ? value : 0;
-}
-
-export default function SearchStage({ onSubmit }: { onSubmit: (field: string) => void }) {
+// demo=false: השורה מחכה ריקה להקלדה של הגולש, בלי ההדגמה (לקריאה האחרונה לפעולה בסוף הדף)
+export default function SearchStage({ onSubmit, demo = true }: { onSubmit: (field: string) => void; demo?: boolean }) {
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState("");
   const [phase, setPhase] = useState<Phase>("typing");
-  const [userMode, setUserMode] = useState(false);
+  const [userMode, setUserMode] = useState(!demo);
   const [userText, setUserText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const ex = EXAMPLES[index];
