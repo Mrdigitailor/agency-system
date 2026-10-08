@@ -50,11 +50,12 @@ export default function HowItWorks() {
                   <h3 className="mt-3 text-2xl font-semibold text-[#f4f0e7] sm:text-3xl">{s.title}</h3>
                   <p className="mt-2 max-w-2xl text-lg leading-relaxed text-[#c9c2b3]">{s.body}</p>
                   </div>
-                  {/* האיור כמו תמונה מודבקת: מסגרת לבנה, נטייה קלה לסירוגין */}
+                  {/* הדמות עומדת חופשי על הרקע הכהה. הזוהר הזהוב מאחור שומר על קו המתאר של הבגד השחור */}
                   {s.img && (
-                    <div className={`w-full max-w-[19rem] rounded-2xl bg-white p-1.5 shadow-[0_24px_60px_-18px_rgba(238,216,155,0.4)] sm:max-w-none ${i % 2 === 0 ? "-rotate-2" : "rotate-2"}`}>
+                    <div className="relative mx-auto w-full max-w-[15rem] sm:max-w-none">
+                      <div aria-hidden className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(238,216,155,0.30),transparent_68%)]" />
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={s.img} alt={s.alt} loading="lazy" className="w-full rounded-xl" />
+                      <img src={s.img} alt={s.alt} loading="lazy" className="relative w-full" />
                     </div>
                   )}
                 </li>

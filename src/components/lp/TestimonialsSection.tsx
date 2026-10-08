@@ -7,7 +7,12 @@ export default function TestimonialsSection() {
   return (
     <section className="bg-black">
       <div className="mx-auto w-full max-w-6xl overflow-hidden px-5 py-16 lg:px-8 lg:py-28">
-        <p className="text-center text-sm font-medium text-brand-gold">לקוחות מספרים</p>
+        <div className="relative mx-auto w-40 sm:w-52">
+          <div aria-hidden className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(238,216,155,0.30),transparent_68%)]" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/tailor-chart.webp" alt="החייט מציג גרף עולה" loading="lazy" className="relative w-full" />
+        </div>
+        <p className="mt-6 text-center text-sm font-medium text-brand-gold">לקוחות מספרים</p>
         <h2 className="mt-3 text-balance text-center text-3xl font-semibold leading-tight sm:text-5xl">היעד היה 5 מופעים בחודש. היא סגרה 16.</h2>
 
         <figure className="mx-auto mt-12 max-w-4xl rounded-2xl border border-brand-gold/40 bg-[#14120e] p-7 sm:p-10">

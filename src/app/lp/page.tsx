@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import FaqSection from "@/components/lp/FaqSection";
 import GoogleG from "@/components/lp/GoogleG";
 import HowItWorks from "@/components/lp/HowItWorks";
-import MeasuringTape from "@/components/lp/MeasuringTape";
 import PartnerChip from "@/components/lp/PartnerChip";
 import ProblemSection from "@/components/lp/ProblemSection";
 import ProofStrip from "@/components/lp/ProofStrip";
@@ -88,8 +87,11 @@ export default function LandingPage() {
       <ProofStrip />
       <ProblemSection />
 
-      <div className="pointer-events-none -mx-6 -rotate-1 overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
-        <MeasuringTape className="h-10 w-full lg:h-12" />
+      {/* מפריד: החייט מותח את סרט המדידה */}
+      <div className="relative mx-auto w-full max-w-md px-8 sm:max-w-xl">
+        <div aria-hidden className="absolute inset-x-0 inset-y-4 rounded-full bg-[radial-gradient(ellipse,rgba(238,216,155,0.26),transparent_68%)]" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/images/tailor-tape.webp" alt="החייט מותח סרט מדידה" loading="lazy" className="relative w-full" />
       </div>
 
       {/* החלק השני: מה זה אומר בכסף. הדמות מסבירה שזו הדמיה, כדי שאף אחד לא יחשוב שאלה המספרים שלו */}
@@ -129,7 +131,7 @@ export default function LandingPage() {
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_70%,rgba(238,216,155,0.14),transparent_60%)]" />
         <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center px-5 py-14 text-center lg:px-8 lg:py-28">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/images/tailor-character.png" alt="" className="h-28 w-28" />
+          <img src="/images/tailor-handshake.webp" alt="החייט מושיט יד ללחיצה" loading="lazy" className="w-44 sm:w-56" />
           <h2 className="mt-6 max-w-3xl text-balance text-3xl font-semibold leading-tight sm:text-5xl">עכשיו תורכם. מה התחום שלכם?</h2>
           <p className="mt-4 max-w-xl text-lg leading-relaxed text-[#c9c2b3]">שתי דקות, ותדעו כמה הפרסום בגוגל אמור להחזיר לכם. לפני שהשקעתם שקל.</p>
           <div className="mt-9 w-full"><SearchStage onSubmit={goToChat} demo={false} /></div>
