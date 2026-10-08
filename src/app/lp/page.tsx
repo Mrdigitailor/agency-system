@@ -69,17 +69,27 @@ export default function LandingPage() {
         <MeasuringTape className="h-10 w-full lg:h-12" />
       </div>
 
-      {/* החלק השני: מה זה אומר בכסף */}
-      <section className="mx-auto grid w-full max-w-6xl gap-10 px-5 py-20 lg:grid-cols-[1fr_0.8fr] lg:items-center lg:gap-16 lg:px-8 lg:py-28">
+      {/* החלק השני: מה זה אומר בכסף. הדמות מסבירה שזו הדמיה, כדי שאף אחד לא יחשוב שאלה המספרים שלו */}
+      <section className="mx-auto grid w-full max-w-6xl gap-12 px-5 py-20 lg:grid-cols-[1fr_0.85fr] lg:items-center lg:gap-16 lg:px-8 lg:py-28">
         <div>
           <p className="text-sm font-medium text-brand-gold">ומה זה אומר בכסף?</p>
-          <h2 className="mt-3 text-3xl font-semibold leading-tight sm:text-5xl">חיפושים הם רק ההתחלה. השאלה היא כמה מהם הופכים לעסקאות.</h2>
+          <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight sm:text-5xl">חיפושים הם רק ההתחלה. השאלה היא כמה מהם הופכים לעסקאות.</h2>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#c9c2b3]">
-            הזיזו את התקציב וראו את כל הדרך: מהקליק, דרך הפנייה, ועד העסקה. בצ&apos;אט תקבלו את אותו חשבון עם המספרים של התחום שלכם.
+            שחקו עם ההדמיה: החליפו תחום, הזיזו תקציב, וראו איך התמונה משתנה. יש תחומים שבהם כל שקל מחזיר פי עשרה, ויש כאלה שבהם הוא לא מחזיר את עצמו.
           </p>
+
+          <div className="mt-8 flex items-end gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/images/tailor-character.png" alt="" className="h-28 w-28 shrink-0 sm:h-36 sm:w-36" />
+            <div className="relative mb-4 rounded-2xl rounded-br-sm border border-brand-gold/40 bg-[#14120e] px-5 py-4">
+              <p className="text-lg font-semibold text-[#f4f0e7]">שימו לב, זו רק הדמיה.</p>
+              <p className="mt-1 leading-relaxed text-[#c9c2b3]">המספרים של התחום שלכם יהיו אחרים. אותם מקבלים בצ&apos;אט, תוך שתי דקות.</p>
+            </div>
+          </div>
+
           <button onClick={() => goToChat("")}
-            className="mt-8 hidden items-center justify-center rounded-lg bg-brand-gold px-8 py-4 text-lg font-semibold text-black transition-all duration-200 hover:brightness-95 sm:inline-flex">
-            לבדוק את התחום שלי
+            className="mt-6 hidden items-center justify-center rounded-lg bg-brand-gold px-8 py-4 text-lg font-semibold text-black transition-all duration-200 hover:brightness-95 sm:inline-flex">
+            לקבל את המספרים של התחום שלי
           </button>
         </div>
         <div className="mx-auto w-full max-w-md lg:mx-0 lg:justify-self-end">
