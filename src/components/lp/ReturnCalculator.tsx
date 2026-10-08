@@ -48,7 +48,7 @@ export default function ReturnCalculator() {
       <div className="mt-2 flex flex-wrap gap-2">
         {EXAMPLES.map((e, i) => (
           <button key={e.field} onClick={() => setPick(i)}
-            className={`rounded-full border px-3 py-1.5 text-sm transition-colors duration-200 ${i === pick ? "border-brand-gold bg-brand-gold/15 text-brand-gold" : "border-[#3a3324] text-[#c9c2b3] hover:border-brand-gold"}`}>
+            className={`rounded-full border px-3.5 py-2 text-sm transition-colors duration-200 ${i === pick ? "border-brand-gold bg-brand-gold/15 text-brand-gold" : "border-[#3a3324] text-[#c9c2b3] hover:border-brand-gold"}`}>
             {e.field}
           </button>
         ))}

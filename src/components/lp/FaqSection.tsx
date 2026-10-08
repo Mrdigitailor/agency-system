@@ -16,7 +16,7 @@ const FAQ: Array<[string, string]> = [
 export default function FaqSection() {
   const [open, setOpen] = useState<number | null>(0);
   return (
-    <section className="mx-auto w-full max-w-3xl px-5 py-20 lg:px-8 lg:py-28">
+    <section className="mx-auto w-full max-w-3xl px-5 py-14 lg:px-8 lg:py-28">
       <p className="text-center text-sm font-medium text-brand-gold">שאלות נפוצות</p>
       <h2 className="mt-3 text-balance text-center text-3xl font-semibold leading-tight sm:text-5xl">מה ששואלים לפני שלוחצים.</h2>
       <div className="mt-10 divide-y divide-[#272319] border-y border-[#272319]">

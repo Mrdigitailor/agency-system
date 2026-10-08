@@ -2,7 +2,7 @@
 
 // דף הנחיתה של המשפך שלנו: תשעה חלקים, כל אחד ברכיב משלו ב-components/lp.
 // המבנה המלא: docs/funnel-landing-page-blueprint.md. יעד יחיד: מעבר לצ'אט.
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import FaqSection from "@/components/lp/FaqSection";
 import GoogleG from "@/components/lp/GoogleG";
 import HowItWorks from "@/components/lp/HowItWorks";
@@ -19,6 +19,19 @@ import TestimonialsSection from "@/components/lp/TestimonialsSection";
 const GTM_ID = "GTM-5BP74DF5";
 
 export default function LandingPage() {
+  // הכפתור הצמוד בנייד מופיע רק אחרי הבמה, ונעלם כשמגיעים לקריאה האחרונה (שם יש כבר שורת חיפוש)
+  const [sticky, setSticky] = useState(false);
+  const finalRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const onScroll = () => {
+      const finalTop = finalRef.current?.getBoundingClientRect().top ?? Infinity;
+      setSticky(window.scrollY > window.innerHeight * 0.75 && finalTop > window.innerHeight * 0.6);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   useEffect(() => {
     if (document.getElementById("gtm-loader")) return;
     const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> };
@@ -80,7 +93,7 @@ export default function LandingPage() {
       </div>
 
       {/* החלק השני: מה זה אומר בכסף. הדמות מסבירה שזו הדמיה, כדי שאף אחד לא יחשוב שאלה המספרים שלו */}
-      <section className="mx-auto grid w-full max-w-6xl gap-12 px-5 py-20 lg:grid-cols-[1fr_0.85fr] lg:items-center lg:gap-16 lg:px-8 lg:py-28">
+      <section className="mx-auto grid w-full max-w-6xl gap-12 px-5 py-14 lg:grid-cols-[1fr_0.85fr] lg:items-center lg:gap-16 lg:px-8 lg:py-28">
         <div>
           <p className="text-sm font-medium text-brand-gold">ומה זה אומר בכסף?</p>
           <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight sm:text-5xl">חיפושים הם רק ההתחלה. השאלה היא כמה מהם הופכים לעסקאות.</h2>
@@ -112,9 +125,9 @@ export default function LandingPage() {
       <FaqSection />
 
       {/* קריאה אחרונה: שורת החיפוש חוזרת, והפעם ריקה ומחכה לגולש */}
-      <section className="relative overflow-hidden bg-black">
+      <section ref={finalRef} className="relative overflow-hidden bg-black">
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_70%,rgba(238,216,155,0.14),transparent_60%)]" />
-        <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center px-5 py-20 text-center lg:px-8 lg:py-28">
+        <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center px-5 py-14 text-center lg:px-8 lg:py-28">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/images/tailor-character.png" alt="" className="h-28 w-28" />
           <h2 className="mt-6 max-w-3xl text-balance text-3xl font-semibold leading-tight sm:text-5xl">עכשיו תורכם. מה התחום שלכם?</h2>
@@ -130,10 +143,9 @@ export default function LandingPage() {
           <a href="/privacy" className="underline transition-colors duration-200 hover:text-brand-gold">מדיניות פרטיות</a>
         </div>
       </footer>
-      <div className="h-20 sm:hidden" />
 
       {/* כפתור צמוד לתחתית בנייד */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#272319] bg-[#0a0908]/95 p-3 backdrop-blur sm:hidden">
+      <div className={`fixed inset-x-0 bottom-0 z-20 border-t border-[#272319] bg-[#0a0908]/95 p-3 backdrop-blur transition-transform duration-200 sm:hidden ${sticky ? "translate-y-0" : "translate-y-full"}`}>
         <button onClick={() => goToChat("")} className="flex w-full items-center justify-center rounded-lg bg-brand-gold py-3.5 text-base font-semibold text-black">לבדוק את התחום שלי</button>
       </div>
     </div>

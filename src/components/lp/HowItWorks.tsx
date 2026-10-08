@@ -28,7 +28,7 @@ export default function HowItWorks() {
 
   return (
     <section className="bg-black">
-      <div className="mx-auto w-full max-w-4xl px-5 py-20 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-4xl px-5 py-14 lg:px-8 lg:py-28">
         <p className="text-center text-sm font-medium text-brand-gold">איך זה עובד</p>
         <h2 className="mt-3 text-balance text-center text-3xl font-semibold leading-tight sm:text-5xl">מהקלדה ראשונה ועד דוח ביד: פחות משלוש דקות.</h2>
 

@@ -12,19 +12,22 @@ const DOUBTS = [
 export default function ProblemSection() {
   const [open, setOpen] = useState(0);
   return (
-    <section className="mx-auto grid w-full max-w-6xl gap-12 px-5 py-20 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:gap-16 lg:px-8 lg:py-28">
-      <div className="relative mx-auto w-full max-w-sm lg:max-w-none">
+    <section className="mx-auto grid w-full max-w-6xl gap-8 px-5 py-16 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:gap-16 lg:px-8 lg:py-28">
+      <div className="relative order-2 mx-auto w-full max-w-[17rem] lg:order-1 lg:max-w-none">
         <div aria-hidden className="absolute inset-6 rounded-full bg-[radial-gradient(circle,rgba(238,216,155,0.22),transparent_68%)]" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/images/tailor-measuring.png" alt="החייט של Mr.digitailor מודד לקוח בסרט מדידה" className="relative w-full" />
       </div>
 
-      <div>
+      <div className="contents lg:order-2 lg:block">
+        <div className="order-1">
         <p className="text-sm font-medium text-brand-gold">חייט טוב מודד לפני שהוא גוזר</p>
         <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight sm:text-5xl">רוב העסקים מתחילים לפרסם בלי לקחת מידות.</h2>
-        <p className="mt-5 text-lg leading-relaxed text-[#c9c2b3]">אולי אחד מהמשפטים האלה מוכר לכם. לחצו עליו.</p>
+        </div>
 
-        <div className="mt-7 space-y-3">
+        <div className="order-3 lg:mt-7">
+        <p className="text-lg leading-relaxed text-[#c9c2b3] lg:mt-5">אולי אחד מהמשפטים האלה מוכר לכם. לחצו עליו.</p>
+        <div className="mt-5 space-y-3">
           {DOUBTS.map((d, i) => (
             <div key={d.say} className={`overflow-hidden rounded-xl border transition-colors duration-200 ${open === i ? "border-brand-gold/60 bg-[#14120e]" : "border-[#272319] bg-[#0f0d0a]"}`}>
               <button onClick={() => setOpen(i)} aria-expanded={open === i}
@@ -41,6 +44,7 @@ export default function ProblemSection() {
               )}
             </div>
           ))}
+        </div>
         </div>
       </div>
     </section>

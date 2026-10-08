@@ -89,7 +89,7 @@ export default function SearchStage({ onSubmit, demo = true }: { onSubmit: (fiel
       <div className="mt-8 min-h-[8.5rem] sm:min-h-[9.5rem]">
         {userMode ? (
           <p className="text-center text-lg leading-relaxed text-[#c9c2b3]">
-            כתבו מה אתם מוכרים ואיפה, ולחצו Enter.
+            כתבו מה אתם מוכרים ואיפה, ולחצו על הכפתור.
             <span className="block text-[#7e776a]">הצ&apos;אט ייפתח עם התחום שלכם, ותוך שתי דקות תקבלו את המספרים שלו.</span>
           </p>
         ) : (

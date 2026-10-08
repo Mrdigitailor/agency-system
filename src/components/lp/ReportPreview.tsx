@@ -19,7 +19,7 @@ export default function ReportPreview({ onCta }: { onCta: () => void }) {
   const maxVol = TERMS[0][1];
 
   return (
-    <section className="mx-auto grid w-full max-w-6xl gap-12 px-5 py-20 lg:grid-cols-[1fr_1fr] lg:items-center lg:gap-16 lg:px-8 lg:py-28">
+    <section className="mx-auto grid w-full max-w-6xl gap-12 px-5 py-14 lg:grid-cols-[1fr_1fr] lg:items-center lg:gap-16 lg:px-8 lg:py-28">
       <div>
         <p className="text-sm font-medium text-brand-gold">מה מקבלים בסוף השיחה</p>
         <h2 className="mt-3 text-balance text-3xl font-semibold leading-tight sm:text-5xl">דוח אישי על התחום שלכם, לא מצגת מכירה.</h2>
@@ -41,7 +41,7 @@ export default function ReportPreview({ onCta }: { onCta: () => void }) {
           <div className="mt-4 flex gap-2">
             {TABS.map((t) => (
               <button key={t} onClick={() => setTab(t)}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-200 ${tab === t ? "bg-black text-brand-gold" : "bg-[#f5f5f5] text-[#666666] hover:text-black"}`}>
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200 ${tab === t ? "bg-black text-brand-gold" : "bg-[#f5f5f5] text-[#666666] hover:text-black"}`}>
                 {t}
               </button>
             ))}
