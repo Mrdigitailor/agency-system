@@ -102,7 +102,7 @@ export default function BookPage() {
               </div>
 
               {picked && (
-                <div className="mt-6 border-t border-[#272319] pt-5">
+                <div className="sticky bottom-0 -mx-5 mt-6 border-t border-[#272319] bg-[#0d0c0a] px-5 pb-4 pt-5 sm:-mx-7 sm:px-7">
                   <label className="block text-sm text-[#a39c8d]" htmlFor="phone">טלפון, למקרה שנצטרך לעדכן משהו לגבי הפגישה (לא חובה)</label>
                   <input id="phone" dir="ltr" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="050-0000000"
                     className="mt-2 w-full rounded-lg border border-[#3a3324] bg-black px-3 py-2.5 text-right text-[#f4f0e7] outline-none transition-colors duration-200 focus:border-brand-gold" />
