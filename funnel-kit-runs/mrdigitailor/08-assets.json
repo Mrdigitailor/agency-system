@@ -1,0 +1,112 @@
+[
+ {
+  "create": {
+   "finalUrls": [
+    "https://agency.mr-digitailor.co.il/lp"
+   ],
+   "sitelinkAsset": {
+    "linkText": "איך זה עובד",
+    "description1": "שתי דקות בצ'אט",
+    "description2": "ודוח עם המספרים שלכם"
+   }
+  }
+ },
+ {
+  "create": {
+   "finalUrls": [
+    "https://agency.mr-digitailor.co.il/lp"
+   ],
+   "sitelinkAsset": {
+    "linkText": "מה מקבלים בדוח",
+    "description1": "חיפושים בחודש ומחיר לקליק",
+    "description2": "וכמה פניות התקציב אמור להביא"
+   }
+  }
+ },
+ {
+  "create": {
+   "finalUrls": [
+    "https://agency.mr-digitailor.co.il/lp"
+   ],
+   "sitelinkAsset": {
+    "linkText": "מחשבון החזר",
+    "description1": "הזיזו תקציב בהדמיה",
+    "description2": "וראו איך התמונה משתנה"
+   }
+  }
+ },
+ {
+  "create": {
+   "finalUrls": [
+    "https://agency.mr-digitailor.co.il/lp"
+   ],
+   "sitelinkAsset": {
+    "linkText": "לבדוק את התחום שלי",
+    "description1": "הקלידו את התחום שלכם",
+    "description2": "וקבלו את המספרים שלו"
+   }
+  }
+ },
+ {
+  "create": {
+   "calloutAsset": {
+    "calloutText": "בלי עלות"
+   }
+  }
+ },
+ {
+  "create": {
+   "calloutAsset": {
+    "calloutText": "בלי התחייבות"
+   }
+  }
+ },
+ {
+  "create": {
+   "calloutAsset": {
+    "calloutText": "דוח תוך שתי דקות"
+   }
+  }
+ },
+ {
+  "create": {
+   "calloutAsset": {
+    "calloutText": "נתוני חיפוש אמיתיים"
+   }
+  }
+ },
+ {
+  "create": {
+   "calloutAsset": {
+    "calloutText": "10 שנים בפרסום בגוגל"
+   }
+  }
+ },
+ {
+  "create": {
+   "calloutAsset": {
+    "calloutText": "350+ עסקים"
+   }
+  }
+ },
+ {
+  "create": {
+   "calloutAsset": {
+    "calloutText": "Google Partner"
+   }
+  }
+ },
+ {
+  "create": {
+   "structuredSnippetAsset": {
+    "header": "שירותים",
+    "values": [
+     "בדיקת ביקוש בגוגל",
+     "מחירי קליקים בתחום",
+     "תחזית פניות לתקציב",
+     "פגישת זום"
+    ]
+   }
+  }
+ }
+]

@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""הכלי של סוכן הגוגל אדס. שולח בקשות למערכת, והיא מבצעת אותן בגוגל אדס עם מעקות הבטיחות שלה.
+
+שימוש:
+  gads research "<תחום>" ["<אזור>"]                מחקר מילות חיפוש (נפח ומחיר לקליק)
+  gads search <customerId> "<GAQL>"               קריאת נתונים מהחשבון
+  gads mutate <customerId> <service> <file.json>  שינוי בחשבון. הקובץ מכיל רשימת operations
+  gads validate <customerId> <service> <file.json> אותה בקשה בלי לבצע, לבדיקת תקינות
+
+הגדרות: ~/.config/funnel-kit/config.json עם {"url": "...", "key": "..."}, או משתני הסביבה FUNNEL_KIT_URL ו-FUNNEL_KIT_KEY.
+"""
+import json, os, sys, urllib.request, urllib.error
+
+def config():
+    url, key = os.environ.get("FUNNEL_KIT_URL"), os.environ.get("FUNNEL_KIT_KEY")
+    path = os.path.expanduser("~/.config/funnel-kit/config.json")
+    if (not url or not key) and os.path.exists(path):
+        c = json.load(open(path, encoding="utf-8"))
+        url, key = url or c.get("url"), key or c.get("key")
+    if not url or not key:
+        sys.exit("חסרות הגדרות: צריך url ו-key ב-~/.config/funnel-kit/config.json")
+    return url.rstrip("/"), key
+
+def call(body):
+    url, key = config()
+    req = urllib.request.Request(url + "/api/public/kit/google-ads", data=json.dumps(body).encode("utf-8"),
+                                 headers={"Content-Type": "application/json", "Authorization": "Bearer " + key})
+    try:
+        with urllib.request.urlopen(req, timeout=150) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try: return json.loads(e.read())
+        except Exception: return {"ok": False, "error": "HTTP %s" % e.code}
+
+def main():
+    a = sys.argv[1:]
+    if not a: sys.exit(__doc__)
+    cmd = a[0]
+    if cmd == "research" and len(a) >= 2:
+        out = call({"op": "research", "serviceField": a[1], "serviceArea": a[2] if len(a) > 2 else ""})
+    elif cmd == "search" and len(a) == 3:
+        out = call({"op": "search", "customerId": a[1], "query": a[2]})
+    elif cmd in ("mutate", "validate") and len(a) == 4:
+        ops = json.load(open(a[3], encoding="utf-8"))
+        out = call({"op": "mutate", "customerId": a[1], "service": a[2], "operations": ops, "validateOnly": cmd == "validate"})
+    else:
+        sys.exit(__doc__)
+    print(json.dumps(out, ensure_ascii=False, indent=1))
+    if not out.get("ok"): sys.exit(1)
+
+main()

@@ -1,0 +1,4 @@
+[
+  { "create": { "campaign": "customers/3798644658/campaigns/24343132492", "location": { "geoTargetConstant": "geoTargetConstants/2376" } } },
+  { "create": { "campaign": "customers/3798644658/campaigns/24343132492", "language": { "languageConstant": "languageConstants/1027" } } }
+]

@@ -1,0 +1,86 @@
+[
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428771003294",
+   "fieldType": "SITELINK"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428874409315",
+   "fieldType": "SITELINK"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428958842430",
+   "fieldType": "SITELINK"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428874413986",
+   "fieldType": "SITELINK"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428958842439",
+   "fieldType": "CALLOUT"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428874409324",
+   "fieldType": "CALLOUT"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428874413992",
+   "fieldType": "CALLOUT"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428770998296",
+   "fieldType": "CALLOUT"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428958842448",
+   "fieldType": "CALLOUT"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428874414004",
+   "fieldType": "CALLOUT"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428874409336",
+   "fieldType": "CALLOUT"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/428958842457",
+   "fieldType": "STRUCTURED_SNIPPET"
+  }
+ }
+]

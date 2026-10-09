@@ -1,0 +1,152 @@
+[
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "חברת פרסום בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "סוכנות פרסום בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "חברה לפרסום בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "ניהול קמפיינים בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "ניהול קמפיין בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "מומחה פרסום בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "מומחה לפרסום בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "פרסום בגוגל לעסקים",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "פרסום עסק בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "פרסום העסק בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "קידום ממומן בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "פרסום ממומן בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "שיווק ממומן בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "כמה עולה פרסום בגוגל",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "keyword": {
+    "text": "קידום ממומן בגוגל מחירים",
+    "matchType": "PHRASE"
+   }
+  }
+ }
+]

@@ -1,0 +1,1 @@
+[{ "update": { "resourceName": "customers/3798644658/conversionGoalCampaignConfigs/24343132492", "goalConfigLevel": "CAMPAIGN", "customConversionGoal": "customers/3798644658/customConversionGoals/6459397776" }, "updateMask": "goalConfigLevel,customConversionGoal" }]

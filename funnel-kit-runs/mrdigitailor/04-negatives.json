@@ -1,0 +1,462 @@
+[
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "חינם",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "בחינם",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "חינמי",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "דרושים",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "דרוש",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "דרושה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "משרות",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "משרה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "עבודה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "שכר",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "משכורת",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "קריירה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "התמחות",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "קורס",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "קורסים",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "לימודים",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "לימוד",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "ללמוד",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "הכשרה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "סדנה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "וובינר",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "מדריך",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "הדרכה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "הורדה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "להורדה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "pdf",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "ספר",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "איך",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "לבד",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "בעצמך",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "בעצמי",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "מה זה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "ויקיפדיה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "התחברות",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "כניסה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "login",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "תמיכה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "שירות לקוחות",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "קופון",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "שובר",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "מפות",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "maps",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "מיי ביזנס",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "הסמכה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "תעודה",
+    "matchType": "PHRASE"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "negative": true,
+   "keyword": {
+    "text": "מבחן",
+    "matchType": "PHRASE"
+   }
+  }
+ }
+]

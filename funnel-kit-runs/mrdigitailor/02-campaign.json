@@ -1,0 +1,11 @@
+[{ "create": {
+  "name": "משפך | חיפוש | מכונת הפגישות מגוגל",
+  "status": "PAUSED",
+  "advertisingChannelType": "SEARCH",
+  "campaignBudget": "customers/3798644658/campaignBudgets/15939832444",
+  "targetSpend": { "cpcBidCeilingMicros": "46000000" },
+  "networkSettings": { "targetGoogleSearch": true, "targetSearchNetwork": false, "targetContentNetwork": false, "targetPartnerSearchNetwork": false },
+  "geoTargetTypeSetting": { "positiveGeoTargetType": "PRESENCE", "negativeGeoTargetType": "PRESENCE" },
+  "finalUrlSuffix": "utm_source=google&utm_medium=cpc&utm_campaign=funnel_search_meetings_machine&utm_term={keyword}",
+  "containsEuPoliticalAdvertising": "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING"
+} }]
