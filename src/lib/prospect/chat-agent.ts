@@ -294,7 +294,7 @@ function splitQuickReplies(text: string): { reply: string; quickReplies: string[
   };
 }
 
-export const RESEARCH_ANNOUNCEMENT = "אני ניגש עכשיו לגוגל לבדוק את התחום שלך בזמן אמת 🔍\nתן לי בערך 15 שניות.";
+export const RESEARCH_ANNOUNCEMENT = "אני ניגש עכשיו לגוגל לבדוק את התחום שלך בזמן אמת 🔍\nזה לוקח בערך 15 שניות.";
 export const RESEARCH_TRIGGER = "__research__"; // הודעת המשך אוטומטית מהדפדפן, לא מוצגת למשתמש
 
 export const OPENING_MESSAGE = "היי 👋 אני העוזר הדיגיטלי של Mr.digitailor.\nתוך שתי דקות אני יכול להראות לך, במספרים אמיתיים מגוגל, כמה לקוחות והכנסות העסק שלך יכול להוציא מקמפיין חכם. שנבדוק?";
