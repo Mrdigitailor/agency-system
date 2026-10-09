@@ -18,12 +18,14 @@ export interface VerdictInput {
   dealFirst: number;      // שווי עסקה ראשונה / דמי הקמה
   monthlyFee: number;     // ריטיינר חודשי (0 אם אין)
   lifetimeMonths: number; // אורך חיי לקוח ממוצע
+  closeRate?: number;     // אחוז הסגירה שהליד מסר בצ'אט (0 עד 1). בלי תשובה משתמשים בהנחה השמרנית
 }
 
 export interface Chain {
   ok: boolean;            // האם יש מספיק נתונים למספר אמין
   reason?: string;        // אם לא — למה (מוביל למסלול "בוא נדבר")
   closeRate: number;
+  closeRateFromLead?: boolean; // true = הליד מסר את אחוז הסגירה שלו, false = ההנחה השמרנית שלנו
   pageConv: number;
   cpcMid: number;
   clicks: { head: number; best: number; worst: number };
@@ -55,7 +57,10 @@ export function computeChain(r: ResearchResult, input: VerdictInput): Chain {
 
   // רף המחיר לקביעת אחוז הסגירה — לפי הסכום המשמעותי שהלקוח משלם
   const priceBasis = Math.max(input.dealFirst, input.monthlyFee);
-  const closeRate = priceBasis > CHEAP_THRESHOLD ? CLOSE_RATE_EXPENSIVE : CLOSE_RATE_CHEAP;
+  const fromLead = typeof input.closeRate === "number" && input.closeRate > 0;
+  const closeRate = fromLead
+    ? Math.min(Math.max(input.closeRate as number, 0.02), 0.8)
+    : priceBasis > CHEAP_THRESHOLD ? CLOSE_RATE_EXPENSIVE : CLOSE_RATE_CHEAP;
 
   const cap = r.totalVol * VOLUME_SHARE_CAP;
   const clicks = {
@@ -69,7 +74,7 @@ export function computeChain(r: ResearchResult, input: VerdictInput): Chain {
   const dealValueFull = input.dealFirst + (input.monthlyFee > 0 ? input.monthlyFee * Math.max(input.lifetimeMonths, 1) : 0);
 
   return {
-    ...base, ok: true, closeRate,
+    ...base, ok: true, closeRate, closeRateFromLead: fromLead,
     clicks: { head: Math.round(clicks.head), best: Math.round(clicks.best), worst: Math.round(clicks.worst) },
     leads: { head: +leads.head.toFixed(1), best: +leads.best.toFixed(1), worst: +leads.worst.toFixed(1) },
     deals: { head: +deals.head.toFixed(2), best: +deals.best.toFixed(2) },

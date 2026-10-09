@@ -15,6 +15,7 @@ export interface CreateReportInput {
   dealFirst?: number;
   monthlyFee?: number;
   lifetimeMonths?: number;
+  closeRate?: number; // אחוז הסגירה שהליד מסר (0 עד 1)
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
@@ -54,6 +55,7 @@ export async function createAndRunReport(input: CreateReportInput): Promise<Crea
       dealFirst: report.dealFirst,
       monthlyFee: report.monthlyFee,
       lifetimeMonths: report.lifetimeMonths,
+      closeRate: input.closeRate,
     });
     await prisma.potentialReport.update({
       where: { id: report.id },

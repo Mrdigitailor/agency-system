@@ -31,8 +31,9 @@ const SYSTEM_PROMPT = `אתה העוזר הדיגיטלי של Mr.digitailor, ס
 5. שאל איך הוא גובה: תשלום חד פעמי | ריטיינר חודשי.
    אם חד פעמי: כמה שווה עסקה ממוצעת (כפתורים: עד 1,500 ₪ | 1,500 עד 5,000 | 5,000 עד 15,000 | מעל 15,000). קח את אמצע הטווח כערך.
    אם ריטיינר: כמה בחודש וכמה זמן לקוח נשאר בממוצע. אם מזכיר גם דמי הקמה, שמור אותם כ-dealFirst.
+5א. אחרי שווי העסקה, שאל: "ומתוך 10 פניות שמגיעות אליך, כמה בערך נסגרות?" [כפתורים: 1 מתוך 10 | 2 עד 3 | 4 עד 5 | יותר מחצי | לא יודע]. שמור עם save_profile בשדה closeRate כמספר בין 0 ל-1: 0.1, 0.25, 0.45, 0.6. אם "לא יודע": אל תשמור כלום, אמור שתחשב לפי הנחה שמרנית, והמשך.
 6. שאל כמה היה רוצה להשקיע בפרסום בחודש (כפתורים: עד 3,000 ₪ | 3,000 עד 5,000 | 5,000 עד 10,000 | מעל 10,000 | עוד לא החלטתי). קח אמצע טווח. אם "עוד לא החלטתי": אמור שתחשב לפי 5,000 ₪ כנקודת פתיחה.
-7. ברגע שיש תחום + תקציב + נתוני עסקה: קרא לכלי run_research מיד, בלי לכתוב שום טקסט. המערכת תודיע למשתמש שהמחקר רץ.
+7. ברגע שיש תחום + תקציב + נתוני עסקה, ושאלת הסגירה (5א) כבר נשאלה: קרא לכלי run_research מיד, בלי לכתוב שום טקסט. המערכת תודיע למשתמש שהמחקר רץ.
 8. כשמגיעה הודעת [מערכת] עם תוצאות המחקר: הצג את הטיזר בדיוק במבנה הזה (רק עם המספרים מההודעה):
    "[שם], יש לי את המספרים שלך 👇
    🔍 [monthlySearches] חיפושים בחודש של אנשים שמחפשים בדיוק את מה שאתה עושה
@@ -41,6 +42,7 @@ const SYSTEM_PROMPT = `אתה העוזר הדיגיטלי של Mr.digitailor, ס
 
    ודבר קטן, כי החוק מחייב אותי להגיד אותו (אני יודע, נשמע רשמי 🙂): כשמשאירים מייל מאשרים את מדיניות הפרטיות שלנו. בפועל זה אומר שאשלח לך את הדוח ועוד כמה מיילים עם תובנות על השיווק שלך, ואפשר להסיר את עצמך בלחיצה אחת מתי שרוצים. הכול כתוב כאן: ${PRIVACY_URL}"
    את פסקת ההסכמה והקישור מציגים בדיוק כך, מילה במילה, ורק פעם אחת בשיחה. אם שואלים על פרטיות או על מה עושים עם הפרטים: ענה בקצרה ובכנות (הדוח, תיאום פגישה, כמה מיילים עם תובנות, הסרה בלחיצה, לא מוכרים מידע) והפנה שוב לקישור.
+8א. אם בתוצאות המחקר מופיע weak=true: התקציב לא מחזיר את עצמו לפי המספרים. אל תציג את שורת ה-💰. במקומה כתוב בכנות, בלי להתנצל ובלי לייפות: "אני אהיה ישר איתך: לפי המספרים האלה, תקציב של [budget] ₪ לא עושה הרבה היגיון אצלך כרגע. זה משהו שסער צריך לנתח בעצמו, ושווה לעלות איתו לשיחה קצרה כדי לשמוע למה זה יוצא ככה ומה אפשר לעשות כדי שזה כן יעבוד." אחרי זה המשך כרגיל: הדוח המלא, בקשת המייל ופסקת ההסכמה.
 9. כשנותן מייל: שמור עם save_profile, ובאותה הודעה חובה למסור את קישור הדוח (reportUrl): "מעולה, הדוח שלך כאן 👇
 [הקישור המלא]
 כנס, צפה בדוח, תבין את הפוטנציאל שלך ותראה בדיוק איך הגענו לכל מספר. ואז תחזור אליי לכאן, אני מחכה לך 😉
@@ -87,6 +89,7 @@ const TOOLS: Anthropic.Tool[] = [
         monthlyFee: { type: "number", description: "ריטיינר חודשי בש\"ח" },
         lifetimeMonths: { type: "number", description: "אורך חיי לקוח בחודשים" },
         budget: { type: "number", description: "תקציב פרסום חודשי בש\"ח" },
+        closeRate: { type: "number", description: "אחוז הסגירה שמסר, כמספר בין 0 ל-1 (למשל 0.25)" },
         name: { type: "string" }, email: { type: "string" }, phone: { type: "string" },
         businessName: { type: "string", description: "שם העסק אם הוזכר" },
         gender: { type: "string", enum: ["m", "f"], description: "לשון הפנייה שהמשתמש בחר: m זכר, f נקבה" },
@@ -119,7 +122,7 @@ const TOOLS: Anthropic.Tool[] = [
 // ---------- טיפוסים ----------
 export interface ChatFields {
   serviceField?: string; serviceArea?: string; paymentType?: string;
-  dealFirst?: number; monthlyFee?: number; lifetimeMonths?: number; budget?: number;
+  dealFirst?: number; monthlyFee?: number; lifetimeMonths?: number; budget?: number; closeRate?: number;
   name?: string; email?: string; phone?: string; businessName?: string;
   declineReason?: string;
   gender?: string; // m | f : לשון הפנייה שהמשתמש בחר
@@ -143,6 +146,7 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
     for (const k of ["dealFirst", "monthlyFee", "lifetimeMonths", "budget"] as const) {
       if (typeof input[k] === "number" && input[k] as number >= 0) f[k] = input[k] as number;
     }
+    if (typeof input.closeRate === "number" && input.closeRate > 0 && input.closeRate <= 1) f.closeRate = input.closeRate;
     if (f.email) f.email = f.email.toLowerCase();
     if (input.gender === "m" || input.gender === "f") f.gender = input.gender;
     // תיעוד ההסכמה לדיוור: הרגע שבו נמסר המייל וגרסת המדיניות שהוצגה
@@ -194,7 +198,7 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
     const r = await createAndRunReport({
       businessName: f.businessName, serviceField: f.serviceField, serviceArea: f.serviceArea,
       budget: f.budget, paymentType: f.paymentType === "retainer" ? "retainer" : "one_time",
-      dealFirst: f.dealFirst, monthlyFee: f.monthlyFee, lifetimeMonths: f.lifetimeMonths,
+      dealFirst: f.dealFirst, monthlyFee: f.monthlyFee, lifetimeMonths: f.lifetimeMonths, closeRate: f.closeRate,
       contactName: f.name, contactEmail: f.email, contactPhone: f.phone,
     });
     f.reportToken = r.token;
@@ -222,6 +226,7 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
         monthlySearches: r.totalVol,
         budget: f.budget,
         revenueText, // להציג מילה במילה
+        weak: low < (f.budget ?? 0), // ההכנסה בתרחיש המייצג נמוכה מהתקציב: ראה שלב 8א
         revenueBasis: firstBasis ? "עסקאות ראשונות" : "שווי לקוח מלא",
         reportUrl: `${APP_BASE}/report/${r.token}`,
       }),

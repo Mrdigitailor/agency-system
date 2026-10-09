@@ -28,8 +28,14 @@ export function renderReportHtml(input: ReportInput, r: ResearchResult, c: Chain
   const maxVol = top[0]?.vol ?? 1;
   const rest = Math.max(r.kept.length - top.length, 0);
   const isRetainer = input.paymentType === "retainer" && input.monthlyFee > 0;
-  const closeText = c.closeRate === 0.05 ? "פנייה אחת מכל 20" : "פנייה אחת מכל 10";
-  const closeTierText = c.closeRate === 0.05 ? "הרף השמרני למוצרים מעל 1,500 ₪" : "הרף השמרני למוצרים עד 1,500 ₪";
+  // אחוז הסגירה: מה שהליד מסר בצ'אט, ואם לא מסר, ההנחה השמרנית לפי מחיר המוצר
+  const outOfTen = Math.round(c.closeRate * 10);
+  const closeText = c.closeRateFromLead
+    ? (outOfTen >= 1 ? `${outOfTen} מכל 10 פניות` : `${Math.round(c.closeRate * 100)}% מהפניות`)
+    : c.closeRate === 0.05 ? "פנייה אחת מכל 20" : "פנייה אחת מכל 10";
+  const closeTierText = c.closeRateFromLead
+    ? "זה אחוז הסגירה שמסרת בשיחה"
+    : c.closeRate === 0.05 ? "הרף השמרני למוצרים מעל 1,500 ₪" : "הרף השמרני למוצרים עד 1,500 ₪";
 
   // בסיס המספר הראשי: אם אין דמי הקמה (ריטיינר נקי), עסקה ראשונה שווה 0 ואסור להציג אותה.
   // הגנת אפס: הדוח לעולם לא מציג הכנסה 0. במקרה כזה הכותרת עוברת לשווי הלקוח המלא.
@@ -206,7 +212,7 @@ footer span{font-size:11.5px;color:var(--ink-3);font-weight:300;max-width:60ch;l
     <div class="arow"><span class="k">מקור הנתונים</span><span class="v">כלי מילות המפתח של גוגל, נכון ל-${dateIL(input.createdAt)}. ישראל, עברית, רשת החיפוש בלבד.</span></div>
     <div class="arow"><span class="k">מחיר לקליק</span><span class="v">ממוצע משוקלל של הצעות המחיר של גוגל, באמצע הטווח. לא הקצה הזול ולא היקר.</span></div>
     <div class="arow"><span class="k">המרה בדף</span><span class="v">5% מהנכנסים משאירים פרטים. היעד השמרני שאנחנו עובדים לפיו.</span></div>
-    <div class="arow"><span class="k">סגירת עסקאות</span><span class="v">${closeText} הופכת לעסקה. ${closeTierText}. גם אם אצלך זה חצי מזה, הכיוון נשאר.</span></div>${isRetainer ? `
+    <div class="arow"><span class="k">סגירת עסקאות</span><span class="v">${closeText} ${c.closeRateFromLead ? "הופכות" : "הופכת"} לעסקה. ${closeTierText}. גם אם אצלך זה חצי מזה, הכיוון נשאר.</span></div>${isRetainer ? `
     <div class="arow"><span class="k">אורך חיי לקוח</span><span class="v">${input.lifetimeMonths} חודשים, לפי הערכה שמרנית.</span></div>` : ""}
     <div class="arow"><span class="k">מה זה לא</span><span class="v">הערכת פוטנציאל, לא התחייבות. בפגישה נפרק את המספרים יחד, עד הפרט האחרון.</span></div>
   </div>
