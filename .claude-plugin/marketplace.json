@@ -1,0 +1,14 @@
+{
+  "name": "mrdigitailor",
+  "description": "הערכות של Mr.digitailor",
+  "owner": {
+    "name": "Mr.digitailor"
+  },
+  "plugins": [
+    {
+      "name": "funnel-kit",
+      "source": "./funnel-kit",
+      "description": "ערכת השכפול של מכונת הפגישות מגוגל: הסוכנים שמקימים את המשפך לכל לקוח"
+    }
+  ]
+}
