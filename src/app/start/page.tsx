@@ -4,19 +4,17 @@
 // שחור-זהב באווירת המותג, RTL, כפתורי תשובה מהירה, ושורות התקדמות אמיתיות בזמן המחקר.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TESTIMONIALS } from "@/lib/prospect/testimonials";
+import { loadTracking, trackFunnel } from "@/lib/prospect/track";
 
 interface Msg { role: "user" | "bot"; text: string }
 
-// Tag Manager של המשפך שלנו. לכל לקוח יהיה מכל משלו, לכן נטען רק כשאין מזהה לקוח בכתובת.
-const GTM_ID = "GTM-5BP74DF5";
+// המדידה פעילה רק במשפך שלנו. לכל לקוח יהיו מכל והמרות משלו, לכן לא נטען כשיש מזהה לקוח בכתובת.
 const OWN_SLUG = "mrdigitailor";
-
-// אבני הדרך של המשפך נשלחות ל-dataLayer; התגים וההמרות עצמם מוגדרים ב-Tag Manager
+function isOwnFunnel(): boolean {
+  try { const slug = new URLSearchParams(window.location.search).get("p") ?? ""; return !slug || slug === OWN_SLUG; } catch { return true; }
+}
 function pushEvents(events?: string[]) {
-  if (!events?.length) return;
-  const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> };
-  w.dataLayer = w.dataLayer ?? [];
-  for (const event of events) w.dataLayer.push({ event });
+  if (events?.length && isOwnFunnel()) trackFunnel(events);
 }
 
 // רקע באווירת המותג: איור פוליגונלי של דמות החייט מול מחשב, מפצחת משפך שיווק.
@@ -47,19 +45,8 @@ export default function ProspectChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const researchTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // טעינת Tag Manager פעם אחת, רק במשפך שלנו
-  useEffect(() => {
-    let slug = "";
-    try { slug = new URLSearchParams(window.location.search).get("p") ?? ""; } catch { /* לא קריטי */ }
-    if ((slug && slug !== OWN_SLUG) || document.getElementById("gtm-loader")) return;
-    const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> };
-    w.dataLayer = w.dataLayer ?? [];
-    w.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
-    const s = document.createElement("script");
-    s.id = "gtm-loader"; s.async = true;
-    s.src = `https://www.googletagmanager.com/gtm.js?id=${GTM_ID}`;
-    document.head.appendChild(s);
-  }, []);
+  // טעינת כלי המדידה פעם אחת, רק במשפך שלנו
+  useEffect(() => { if (isOwnFunnel()) loadTracking(); }, []);
 
   const scroll = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 60);
 

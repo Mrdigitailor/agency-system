@@ -14,8 +14,7 @@ import ReportPreview from "@/components/lp/ReportPreview";
 import ReturnCalculator from "@/components/lp/ReturnCalculator";
 import SearchStage from "@/components/lp/SearchStage";
 import TestimonialsSection from "@/components/lp/TestimonialsSection";
-
-const GTM_ID = "GTM-5BP74DF5";
+import { loadTracking, trackFunnel } from "@/lib/prospect/track";
 
 export default function LandingPage() {
   // הכפתור הצמוד בנייד מופיע רק אחרי הבמה, ונעלם כשמגיעים לקריאה האחרונה (שם יש כבר שורת חיפוש)
@@ -31,26 +30,15 @@ export default function LandingPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => {
-    if (document.getElementById("gtm-loader")) return;
-    const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> };
-    w.dataLayer = w.dataLayer ?? [];
-    w.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
-    const s = document.createElement("script");
-    s.id = "gtm-loader"; s.async = true;
-    s.src = `https://www.googletagmanager.com/gtm.js?id=${GTM_ID}`;
-    document.head.appendChild(s);
-  }, []);
+  useEffect(() => { loadTracking(); }, []);
 
   // מעבר לצ'אט: מקור ההגעה (מודעה, מילת חיפוש) עובר איתו, וגם התחום שהגולש הקליד
   const goToChat = (field: string) => {
-    const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> };
-    w.dataLayer = w.dataLayer ?? [];
-    w.dataLayer.push({ event: "funnel_lp_click" });
     const params = new URLSearchParams(window.location.search);
     if (field) params.set("field", field); else params.delete("field");
     const qs = params.toString();
-    window.location.href = `/start${qs ? `?${qs}` : ""}`;
+    // עוברים לצ'אט רק אחרי שהדיווח על הלחיצה יצא, כדי שהמעבר לא יקטע אותו
+    trackFunnel(["funnel_lp_click"], () => { window.location.href = `/start${qs ? `?${qs}` : ""}`; });
   };
 
   return (

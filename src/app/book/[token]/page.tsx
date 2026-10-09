@@ -4,9 +4,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { CalendarCheck, Loader2 } from "lucide-react";
+import { loadTracking, trackFunnel } from "@/lib/prospect/track";
 
 interface Slot { startIso: string; label: string }
-const GTM_ID = "GTM-5BP74DF5";
 const fmtFull = (iso: string) => new Date(iso).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 export default function BookPage() {
@@ -33,14 +33,7 @@ export default function BookPage() {
 
   useEffect(() => {
     load();
-    if (document.getElementById("gtm-loader")) return;
-    const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> };
-    w.dataLayer = w.dataLayer ?? [];
-    w.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
-    const s = document.createElement("script");
-    s.id = "gtm-loader"; s.async = true;
-    s.src = `https://www.googletagmanager.com/gtm.js?id=${GTM_ID}`;
-    document.head.appendChild(s);
+    loadTracking();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -68,9 +61,7 @@ export default function BookPage() {
       await load();
       return;
     }
-    const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> };
-    w.dataLayer = w.dataLayer ?? [];
-    w.dataLayer.push({ event: "funnel_meeting_booked" });
+    trackFunnel(["funnel_meeting_booked"]);
     setMeetingAt(d.meetingAt); setExisting(false); setState("done");
   };
 
