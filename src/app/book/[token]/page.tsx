@@ -12,7 +12,6 @@ const fmtFull = (iso: string) => new Date(iso).toLocaleString("he-IL", { timeZon
 export default function BookPage() {
   const { token } = useParams<{ token: string }>();
   const [state, setState] = useState<"loading" | "pick" | "busy" | "done" | "missing" | "down">("loading");
-  const [name, setName] = useState("");
   const [slots, setSlots] = useState<Slot[]>([]);
   const [picked, setPicked] = useState<Slot | null>(null);
   const [phone, setPhone] = useState("");
@@ -26,7 +25,6 @@ export default function BookPage() {
     if (res.status === 404) { setState("missing"); return; }
     if (!res.ok) { setState("down"); return; }
     const d = await res.json();
-    setName(d.name ?? "");
     if (d.meetingAt) { setMeetingAt(d.meetingAt); setExisting(true); setState("done"); return; }
     setSlots(d.slots ?? []); setState("pick");
   };
@@ -76,16 +74,16 @@ export default function BookPage() {
         <div className="px-5 py-6 sm:px-7">
           {state === "loading" && <div className="flex items-center gap-2 py-10 text-[#a39c8d]"><Loader2 className="h-5 w-5 animate-spin" /> בודק מועדים פנויים ביומן...</div>}
 
-          {state === "missing" && <p className="py-8 text-[#c9c2b3]">הקישור הזה לא תקף. אפשר להשיב למייל שקיבלת, ונתאם מועד משם.</p>}
-          {state === "down" && <p className="py-8 text-[#c9c2b3]">היומן לא זמין כרגע. אפשר לנסות שוב בעוד כמה דקות, או להשיב למייל עם מועד שנוח לך.</p>}
+          {state === "missing" && <p className="py-8 text-[#c9c2b3]">הקישור הזה לא תקף. אפשר להשיב למייל שקיבלתם, ונתאם מועד משם.</p>}
+          {state === "down" && <p className="py-8 text-[#c9c2b3]">היומן לא זמין כרגע. אפשר לנסות שוב בעוד כמה דקות, או להשיב למייל עם מועד שנוח לכם.</p>}
 
           {(state === "pick" || state === "busy") && (
             <>
-              <h1 className="text-2xl font-semibold">{name ? `${name}, מתי נוח לך?` : "מתי נוח לך?"}</h1>
+              <h1 className="text-2xl font-semibold">מתי נוח לכם?</h1>
               <p className="mt-2 leading-relaxed text-[#a39c8d]">פגישה של 30 דקות בזום. בוחרים מועד, וההזמנה עם הקישור מגיעה למייל.</p>
               {error && <p className="mt-3 rounded-lg bg-red-400/10 px-3 py-2 text-sm text-red-300">{error}</p>}
 
-              {days.length === 0 && <p className="mt-6 text-[#c9c2b3]">אין כרגע מועדים פנויים בשבועיים הקרובים. אפשר להשיב למייל שקיבלת עם מועד שנוח לך.</p>}
+              {days.length === 0 && <p className="mt-6 text-[#c9c2b3]">אין כרגע מועדים פנויים בשבועיים הקרובים. אפשר להשיב למייל שקיבלתם עם מועד שנוח לכם.</p>}
 
               <div className="mt-5 space-y-4">
                 {days.map(([day, list]) => (
@@ -124,8 +122,8 @@ export default function BookPage() {
               <p className="mt-2 text-lg text-brand-gold">{meetingAt && fmtFull(meetingAt)}</p>
               <p className="mt-3 leading-relaxed text-[#a39c8d]">
                 {existing
-                  ? "ההזמנה עם קישור הזום כבר במייל שלך. אם צריך לשנות מועד, אפשר להשיב למייל."
-                  : "ההזמנה עם קישור הזום בדרך למייל שלך. נתראה."}
+                  ? "ההזמנה עם קישור הזום כבר במייל שלכם. אם צריך לשנות מועד, אפשר להשיב למייל."
+                  : "ההזמנה עם קישור הזום בדרך למייל שלכם. נתראה."}
               </p>
             </div>
           )}

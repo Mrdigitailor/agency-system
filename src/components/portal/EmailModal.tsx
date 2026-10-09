@@ -153,6 +153,11 @@ export default function EmailModal({ token, emailKey, demo, onClose, onSaved }: 
                     משתנים שמתמלאים אוטומטית לכל ליד:{" "}
                     {detail.tokens.map((t) => <span key={t} dir="rtl" className="mx-0.5 rounded bg-white/10 px-1.5 py-0.5 font-mono text-white/70">{t}</span>)}
                   </div>
+                  <div className="text-xs text-white/40">
+                    לשון פנייה: מילה שמשתנה בין זכר לנקבה נכתבת כך{" "}
+                    <span dir="rtl" className="mx-0.5 rounded bg-white/10 px-1.5 py-0.5 font-mono text-white/70">[[אתה מוכר|את מוכרת]]</span>
+                    {" "}והמערכת בוחרת לפי מה שהליד ענה בצ&apos;אט.
+                  </div>
 
                   <div className="border-t border-white/10 pt-4">
                     <label className="mb-1 block text-xs text-white/50" htmlFor="email-change-note">מה שינית? (יופיע בהשוואת הגרסאות)</label>

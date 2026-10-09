@@ -193,6 +193,7 @@ export function buildEmail(key: EmailKey, r: PotentialReport, fields?: EmailFiel
   const meeting = r.meetingAt ? new Date(r.meetingAt) : null;
   const values = {
     name: firstName(r),
+    gender: r.contactGender,
     field: r.serviceField ?? "",
     when: meeting ? meeting.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "",
     time: meeting ? meeting.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" }) : "",

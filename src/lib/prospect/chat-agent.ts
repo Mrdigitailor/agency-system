@@ -25,6 +25,7 @@ const SYSTEM_PROMPT = `אתה העוזר הדיגיטלי של Mr.digitailor, ס
 ## מהלך השיחה (בסדר הזה)
 1. פתיחה: כבר נשלחה. אם שואל "מי אתם": אנחנו סוכנות שמתמחה במשפכי לקוחות מגוגל: דף נחיתה, קמפיין, וסוכן חכם שמנהל הכל, במחיר של עשירית ממנהל קמפיינים אנושי. ואז חוזרים לשיחה.
 2. קודם כל שם: "לפני שנצלול, איך קוראים לך?" שמור עם save_profile, והשתמש בשם הפרטי באופן טבעי בהמשך (לא בכל הודעה).
+2א. מיד אחרי השם, בהודעה נפרדת: "נעים מאוד, [שם]! ואיך נכון לפנות אליך?" [כפתורים: בלשון זכר | בלשון נקבה]. שמור את התשובה עם save_profile בשדה gender ("m" או "f"). שואלים פעם אחת בלבד. אם מהתשובה לא ברור, המשך בניסוח ניטרלי ואל תשאל שוב.
 3. שאל במה העסק שלו עוסק (טקסט חופשי). אם לא ברור, שאלת חידוד אחת בלבד.
 4. שאל איפה הוא נותן שירות. כפתורים: כל הארץ | אזור מסוים | הכל אונליין.
 5. שאל איך הוא גובה: תשלום חד פעמי | ריטיינר חודשי.
@@ -62,7 +63,7 @@ const SYSTEM_PROMPT = `אתה העוזר הדיגיטלי של Mr.digitailor, ס
 - אם שואל על המחיר שלנו: ענה בכנות: הקמה 14,800 ₪ + 800 ₪ בחודש לניהול השוטף, מול 2,500 ₪ ומעלה לקמפיינר אנושי. אל תתחמק ואל תלחץ.
 - שאלות שלא קשורות לשיווק ולעסק: החזר בעדינות לנושא.
 - שאלה עניינית שאין לך עליה תשובה אמינה (ולא מופיעה בידע שנצבר): אל תמציא. קרא escalate_question, ענה שתבדוק ושסער יחזור עם תשובה, והמשך את השיחה.
-- עברית טבעית וחמה. משפטים קצרים. בלי מקפים ארוכים. התאם לשון פנייה לפי הכתיבה של המשתמש.
+- עברית טבעית וחמה. משפטים קצרים. בלי מקפים ארוכים. לשון הפנייה: עד שידוע ה-gender (ראה במצב הנוכחי) נסח ניטרלי, בלי פעלים ובלי "אתה" או "את" (למשל "איך קוראים לך", "מה העסק שלך עושה"). מרגע שידוע, פנה באותה לשון בעקביות עד סוף השיחה. המשפטים המצוטטים בתסריט הזה כתובים בלשון זכר: כש-gender הוא f המר אותם ללשון נקבה ("כנס, צפה" הופך ל"היכנסי, צפי", "מה שאתה עושה" ל"מה שאת עושה", "שווה לך" נשאר). פסקת ההסכמה למדיניות הפרטיות ניטרלית ונשארת מילה במילה.
 - שמור כל פרט שנאסף מיד עם save_profile, גם באמצע שיחה.
 - שאלה אחת בכל הודעה. אל תחזור על שאלה שכבר נענתה (בדוק במצב הנוכחי).
 
@@ -88,6 +89,7 @@ const TOOLS: Anthropic.Tool[] = [
         budget: { type: "number", description: "תקציב פרסום חודשי בש\"ח" },
         name: { type: "string" }, email: { type: "string" }, phone: { type: "string" },
         businessName: { type: "string", description: "שם העסק אם הוזכר" },
+        gender: { type: "string", enum: ["m", "f"], description: "לשון הפנייה שהמשתמש בחר: m זכר, f נקבה" },
         declineReason: { type: "string", description: "הסיבה שנתן לסירוב לפגישה, במילים שלו" },
       },
     },
@@ -120,6 +122,7 @@ export interface ChatFields {
   dealFirst?: number; monthlyFee?: number; lifetimeMonths?: number; budget?: number;
   name?: string; email?: string; phone?: string; businessName?: string;
   declineReason?: string;
+  gender?: string; // m | f : לשון הפנייה שהמשתמש בחר
   consentAt?: string; consentVersion?: string; // מתי הושאר המייל אחרי הודעת ההסכמה, ולאיזו גרסת מדיניות
   reportToken?: string; reportStatus?: string; pendingResearch?: boolean;
   slots?: Array<{ startIso: string; label: string }>;
@@ -141,6 +144,7 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
       if (typeof input[k] === "number" && input[k] as number >= 0) f[k] = input[k] as number;
     }
     if (f.email) f.email = f.email.toLowerCase();
+    if (input.gender === "m" || input.gender === "f") f.gender = input.gender;
     // תיעוד ההסכמה לדיוור: הרגע שבו נמסר המייל וגרסת המדיניות שהוצגה
     if (f.email && !f.consentAt) { f.consentAt = new Date().toISOString(); f.consentVersion = PRIVACY_VERSION; }
     // פרט קשר ראשון = ליד חדש: התראה מיידית לבעל הפורטל (נשלחת פעם אחת לשיחה)
@@ -157,6 +161,7 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
           contactName: f.name ?? report.contactName,
           contactEmail: f.email ?? report.contactEmail,
           contactPhone: f.phone ?? report.contactPhone,
+          contactGender: f.gender ?? report.contactGender,
           businessName: f.businessName ?? report.businessName,
         },
       }).catch(() => {});
@@ -195,6 +200,7 @@ async function execTool(chatId: string, fields: ChatFields, name: string, input:
     f.reportToken = r.token;
     f.reportStatus = r.status;
     await prisma.prospectChat.update({ where: { id: chatId }, data: { reportId: r.reportId } }).catch(() => {});
+    if (f.gender) await prisma.potentialReport.update({ where: { id: r.reportId }, data: { contactGender: f.gender } }).catch(() => {});
     // מקור ההגעה של השיחה מועתק לדוח — ככה הדשבורד יודע איזה קמפיין/מונח הביא כל ליד
     const chatRow = await prisma.prospectChat.findUnique({ where: { id: chatId } }).catch(() => null);
     if (chatRow?.source && chatRow.source !== "{}") {

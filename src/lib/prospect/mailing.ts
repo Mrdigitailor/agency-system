@@ -148,7 +148,7 @@ export function sampleReport(): PotentialReport {
   return {
     id: "sample", token: "sample", status: "ready",
     businessName: "", serviceField: "ייעוץ משכנתאות", serviceArea: "", budget: 6000, paymentType: "one_time",
-    dealFirst: 12000, monthlyFee: 0, lifetimeMonths: 12, contactName: "דנה לוי", contactPhone: "", contactEmail: "dana@example.co.il",
+    dealFirst: 12000, monthlyFee: 0, lifetimeMonths: 12, contactName: "דנה לוי", contactPhone: "", contactEmail: "dana@example.co.il", contactGender: "f",
     bookedAt: null, meetingAt: meeting, calendarEventId: "", cancelledAt: null, emailsSent: "[]",
     research: JSON.stringify({
       totalVol: 24540,
