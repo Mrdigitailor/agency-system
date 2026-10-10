@@ -15,13 +15,17 @@ type CrmConfig =
 // שם ה-env של טוקן ה-System-User של מטא (שליפת לידי-טפסים להצלבה). נטבע לטוקן-עמוד פר-עמוד.
 const META_LEADS_TOKEN_ENV = "META_LEADS_TOKEN";
 
-export interface CrmSourceInfo { label: string; detail: string }
-/** תיאור קריא של מקור ה-CRM המחובר ללקוח (לתצוגה בסקירה הכללית). null = לא מחובר. */
+export interface CrmSourceInfo { label: string; detail: string; url: string }
+/** תיאור קריא של מקור ה-CRM המחובר ללקוח (לתצוגה בסקירה הכללית). null = לא מחובר.
+ *  url = קישור ישיר למקור (לחיצה פותחת אותו): הטבלה בלשונית הנכונה, או אפליקציית Arbox. */
 export function crmSourceFor(clientId: string): CrmSourceInfo | null {
   const cfg = CRM_BY_CLIENT[clientId];
   if (!cfg) return null;
-  if (cfg.type === "sheet") return { label: "Google Sheet", detail: "טבלת ניהול לידים" };
-  return { label: "Arbox", detail: cfg.pageId ? "הצלבה מול טפסי מטא" : "לפי תיוג ממומן" };
+  if (cfg.type === "sheet") {
+    const base = cfg.url.replace(/#.*$/, "");
+    return { label: "Google Sheet", detail: "טבלת ניהול לידים", url: base + (cfg.gid ? `#gid=${cfg.gid}` : "") };
+  }
+  return { label: "Arbox", detail: cfg.pageId ? "הצלבה מול טפסי מטא" : "לפי תיוג ממומן", url: "https://arboxapp.com" };
 }
 
 const CRM_BY_CLIENT: Record<string, CrmConfig> = {

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Database, CheckCircle2 } from "lucide-react";
+import { Database, CheckCircle2, ExternalLink } from "lucide-react";
 
-interface CrmInfo { label: string; detail: string }
+interface CrmInfo { label: string; detail: string; url: string }
 
 // מציג את מקור ה-CRM/לידים החיצוני המחובר ללקוח (Google Sheet / Arbox / ...),
 // כדי שנדע בסקירה הכללית בדיוק מה ומי מחובר — לצד חיבורי הפלטפורמות.
@@ -27,7 +27,13 @@ export default function CrmConnection({ clientId }: { clientId: string }) {
     <div className="border-t border-brand-border pt-4">
       <p className="mb-3 text-xs font-semibold text-brand-muted">מקור לידים / CRM חיצוני</p>
       {crm ? (
-        <div className="flex items-center gap-3 rounded-lg border border-brand-border bg-brand-light p-3">
+        <a
+          href={crm.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`פתיחת מקור הלידים: ${crm.label}`}
+          className="group flex items-center gap-3 rounded-lg border border-brand-border bg-brand-light p-3 transition-colors duration-200 hover:border-brand-primary hover:bg-brand-primary/10"
+        >
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-primary/20">
             <Database className="h-5 w-5 text-brand-dark" />
           </div>
@@ -38,8 +44,9 @@ export default function CrmConnection({ clientId }: { clientId: string }) {
             </p>
             <p className="truncate text-xs text-brand-muted">{crm.detail}</p>
           </div>
+          <ExternalLink className="h-4 w-4 shrink-0 text-brand-muted transition-colors group-hover:text-brand-dark" />
           <span className="shrink-0 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">מחובר</span>
-        </div>
+        </a>
       ) : (
         <p className="rounded-lg border border-dashed border-brand-border px-3 py-2.5 text-xs text-brand-muted">
           לא מחובר מקור לידים חיצוני
