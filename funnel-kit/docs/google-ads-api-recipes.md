@@ -152,7 +152,15 @@ gads search CID "SELECT user_interest.resource_name, user_interest.name, user_in
 ]
 ```
 
-במודעה הרחבה (15 כותרות) אפשר לנעוץ כמה כותרות לאותו מיקום. במודעה ממוקדת יש בדיוק שלוש כותרות ושני תיאורים, כולם נעוצים.
+במודעה הרחבה (15 כותרות) נועצים רק את כותרות מילת החיפוש, כולן ל-`HEADLINE_1`. השאר בלי `pinnedField`. במודעה ממוקדת יש בדיוק שלוש כותרות ושני תיאורים, כולם נעוצים.
+
+**החלפת מודעות בקמפיין חי.** גוגל מאפשר עד שלוש מודעות רספונסיביות פעילות בקבוצה, ומודעה חדשה לא מוצגת עד שהיא מאושרת. לכן לעולם לא מסירים מודעה מאושרת לפני שיש בקבוצה לפחות מודעה מאושרת אחרת. בודקים אישור כך:
+
+```
+gads search CID "SELECT ad_group_ad.ad.id, ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.review_status FROM ad_group_ad WHERE campaign.id = CAMPAIGN_ID AND ad_group_ad.status != 'REMOVED'"
+```
+
+אם המודעות החדשות עדיין בבדיקה, משאירים את הישנה, מדווחים בדוח שההחלפה ממתינה לאישור, ולא מסירים.
 
 טקסט של מודעה קיימת לא עורכים. יוצרים מודעה חדשה, ואת הישנה מסירים (service: adGroupAds):
 ```json
