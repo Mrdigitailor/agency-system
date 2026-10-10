@@ -11,6 +11,7 @@ import { detectClientFunnel, type CampaignFunnel } from "@/lib/agent/funnel-dete
 import { syncClientMeta, syncClientMetaSubLevels } from "@/lib/api/meta/sync";
 import { syncClientGoogleAds } from "@/lib/api/google-ads/sync";
 import { shiftYmd, todayIL } from "@/lib/utils/ildate";
+import { crmSheetForClient, fetchCrmLeads, computeCrmWeekly, buildCrmText } from "@/lib/crm/google-sheet";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = process.env.REPORT_AI_MODEL ?? "claude-sonnet-4-6";
@@ -209,7 +210,7 @@ const REPORT_INSTRUCTIONS = `אתה כותב דוח שבועי ללקוח של �
 - אם קמפיינים מתויגים "(טופס לידים)" או "(דף נחיתה)" — בסיכום הכולל אחד את כל הלידים למספר אחד, אבל בפילוח לפי מוצר/שירות הפרד בין לידים מטופס לבין לידים מדף נחיתה/אתר.
 - אם סופק "המרות (פילוח)" עם כמה קטגוריות (למשל לידים + שיחות בהודעות) — **חובה להציג אותן בנפרד** לכל אורך הדוח. לעולם אל תאחד אותן למספר אחד ואל תקרא לכולן "לידים". השתמש בעלות-לליד שסופקה (הוצאה ÷ לידים בלבד), לא בעלות שמחלקת את ההוצאה גם בשיחות.
 - אם סופקו בלוקים "קהלים מובילים" / "מודעות מובילות" — הוסף סקשן קצר 🎯 עם 2-3 תובנות בלבד: הקהל החזק ביותר, קהל שמבזבז תקציב בלי תוצאות, והמודעה המנצחת. שמות קבוצות מודעות מייצגים קהלים ושמות מודעות מייצגים קריאייטיבים — נקה גם אותם משמות גולמיים (כמו קמפיינים). אל תפרט את כל הרשימה — רק את מה שדורש החלטה.
-- **מטבע:** השתמש אך ורק במטבע ובסימן שסופקו בנתונים ("מטבע החשבון"). לעולם אל תניח שקלים אם המטבע שונה.
+- **נתוני CRM (איכות לידים וסגירות):** אם סופק בלוק "נתוני CRM" — הוסף סקשן קצר 💼 (2-3 שורות) על איכות הלידים והתוצאות העסקיות: כמה לידים איכותיים/בפולואפ פעיל מול כמה לא התאימו, וכמה עסקאות נסגרו וההכנסה ב-30 הימים האחרונים. זה מחבר את הפרסום לתוצאות בפועל ומשדר ערך. **אל תמציא** — רק מהמספרים שסופקו. **אל תיצור ספירת-לידים נוספת שסותרת את מספר הלידים מהפרסום** (מספר הפניות ב-CRM עשוי להיות שונה כי הוא כולל כל המקורות ורישום ידני) — התייחס אליו כ"פניות שנרשמו" והתמקד באיכות ובסגירות, לא בספירה חוזרת.
 - **אל תשתמש בטבלאות Markdown** (הן נשברות בהעתקה לוואטסאפ). הצג מספרים כרשימות תבליטים בפורמט "מדד: ערך", עם אימוג'ים קצרים לכותרות סקשנים. שמור על שורות קצרות.
 
 כללי קריאוּת (קריטיים — הדוח נקרא בוואטסאפ על מסך טלפון):
@@ -278,11 +279,24 @@ export async function generateWeeklyReportContent(
 
   const dataText = buildWeeklyDataText(data, format, products, currency, prevData, campaignFunnels, breakdowns);
 
+  // נתוני CRM (איכות לידים + סגירות) — ללקוחות שמחוברת להם טבלת CRM. לא חוסם: כשל שליפה מדלג בשקט.
+  let crmText = "";
+  const crmUrl = crmSheetForClient(clientId);
+  if (crmUrl) {
+    try {
+      const leads = await fetchCrmLeads(crmUrl);
+      crmText = buildCrmText(computeCrmWeekly(leads, weekStart, weekEnd));
+    } catch (e) {
+      console.error("[WeeklyReport] CRM fetch failed:", e instanceof Error ? e.message : e);
+    }
+  }
+
   const userMessage = [
     `הפק דוח שבועי לתקופה ${weekStart} עד ${weekEnd}.`,
     `\nמטבע החשבון: ${currency} — הצג את כל הסכומים במטבע הזה בלבד.`,
     format === "per_product" ? `\nהלקוח מעדיף פילוח לפי מוצר.` : "",
     `\n\nהנתונים בפועל:\n${dataText}`,
+    crmText ? `\n\n${crmText}` : "",
   ].join("");
 
   // הנחיות הקבע של הלקוח מוזרקות ל-system בצורה בולטת (גוברות על ברירת המחדל)
