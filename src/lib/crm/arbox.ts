@@ -7,11 +7,13 @@ const BASE = "https://arboxserver.arboxapp.com/api/public/v3/";
 const PAID_SOURCE = "קמפיין ממומן";
 const MAX_PAGES = 40; // גבול שפיות לעימוד
 
-interface ArboxLead {
+export interface ArboxLead {
   lead_source?: string | null;
   lead_status?: string | null;
   lost_reason?: string | null;
   created_time?: string | null;
+  phone?: string | null; // לצורך הצלבה מול לידי-טפסים של מטא
+  email?: string | null;
 }
 
 async function getAll(path: string, apiKey: string): Promise<ArboxLead[]> {

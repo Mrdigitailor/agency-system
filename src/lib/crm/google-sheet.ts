@@ -64,9 +64,9 @@ export interface CrmLead {
 const HEADER = {
   date: ["תאריך פניית לקוח", "תאריך פנייה", "תאריך"],
   status: ["סטטוס"],
-  source: ["דרך הגעה", "מקור"],
-  amount: ["סכום פעילות כולל מע\"מ", "סכום", "עלות", "שווי"],
-  campaign: ["הקמפיין דרכו הגיע (אין לשנות)", "קמפיין", "הקמפיין"],
+  source: ["דרך הגעה", "מקור", "utm_source"],
+  amount: ["סכום פעילות כולל מע\"מ", "סכום", "שווי סגירה", "שווי", "עלות"],
+  campaign: ["הקמפיין דרכו הגיע (אין לשנות)", "utm_campaign", "קמפיין", "הקמפיין"],
 };
 
 function findCol(headers: string[], names: string[]): number {
@@ -82,15 +82,32 @@ function findCol(headers: string[], names: string[]): number {
   return -1;
 }
 
-function parseDate(s: string): Date | null {
-  const t = s.trim();
-  const m = t.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
-  if (!m) return null;
-  const [, d, mo, y] = m;
-  let year = parseInt(y, 10);
-  if (year < 100) year += 2000;
-  const dt = new Date(year, parseInt(mo, 10) - 1, parseInt(d, 10));
+const HEB_MONTHS: Record<string, number> = {
+  ינואר: 1, פברואר: 2, מרץ: 3, מרס: 3, אפריל: 4, מאי: 5, יוני: 6,
+  יולי: 7, אוגוסט: 8, ספטמבר: 9, אוקטובר: 10, נובמבר: 11, דצמבר: 12,
+};
+function mkDate(day: number, mon: number, y: number): Date | null {
+  if (mon < 1 || mon > 12 || day < 1 || day > 31) return null;
+  if (y < 100) y += 2000;
+  const dt = new Date(y, mon - 1, day);
   return isNaN(dt.getTime()) ? null : dt;
+}
+/**
+ * מפרסר תאריך בפורמטים מעורבים: "DD/MM/YYYY" (ישראלי, ברירת מחדל), "MM/DD/YYYY"
+ * (אם fmt="mdy" — כפי ש-Google ממלא אוטומטית), "D.M.YY" (נקודה = תמיד ישראלי),
+ * ושם-חודש עברי "דצמבר 4, 2025".
+ */
+function parseDate(s: string, fmt: "dmy" | "mdy" = "dmy"): Date | null {
+  const t = (s || "").trim();
+  if (!t) return null;
+  const hm = t.match(/^([א-ת]+)\s+(\d{1,2}),?\s+(\d{2,4})$/);
+  if (hm) { const mo = HEB_MONTHS[hm[1]]; return mo ? mkDate(parseInt(hm[2], 10), mo, parseInt(hm[3], 10)) : null; }
+  const m = t.match(/^(\d{1,2})([./-])(\d{1,2})[./-](\d{2,4})$/);
+  if (!m) return null;
+  const a = parseInt(m[1], 10), b = parseInt(m[3], 10), sep = m[2];
+  // "/" עם fmt=mdy → חודש/יום. נקודה/מקף תמיד ישראלי (יום.חודש).
+  const [day, mon] = sep === "/" && fmt === "mdy" ? [b, a] : [a, b];
+  return mkDate(day, mon, parseInt(m[4], 10));
 }
 
 function parseAmount(s: string): number {
@@ -98,16 +115,24 @@ function parseAmount(s: string): number {
   return isNaN(n) ? 0 : n;
 }
 
+export interface SheetOptions {
+  gid?: string; // לשונית ספציפית
+  headerRows?: number; // כמה שורות-כותרת (ברירת מחדל 1); הכותרת = השורה האחרונה שבהן
+  dateFormat?: "dmy" | "mdy"; // פורמט תאריך ל-"/" (ברירת מחדל ישראלי dmy)
+}
+
 /** שולף ומפרסר את טבלת ה-CRM מ-Google Sheets (CSV ציבורי) */
-export async function fetchCrmLeads(sheetUrlOrId: string): Promise<CrmLead[]> {
+export async function fetchCrmLeads(sheetUrlOrId: string, opts: SheetOptions = {}): Promise<CrmLead[]> {
   const id = sheetIdFromUrl(sheetUrlOrId);
-  const url = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv`;
+  const url = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv${opts.gid ? `&gid=${opts.gid}` : ""}`;
   const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(20_000) });
   if (!res.ok) throw new Error(`CRM sheet fetch failed: ${res.status}`);
   const text = await res.text();
   const rows = parseCsv(text);
-  if (rows.length < 2) return [];
-  const h = rows[0];
+  const headerRows = Math.max(1, opts.headerRows ?? 1);
+  if (rows.length <= headerRows) return [];
+  const h = rows[headerRows - 1]; // הכותרת = השורה האחרונה מבין שורות-הכותרת (המפורטת)
+  const fmt = opts.dateFormat ?? "dmy";
   const ci = {
     date: findCol(h, HEADER.date),
     status: findCol(h, HEADER.status),
@@ -117,9 +142,9 @@ export async function fetchCrmLeads(sheetUrlOrId: string): Promise<CrmLead[]> {
   };
   if (ci.date < 0 || ci.status < 0) return []; // טבלה לא תואמת
   const get = (r: string[], i: number) => (i >= 0 && i < r.length ? r[i] : "");
-  return rows.slice(1)
+  return rows.slice(headerRows)
     .map((r) => ({
-      date: parseDate(get(r, ci.date)),
+      date: parseDate(get(r, ci.date), fmt),
       status: get(r, ci.status).trim(),
       source: get(r, ci.source).trim(),
       amount: parseAmount(get(r, ci.amount)),

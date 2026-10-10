@@ -36,6 +36,7 @@ import {
 import Modal from "@/components/ui/Modal";
 import ProgressBar from "@/components/ui/ProgressBar";
 import PlatformConnections from "@/components/ui/PlatformConnections";
+import CrmConnection from "@/components/ui/CrmConnection";
 import ConversionEventSelector from "@/components/ui/ConversionEventSelector";
 import GoogleConversionActionSelector from "@/components/ui/GoogleConversionActionSelector";
 import ClientAnalyticsTab from "@/components/ui/ClientAnalyticsTab";
@@ -806,6 +807,9 @@ export default function ClientDetailPage() {
                   <p className="mb-3 text-xs font-semibold text-brand-muted">חיבורי פלטפורמות פרסום</p>
                   <PlatformConnections clientId={client.id} />
                 </div>
+
+                {/* מקור לידים / CRM חיצוני */}
+                <CrmConnection clientId={client.id} />
 
                 {/* בחירת אירוע המרה */}
                 <div className="border-t border-brand-border pt-4 space-y-3">
