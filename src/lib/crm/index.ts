@@ -8,7 +8,7 @@ import { buildCrossmatchCrmText } from "./arbox-crossmatch";
 import type { SheetOptions } from "./google-sheet";
 
 type CrmConfig =
-  | ({ type: "sheet"; url: string } & SheetOptions)
+  | ({ type: "sheet"; url: string; allPaid?: boolean } & SheetOptions)
   // Arbox עם הצלבה מול טפסי-מטא (מזהה ממומן לפי טלפון/אימייל, חסין לתיוג); נופל ל-arbox רגיל אם אין META_LEADS_TOKEN
   | { type: "arbox"; keyEnv: string; pageId?: string };
 
@@ -37,6 +37,10 @@ const CRM_BY_CLIENT: Record<string, CrmConfig> = {
   cmnkol7ui00069kfxggtnkjfo: { type: "arbox", keyEnv: "ARBOX_KEY_NINJA_SCHOOL", pageId: "101098142204429" },
   // היחידה להשכרה — Google Sheet (ניהול לידים + סטטוסים); 2 שורות-כותרת, utm_source=ממומן, תאריכי MM/DD
   cmnnfaltg0001ie046piaiciq: { type: "sheet", url: "https://docs.google.com/spreadsheets/d/15waFs4WSS6xkX4LXcbCoZGB_pKSlPM927gkptoYLaCg/edit", gid: "755958179", headerRows: 2, dateFormat: "mdy" },
+  // שיינה גבריאלי (שמלות כלה) — Google Sheet, לשונית "מעקב לידים". אין עמ' מקור → כל הטבלה
+  // לידים מפרסום (allPaid). תאריך ISO. עמ' כפולות "סטטוס" → אינדקסים מפורשים; סטטוס=G(6),
+  // רלוונטיות=H(7), שווי סגירה=I(8). **לאימות סער: כל הלידים בטבלה אכן ממומנים?**
+  cmnkol82s00089kfx942xry2n: { type: "sheet", url: "https://docs.google.com/spreadsheets/d/1XVFpamGyKLw9ZhLxWtQotk7ad5PX6AnkLUFMQlV77TA/edit", sheetName: "מעקב לידים", allPaid: true, cols: { date: 0, status: 6, relevance: 7, amount: 8 } },
 };
 
 /**
@@ -48,8 +52,8 @@ export async function buildClientCrmText(clientId: string, weekStart: string, we
   if (!cfg) return "";
   try {
     if (cfg.type === "sheet") {
-      const leads = await fetchCrmLeads(cfg.url, { gid: cfg.gid, headerRows: cfg.headerRows, dateFormat: cfg.dateFormat });
-      return buildCrmText(computeCrmWeekly(leads, weekStart, weekEnd));
+      const leads = await fetchCrmLeads(cfg.url, { gid: cfg.gid, sheetName: cfg.sheetName, headerRows: cfg.headerRows, dateFormat: cfg.dateFormat, cols: cfg.cols });
+      return buildCrmText(computeCrmWeekly(leads, weekStart, weekEnd, cfg.allPaid));
     }
     if (cfg.type === "arbox") {
       const key = process.env[cfg.keyEnv];

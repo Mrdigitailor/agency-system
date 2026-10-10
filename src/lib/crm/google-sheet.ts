@@ -56,6 +56,7 @@ function parseCsv(text: string): string[][] {
 export interface CrmLead {
   date: Date | null;
   status: string;
+  relevance: string; // עמודת "רלוונטיות" נפרדת (אם קיימת) — ליד מוסמך/לא-מתאים
   source: string;
   amount: number;
   campaign: string;
@@ -64,6 +65,7 @@ export interface CrmLead {
 const HEADER = {
   date: ["תאריך פניית לקוח", "תאריך פנייה", "תאריך"],
   status: ["סטטוס"],
+  relevance: ["רלוונטיות", "רלוונטי"],
   source: ["דרך הגעה", "מקור", "utm_source"],
   amount: ["סכום פעילות כולל מע\"מ", "סכום", "שווי סגירה", "שווי", "עלות"],
   campaign: ["הקמפיין דרכו הגיע (אין לשנות)", "utm_campaign", "קמפיין", "הקמפיין"],
@@ -100,6 +102,8 @@ function mkDate(day: number, mon: number, y: number): Date | null {
 function parseDate(s: string, fmt: "dmy" | "mdy" = "dmy"): Date | null {
   const t = (s || "").trim();
   if (!t) return null;
+  // ISO (תאריך פנייה מטפסי-מטא): 2024-12-07T19:58:28+02:00 או ...Z
+  if (/^\d{4}-\d{2}-\d{2}[T ]/.test(t)) { const d = new Date(t); return isNaN(d.getTime()) ? null : d; }
   const hm = t.match(/^([א-ת]+)\s+(\d{1,2}),?\s+(\d{2,4})$/);
   if (hm) { const mo = HEB_MONTHS[hm[1]]; return mo ? mkDate(parseInt(hm[2], 10), mo, parseInt(hm[3], 10)) : null; }
   const m = t.match(/^(\d{1,2})([./-])(\d{1,2})[./-](\d{2,4})$/);
@@ -116,15 +120,21 @@ function parseAmount(s: string): number {
 }
 
 export interface SheetOptions {
-  gid?: string; // לשונית ספציפית
+  gid?: string; // לשונית ספציפית (לפי מזהה)
+  sheetName?: string; // לשונית לפי שם (עמיד לשינוי-סדר) — נשלף דרך gviz
   headerRows?: number; // כמה שורות-כותרת (ברירת מחדל 1); הכותרת = השורה האחרונה שבהן
   dateFormat?: "dmy" | "mdy"; // פורמט תאריך ל-"/" (ברירת מחדל ישראלי dmy)
+  // אינדקסים מפורשים לעמודות (0-מבוסס) — כשזיהוי-כותרת לא חד-משמעי (כותרות כפולות וכו')
+  cols?: { date?: number; status?: number; relevance?: number; source?: number; amount?: number; campaign?: number };
 }
 
 /** שולף ומפרסר את טבלת ה-CRM מ-Google Sheets (CSV ציבורי) */
 export async function fetchCrmLeads(sheetUrlOrId: string, opts: SheetOptions = {}): Promise<CrmLead[]> {
   const id = sheetIdFromUrl(sheetUrlOrId);
-  const url = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv${opts.gid ? `&gid=${opts.gid}` : ""}`;
+  // שליפה לפי שם-לשונית (gviz) או לפי gid (export)
+  const url = opts.sheetName
+    ? `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(opts.sheetName)}`
+    : `https://docs.google.com/spreadsheets/d/${id}/export?format=csv${opts.gid ? `&gid=${opts.gid}` : ""}`;
   const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(20_000) });
   if (!res.ok) throw new Error(`CRM sheet fetch failed: ${res.status}`);
   const text = await res.text();
@@ -133,12 +143,15 @@ export async function fetchCrmLeads(sheetUrlOrId: string, opts: SheetOptions = {
   if (rows.length <= headerRows) return [];
   const h = rows[headerRows - 1]; // הכותרת = השורה האחרונה מבין שורות-הכותרת (המפורטת)
   const fmt = opts.dateFormat ?? "dmy";
+  // אינדקס מפורש גובר על זיהוי-כותרת (לטבלאות עם כותרות כפולות כמו "סטטוס" פעמיים)
+  const pick = (explicit: number | undefined, names: string[]) => (explicit !== undefined ? explicit : findCol(h, names));
   const ci = {
-    date: findCol(h, HEADER.date),
-    status: findCol(h, HEADER.status),
-    source: findCol(h, HEADER.source),
-    amount: findCol(h, HEADER.amount),
-    campaign: findCol(h, HEADER.campaign),
+    date: pick(opts.cols?.date, HEADER.date),
+    status: pick(opts.cols?.status, HEADER.status),
+    relevance: pick(opts.cols?.relevance, HEADER.relevance),
+    source: pick(opts.cols?.source, HEADER.source),
+    amount: pick(opts.cols?.amount, HEADER.amount),
+    campaign: pick(opts.cols?.campaign, HEADER.campaign),
   };
   if (ci.date < 0 || ci.status < 0) return []; // טבלה לא תואמת
   const get = (r: string[], i: number) => (i >= 0 && i < r.length ? r[i] : "");
@@ -146,6 +159,7 @@ export async function fetchCrmLeads(sheetUrlOrId: string, opts: SheetOptions = {
     .map((r) => ({
       date: parseDate(get(r, ci.date), fmt),
       status: get(r, ci.status).trim(),
+      relevance: get(r, ci.relevance).trim(),
       source: get(r, ci.source).trim(),
       amount: parseAmount(get(r, ci.amount)),
       campaign: get(r, ci.campaign).trim(),
@@ -155,16 +169,19 @@ export async function fetchCrmLeads(sheetUrlOrId: string, opts: SheetOptions = {
 
 // ---------- סיווג סטטוסים לקטגוריות איכות ----------
 const CLOSED = ["נסגר"];
-const ACTIVE = ["פולואפ חם", "פולואפ", "בטיפול", "פוטנציאל", "הצעת מחיר"];
+const ACTIVE = ["פולואפ חם", "פולואפ", "בטיפול", "פוטנציאל", "הצעת מחיר", "פגישה", "שיחה", "מתכתב"];
 const DEAD = ["לא מתאים", "נפל", "יקר", "לא רלוונטי", "טעות", "כפול", "מספר שגוי", "לא מחובר"];
 const NO_ANSWER = ["אין מענה", "ללא מענה"];
 const AD_SOURCES = ["פייסבוק", "גוגל", "facebook", "google", "meta", "ppc", "cpc", "paid"];
 
-function categorize(status: string): "closed" | "active" | "dead" | "noAnswer" | "other" {
-  const s = status;
-  if (CLOSED.some((x) => s.includes(x))) return "closed";
+// סיווג איכות ליד. כשיש עמודת "רלוונטיות" נפרדת — היא קובעת פסילה ("לא רלוונטי*")
+// ומסמנת ליד מוסמך ("רלוונטית") כפעיל. שווי-סגירה>0 או סטטוס "נסגר" = סגירה.
+function categorize(status: string, relevance = "", amount = 0): "closed" | "active" | "dead" | "noAnswer" | "other" {
+  const s = status, r = relevance;
+  if (amount > 0 || CLOSED.some((x) => s.includes(x)) || CLOSED.some((x) => r.includes(x))) return "closed";
+  if (r && DEAD.some((x) => r.includes(x))) return "dead"; // פסילה לפי רלוונטיות קודמת
   if (NO_ANSWER.some((x) => s.includes(x))) return "noAnswer";
-  if (ACTIVE.some((x) => s.includes(x))) return "active";
+  if (ACTIVE.some((x) => s.includes(x)) || /רלוונטית/.test(r)) return "active";
   if (DEAD.some((x) => s.includes(x))) return "dead";
   return "other";
 }
@@ -187,21 +204,22 @@ const isPaid = (l: CrmLead) => AD_SOURCES.some((s) => l.source.toLowerCase().inc
 
 /**
  * מחשב מדדי CRM לשבוע הדוח + סגירות ב-30 הימים האחרונים.
- * **רק פניות ממומנות** (מקור = פייסבוק/גוגל) — לפי בקשת סער, הדוח מתייחס רק לממומן.
- * פניות אורגניות/פה-לאוזן/חוזרות אינן נספרות.
+ * **רק פניות ממומנות** — לפי בקשת סער הדוח מתייחס רק לממומן. מזהים ממומן לפי עמודת
+ * מקור (פייסבוק/גוגל/ppc). כשאין עמודת-מקור אך כל הטבלה היא לידים מפרסום — `allPaid:true`.
  */
-export function computeCrmWeekly(leads: CrmLead[], weekStartStr: string, weekEndStr: string): CrmWeekly {
+export function computeCrmWeekly(leads: CrmLead[], weekStartStr: string, weekEndStr: string, allPaid = false): CrmWeekly {
   const ws = new Date(weekStartStr + "T00:00:00");
   const we = new Date(weekEndStr + "T23:59:59");
   const since30 = new Date(we.getTime() - 30 * 86400000);
-  const paid = leads.filter(isPaid);
+  const paid = allPaid ? leads : leads.filter(isPaid);
+  const cat = (l: CrmLead) => categorize(l.status, l.relevance, l.amount);
 
   const week = paid.filter((l) => inRange(l.date, ws, we));
   const q = { closed: 0, active: 0, dead: 0, noAnswer: 0, other: 0 };
-  for (const l of week) q[categorize(l.status)]++;
+  for (const l of week) q[cat(l)]++;
 
   const recentArr = paid.filter((l) => inRange(l.date, since30, we));
-  const recentClosedArr = recentArr.filter((l) => categorize(l.status) === "closed");
+  const recentClosedArr = recentArr.filter((l) => cat(l) === "closed");
   const recentRevenue = recentClosedArr.reduce((s, l) => s + l.amount, 0);
 
   return {
