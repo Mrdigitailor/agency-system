@@ -139,6 +139,17 @@ export function countMetaCampaignResults(
   return { total, perCampaign };
 }
 
+/**
+ * תוצאת קמפיין מטא בודד (סוג + כמות) לפי ה-Result שלו — לשימוש בדוח השבועי כדי
+ * שיהיה עקבי עם הסקירה (max בקטגוריה, בלי ניפוח מסכום-אירועים, מכבד בחירת סוג).
+ */
+export function campaignResultCount(rows: MetaRow[], selectedEvents: string[] = []): { resultType: CampaignResultType; count: number } {
+  const cls = classifyOne(rows);
+  const selectedTypes = selectedResultTypes(selectedEvents);
+  const count = selectedTypes.size > 0 && !selectedTypes.has(cls.resultType) ? 0 : cls.count;
+  return { resultType: cls.resultType, count };
+}
+
 // ==================== Google + TikTok — ספירה פר-קמפיין ====================
 // אצל גוגל/טיקטוק ה-"conversions" של הקמפיין הוא כבר ה-Result שלו (הפלטפורמה
 // מייחסת המרות פר-קמפיין). אין objective כמו במטא, אז סוג התוצאה = "המרות".

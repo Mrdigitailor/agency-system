@@ -2,7 +2,8 @@
 // מחזיר סיכומים כוללים, פילוח לפי פלטפורמה, ופילוח לפי קמפיין (לדוחות פר-מוצר).
 
 import { prisma } from "@/lib/db/prisma";
-import { countConversions, categorizeSelectedConversions } from "@/lib/utils/metaMetrics";
+import { categorizeSelectedConversions } from "@/lib/utils/metaMetrics";
+import { campaignResultCount, parseMetaEvents } from "@/lib/utils/campaignResults";
 import { countGoogleConversions } from "@/lib/utils/googleMetrics";
 
 /** סוג התוצאה של הקמפיין — נגזר ממטרת האופטימיזציה + הנתונים בפועל */
@@ -151,7 +152,8 @@ export async function getWeeklyBreakdowns(
     for (const [, rs] of groups) {
       const spend = rs.reduce((s, i) => s + i.spend, 0);
       if (spend === 0) continue;
-      const leads = countConversions(rs, selectedEvent);
+      // ספירת לידים/תוצאה לפי מנוע ה-Result (max בקטגוריה, בלי ניפוח) — עקבי עם הסקירה
+      const leads = campaignResultCount(rs, parseMetaEvents(selectedEvent)).count;
       const purchases = countCampaignPurchases(rs);
       // סוג התוצאה של הישות — ממטרת הקמפיין (objective/optimization_goal בשורה)
       let objective = "", optGoal = "";
@@ -212,7 +214,9 @@ export async function getWeeklyClientData(
     const spend = rows.reduce((s, i) => s + i.spend, 0);
     const impressions = rows.reduce((s, i) => s + i.impressions, 0);
     const clicks = rows.reduce((s, i) => s + i.clicks, 0);
-    const conversions = countConversions(rows, selectedEvent);
+    // ספירת המרות לפי מנוע ה-Result פר-קמפיין (max בקטגוריה, מכבד בחירת-סוג) —
+    // עקבי עם הסקירה, בלי ניפוח מסכום אירועים (למשל טופס+פיקסל שנספרים כפול).
+    const conversions = campaignResultCount(rows, parseMetaEvents(selectedEvent)).count;
     const conversionsValue = rows.reduce((s, i) => s + i.purchaseValue, 0);
     const purchases = countCampaignPurchases(rows);
     metaPurchases += purchases;
