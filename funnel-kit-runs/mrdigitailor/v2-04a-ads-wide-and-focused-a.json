@@ -1,0 +1,132 @@
+[
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "ad": {
+    "finalUrls": [
+     "https://agency.mr-digitailor.co.il/lp"
+    ],
+    "responsiveSearchAd": {
+     "headlines": [
+      {
+       "text": "פרסום בגוגל לעסקים",
+       "pinnedField": "HEADLINE_1"
+      },
+      {
+       "text": "ניהול קמפיינים בגוגל",
+       "pinnedField": "HEADLINE_1"
+      },
+      {
+       "text": "חברת פרסום בגוגל",
+       "pinnedField": "HEADLINE_1"
+      },
+      {
+       "text": "קידום ממומן בגוגל",
+       "pinnedField": "HEADLINE_1"
+      },
+      {
+       "text": "סוכנות פרסום בגוגל",
+       "pinnedField": "HEADLINE_1"
+      },
+      {
+       "text": "בדקו לפני שמשקיעים שקל",
+       "pinnedField": "HEADLINE_2"
+      },
+      {
+       "text": "כמה עולה קליק בתחום שלכם?",
+       "pinnedField": "HEADLINE_2"
+      },
+      {
+       "text": "כמה מחפשים אתכם בגוגל?",
+       "pinnedField": "HEADLINE_2"
+      },
+      {
+       "text": "קודם מספרים, אחר כך תקציב",
+       "pinnedField": "HEADLINE_2"
+      },
+      {
+       "text": "משתלם לכם לפרסם בגוגל? בדקו",
+       "pinnedField": "HEADLINE_2"
+      },
+      {
+       "text": "10 שנים של פרסום בגוגל",
+       "pinnedField": "HEADLINE_3"
+      },
+      {
+       "text": "ליווינו 350+ עסקים",
+       "pinnedField": "HEADLINE_3"
+      },
+      {
+       "text": "Google Partner",
+       "pinnedField": "HEADLINE_3"
+      },
+      {
+       "text": "בלי עלות ובלי התחייבות",
+       "pinnedField": "HEADLINE_3"
+      },
+      {
+       "text": "הקלידו תחום וקבלו מספרים",
+       "pinnedField": "HEADLINE_3"
+      }
+     ],
+     "descriptions": [
+      {
+       "text": "לפני שמשקיעים שקל בפרסום בגוגל, בדקו כמה זה אמור להחזיר בתחום שלכם."
+      },
+      {
+       "text": "מקלידים את התחום בצ'אט ומקבלים דוח: חיפושים בחודש, מחיר לקליק וכמה פניות לצפות."
+      },
+      {
+       "text": "10 שנים של פרסום בגוגל, 350+ עסקים ו-Google Partner. הבדיקה בלי עלות ובלי התחייבות."
+      },
+      {
+       "text": "הדוח נשאר אצלכם. רוצים לעבור עליו יחד? פגישת זום של 30 דקות, בלי עלות."
+      }
+     ],
+     "path1": "פרסום-בגוגל",
+     "path2": "בדיקה-חינם"
+    }
+   }
+  }
+ },
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "ad": {
+    "finalUrls": [
+     "https://agency.mr-digitailor.co.il/lp"
+    ],
+    "responsiveSearchAd": {
+     "headlines": [
+      {
+       "text": "פרסום בגוגל לעסקים",
+       "pinnedField": "HEADLINE_1"
+      },
+      {
+       "text": "כמה עולה קליק בתחום שלכם?",
+       "pinnedField": "HEADLINE_2"
+      },
+      {
+       "text": "הקלידו תחום וקבלו מספרים",
+       "pinnedField": "HEADLINE_3"
+      }
+     ],
+     "descriptions": [
+      {
+       "text": "מקלידים את התחום בצ'אט ומקבלים דוח: חיפושים בחודש, מחיר לקליק וכמה פניות לצפות.",
+       "pinnedField": "DESCRIPTION_1"
+      },
+      {
+       "text": "נתוני חיפוש אמיתיים מגוגל, תוך שתי דקות. הדוח נשאר אצלכם, בלי עלות ובלי התחייבות.",
+       "pinnedField": "DESCRIPTION_2"
+      }
+     ],
+     "path1": "פרסום-בגוגל",
+     "path2": "בדיקה-חינם"
+    }
+   }
+  }
+ }
+]

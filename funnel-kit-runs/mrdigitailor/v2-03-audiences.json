@@ -1,0 +1,42 @@
+[
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "userInterest": {
+    "userInterestCategory": "customers/3798644658/userInterests/80517"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "userInterest": {
+    "userInterestCategory": "customers/3798644658/userInterests/80529"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "userInterest": {
+    "userInterestCategory": "customers/3798644658/userInterests/80463"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "userInterest": {
+    "userInterestCategory": "customers/3798644658/userInterests/80543"
+   }
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "userInterest": {
+    "userInterestCategory": "customers/3798644658/userInterests/92913"
+   }
+  }
+ }
+]

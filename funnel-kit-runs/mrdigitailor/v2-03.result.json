@@ -1,0 +1,22 @@
+{
+ "ok": true,
+ "result": {
+  "results": [
+   {
+    "resourceName": "customers/3798644658/campaignCriteria/24343132492~77517142182"
+   },
+   {
+    "resourceName": "customers/3798644658/campaignCriteria/24343132492~92281257423"
+   },
+   {
+    "resourceName": "customers/3798644658/campaignCriteria/24343132492~92692606597"
+   },
+   {
+    "resourceName": "customers/3798644658/campaignCriteria/24343132492~92281929903"
+   },
+   {
+    "resourceName": "customers/3798644658/campaignCriteria/24343132492~103997905950"
+   }
+  ]
+ }
+}

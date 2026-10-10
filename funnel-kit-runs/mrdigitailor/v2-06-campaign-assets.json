@@ -1,0 +1,37 @@
+[
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/429187714953",
+   "fieldType": "BUSINESS_LOGO"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/429187712403",
+   "fieldType": "AD_IMAGE"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/429187714956",
+   "fieldType": "AD_IMAGE"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/429187714959",
+   "fieldType": "AD_IMAGE"
+  }
+ },
+ {
+  "create": {
+   "campaign": "customers/3798644658/campaigns/24343132492",
+   "asset": "customers/3798644658/assets/429000367229",
+   "fieldType": "AD_IMAGE"
+  }
+ }
+]

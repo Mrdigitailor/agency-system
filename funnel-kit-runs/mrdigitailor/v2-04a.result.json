@@ -1,0 +1,13 @@
+{
+ "ok": true,
+ "result": {
+  "results": [
+   {
+    "resourceName": "customers/3798644658/adGroupAds/201388245736~827588785807"
+   },
+   {
+    "resourceName": "customers/3798644658/adGroupAds/201388245736~827588785810"
+   }
+  ]
+ }
+}

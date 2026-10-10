@@ -41,6 +41,8 @@ gads search CID "SELECT customer.descriptive_name, customer.currency_code, custo
   "targetSpend": { "cpcBidCeilingMicros": "9000000" },
   "networkSettings": { "targetGoogleSearch": true, "targetSearchNetwork": false, "targetContentNetwork": false, "targetPartnerSearchNetwork": false },
   "geoTargetTypeSetting": { "positiveGeoTargetType": "PRESENCE", "negativeGeoTargetType": "PRESENCE" },
+  "adServingOptimizationStatus": "ROTATE_INDEFINITELY",
+  "targetingSetting": { "targetRestrictions": [ { "targetingDimension": "AUDIENCE", "bidOnly": true } ] },
   "finalUrlSuffix": "utm_source=google&utm_medium=cpc&utm_campaign=<שם קצר באנגלית>&utm_term={keyword}",
   "containsEuPoliticalAdvertising": "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING"
 } }]
@@ -50,7 +52,17 @@ gads search CID "SELECT customer.descriptive_name, customer.currency_code, custo
 
 ## 4. מיקום ושפה (service: campaignCriteria)
 
-ישראל = `geoTargetConstants/2376`. עברית = `languageConstants/1027`. אנגלית = `languageConstants/1000`.
+ישראל = `geoTargetConstants/2376`.
+
+**שפה: לא מוסיפים קריטריון שפה בכלל.** קמפיין בלי קריטריון שפה מכוון לכל השפות, וזה מה שרוצים.
+בקמפיין קיים שיש בו קריטריון שפה, מוצאים אותו ומסירים:
+
+```
+gads search CID "SELECT campaign_criterion.resource_name, campaign_criterion.language.language_constant FROM campaign_criterion WHERE campaign.id = CAMPAIGN_ID AND campaign_criterion.type = 'LANGUAGE'"
+```
+```json
+[{ "remove": "customers/CID/campaignCriteria/CAMPAIGN_ID~CRITERION_ID" }]
+```
 לאזור בתוך ישראל מחפשים את הקוד:
 
 ```
@@ -59,9 +71,30 @@ gads search CID "SELECT geo_target_constant.resource_name, geo_target_constant.n
 
 ```json
 [
-  { "create": { "campaign": "customers/CID/campaigns/CAMPAIGN_ID", "location": { "geoTargetConstant": "geoTargetConstants/2376" } } },
-  { "create": { "campaign": "customers/CID/campaigns/CAMPAIGN_ID", "language": { "languageConstant": "languageConstants/1027" } } }
+  { "create": { "campaign": "customers/CID/campaigns/CAMPAIGN_ID", "location": { "geoTargetConstant": "geoTargetConstants/2376" } } }
 ]
+```
+
+## 4א. רוטציית מודעות וקהלים בתצפית
+
+בקמפיין חדש שני השדות כבר נמצאים בפעולת היצירה (סעיף 3). בקמפיין קיים מעדכנים (service: campaigns):
+
+```json
+[{ "update": { "resourceName": "customers/CID/campaigns/CAMPAIGN_ID", "adServingOptimizationStatus": "ROTATE_INDEFINITELY", "targetingSetting": { "targetRestrictions": [ { "targetingDimension": "AUDIENCE", "bidOnly": true } ] } }, "updateMask": "adServingOptimizationStatus,targetingSetting.targetRestrictions" }]
+```
+
+`bidOnly: true` פירושו תצפית: הקהל לא מצמצם את החשיפה.
+
+מחפשים קהלים רלוונטיים לעסק (קהלי "בשוק לקנות" וקהלי עניין):
+
+```
+gads search CID "SELECT user_interest.resource_name, user_interest.name, user_interest.taxonomy_type FROM user_interest WHERE user_interest.taxonomy_type IN ('IN_MARKET', 'AFFINITY') AND user_interest.name LIKE '%Advertising%'"
+```
+
+ומוסיפים 3 עד 6 מהם לקמפיין (service: campaignCriteria):
+
+```json
+[{ "create": { "campaign": "customers/CID/campaigns/CAMPAIGN_ID", "userInterest": { "userInterestCategory": "customers/CID/userInterests/INTEREST_ID" } } }]
 ```
 
 ## 5. שלילות ברמת הקמפיין (service: campaignCriteria)
@@ -103,6 +136,29 @@ gads search CID "SELECT geo_target_constant.resource_name, geo_target_constant.n
 } }]
 ```
 
+### נעיצת כותרות ותיאורים
+
+כדי לנעוץ, מוסיפים `pinnedField` לכותרת (`HEADLINE_1`, `HEADLINE_2`, `HEADLINE_3`) או לתיאור (`DESCRIPTION_1`, `DESCRIPTION_2`):
+
+```json
+"headlines": [
+  { "text": "פרסום בגוגל לעסקים", "pinnedField": "HEADLINE_1" },
+  { "text": "בדקו לפני שמשקיעים שקל", "pinnedField": "HEADLINE_2" },
+  { "text": "בלי עלות ובלי התחייבות", "pinnedField": "HEADLINE_3" }
+],
+"descriptions": [
+  { "text": "תיאור ראשון.", "pinnedField": "DESCRIPTION_1" },
+  { "text": "תיאור שני.", "pinnedField": "DESCRIPTION_2" }
+]
+```
+
+במודעה הרחבה (15 כותרות) אפשר לנעוץ כמה כותרות לאותו מיקום. במודעה ממוקדת יש בדיוק שלוש כותרות ושני תיאורים, כולם נעוצים.
+
+טקסט של מודעה קיימת לא עורכים. יוצרים מודעה חדשה, ואת הישנה מסירים (service: adGroupAds):
+```json
+[{ "remove": "customers/CID/adGroupAds/ADGROUP_ID~AD_ID" }]
+```
+
 ## 9. תוספים: קישורי אתר ויתרונות (services: assets, campaignAssets)
 
 קודם יוצרים את הנכס, אחר כך מקשרים אותו לקמפיין. תוסף שיחת טלפון לא יוצרים.
@@ -121,6 +177,26 @@ gads search CID "SELECT geo_target_constant.resource_name, geo_target_constant.n
 ```json
 [{ "create": { "campaign": "customers/CID/campaigns/CAMPAIGN_ID", "asset": "customers/CID/assets/ASSET_ID", "fieldType": "SITELINK" } }]
 ```
+
+## 9א. שם עסק, לוגו ותמונות (חובה)
+
+שלושתם נכסים שמקשרים לקמפיין. גוגל מציג שם עסק ולוגו רק למפרסם מאומת. אם החשבון לא מאומת, היצירה עשויה להצליח והנכס יחכה, או להיכשל. בשני המקרים מדווחים בדוח ההקמה.
+
+שם העסק (עד 25 תווים), `fieldType` בקישור: `BUSINESS_NAME`:
+```json
+[{ "create": { "textAsset": { "text": "שם העסק" } } }]
+```
+
+לוגו: ריבוע 1:1, לפחות 128 על 128 (מומלץ 1200 על 1200). `fieldType`: `BUSINESS_LOGO`.
+תמונות: ריבוע 1:1 (לפחות 300 על 300) ורוחב 1.91:1 (לפחות 600 על 314). `fieldType`: `AD_IMAGE`. בתמונה אסור טקסט, אסור לוגו, ואסור קולאז'. JPG או PNG.
+
+הקובץ נשלח מקודד ב-base64:
+```json
+[{ "create": { "name": "תמונה ריבועית 1", "type": "IMAGE", "imageAsset": { "data": "<BASE64>" } } }]
+```
+קידוד: `base64 -i image.jpg | tr -d '\n'`.
+
+קישור לקמפיין (service: campaignAssets) כמו בסעיף 9, עם ה-`fieldType` המתאים.
 
 ## 10. יעד המרה ספציפי לקמפיין
 

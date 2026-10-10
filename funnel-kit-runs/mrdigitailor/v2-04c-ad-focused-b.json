@@ -1,0 +1,41 @@
+[
+ {
+  "create": {
+   "adGroup": "customers/3798644658/adGroups/201388245736",
+   "status": "ENABLED",
+   "ad": {
+    "finalUrls": [
+     "https://agency.mr-digitailor.co.il/lp"
+    ],
+    "responsiveSearchAd": {
+     "headlines": [
+      {
+       "text": "פרסום בגוגל לעסקים",
+       "pinnedField": "HEADLINE_1"
+      },
+      {
+       "text": "בדקו לפני שמשקיעים שקל",
+       "pinnedField": "HEADLINE_2"
+      },
+      {
+       "text": "10 שנים של פרסום בגוגל",
+       "pinnedField": "HEADLINE_3"
+      }
+     ],
+     "descriptions": [
+      {
+       "text": "לפני שמשקיעים שקל בפרסום בגוגל, בדקו כמה זה אמור להחזיר בתחום שלכם.",
+       "pinnedField": "DESCRIPTION_1"
+      },
+      {
+       "text": "שתי דקות בצ'אט ומקבלים דוח עם המספרים של התחום שלכם. בלי עלות ובלי התחייבות.",
+       "pinnedField": "DESCRIPTION_2"
+      }
+     ],
+     "path1": "פרסום-בגוגל",
+     "path2": "בדיקה-חינם"
+    }
+   }
+  }
+ }
+]

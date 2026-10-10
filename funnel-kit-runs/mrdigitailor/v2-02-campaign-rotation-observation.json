@@ -1,0 +1,1 @@
+[{ "update": { "resourceName": "customers/3798644658/campaigns/24343132492", "adServingOptimizationStatus": "ROTATE_INDEFINITELY", "targetingSetting": { "targetRestrictions": [ { "targetingDimension": "AUDIENCE", "bidOnly": true } ] } }, "updateMask": "adServingOptimizationStatus,targetingSetting.targetRestrictions" }]

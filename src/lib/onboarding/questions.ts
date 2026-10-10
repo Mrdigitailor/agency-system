@@ -40,7 +40,7 @@ export const CHAPTERS: Chapter[] = [
   { num: 3, title: "המוצרים וההצעה" },
   { num: 4, title: "הלקוחות שלך", milestone: "🔥 חצית את חצי הדרך! הפרק הזה הוא הסוד של קופי שמוכר" },
   { num: 5, title: "הוכחות ומתחרים" },
-  { num: 6, title: "שיחות המכירה שלך", milestone: "💪 עוד 9 וסיימנו — והשאלה הבאה שווה הכי הרבה כסף" },
+  { num: 6, title: "שיחות המכירה שלך", milestone: "💪 עוד 10 וסיימנו — והשאלה הבאה שווה הכי הרבה כסף" },
   { num: 7, title: "תפעול וטכני", sub: "שאלות קצרות וסגורות — בלי חשיבה, רק עובדות" },
 ];
 
@@ -263,6 +263,19 @@ export const QUESTIONS: Question[] = [
       { key: "address", label: "כתובת העסק", type: "text", max: 200 },
       { key: "privacyEmail", label: "כתובת מייל לפניות בנושא פרטיות", type: "text", max: 200 },
     ] },
+  },
+  {
+    id: "q30", chapter: 7, title: "תעודת התאגדות או תעודת עוסק מורשה",
+    why: "גוגל מציג את שם העסק והלוגו שלך במודעה רק אחרי שהוא מאמת שהעסק אמיתי. בשביל האימות הוא מבקש את התעודה ואת הכתובת המלאה של העסק. מודעה עם שם, לוגו ותמונה בולטת הרבה יותר ממודעת טקסט.",
+    input: { kind: "upload",
+      accept: "image/*,.pdf",
+      maxFiles: 3,
+      hint: "תעודת התאגדות (לחברה) או תעודת עוסק מורשה. צילום ברור או PDF",
+      extraFields: [
+        { key: "fullAddress", label: "הכתובת המלאה של העסק, כפי שמופיעה בתעודה", type: "text", optional: true, placeholder: "רחוב ומספר, עיר, מיקוד", max: 200 },
+      ],
+    },
+    optional: true,
   },
   {
     id: "q29", chapter: 7, title: "מי חתום על המיילים שיישלחו למתעניינים?",
@@ -511,6 +524,8 @@ export async function applyV2ToProfile(clientId: string, a: AnswersV2): Promise<
   push("🔧 ניהול דומיין", [dom.choice, dom.detail].filter(Boolean).join(" · "));
   const legal = fieldsOf(a, "q28");
   push("🏢 פרטים רשמיים", [legal.legalName, legal.businessId && `ח.פ/עוסק: ${legal.businessId}`, legal.address, legal.privacyEmail && `פניות פרטיות: ${legal.privacyEmail}`].filter(Boolean).join(" · "));
+  const cert = uploadOf(a, "q30");
+  push("📄 תעודת העסק לאימות בגוגל", [cert.files.map((f) => `${f.name} — ${f.url}`).join("\n"), cert.fields.fullAddress && `כתובת מלאה: ${cert.fields.fullAddress}`].filter(Boolean).join("\n"));
   const signer = fieldsOf(a, "q29");
   push("✍️ חתום על המיילים", [signer.signerName, signer.signerRole, signer.signerPhone, signer.signerEmail].filter(Boolean).join(" · "));
   const fileList = (files: UploadedFile[]) => files.map((f) => `${f.name} — ${f.url}`).join("\n");

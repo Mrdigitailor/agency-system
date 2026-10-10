@@ -1,0 +1,22 @@
+{
+ "ok": true,
+ "result": {
+  "results": [
+   {
+    "resourceName": "customers/3798644658/campaignAssets/24343132492~429187714953~BUSINESS_LOGO"
+   },
+   {
+    "resourceName": "customers/3798644658/campaignAssets/24343132492~429187712403~AD_IMAGE"
+   },
+   {
+    "resourceName": "customers/3798644658/campaignAssets/24343132492~429187714956~AD_IMAGE"
+   },
+   {
+    "resourceName": "customers/3798644658/campaignAssets/24343132492~429187714959~AD_IMAGE"
+   },
+   {
+    "resourceName": "customers/3798644658/campaignAssets/24343132492~429000367229~AD_IMAGE"
+   }
+  ]
+ }
+}

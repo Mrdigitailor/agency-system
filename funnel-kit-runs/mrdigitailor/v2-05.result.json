@@ -1,0 +1,22 @@
+{
+ "ok": true,
+ "result": {
+  "results": [
+   {
+    "resourceName": "customers/3798644658/assets/429187714953"
+   },
+   {
+    "resourceName": "customers/3798644658/assets/429187712403"
+   },
+   {
+    "resourceName": "customers/3798644658/assets/429187714956"
+   },
+   {
+    "resourceName": "customers/3798644658/assets/429187714959"
+   },
+   {
+    "resourceName": "customers/3798644658/assets/429000367229"
+   }
+  ]
+ }
+}
