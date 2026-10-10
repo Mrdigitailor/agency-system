@@ -16,6 +16,10 @@ export interface MetaInsight {
   cpc: string;
   cpm: string;
   actions?: Array<{ action_type: string; value: string }>;
+  // conversions — פירוק ההמרות לפי שם (כולל המרות מותאמות אישית בשמן, לדוגמה
+  // offsite_conversion.fb_pixel_custom.LeadCustom) — זה מה ש-Meta מציגה כעמודת Results.
+  // ב-actions ההמרות המותאמות מאוגדות יחד (fb_pixel_custom), כאן הן מפוצלות בשם.
+  conversions?: Array<{ action_type: string; value: string }>;
   action_values?: Array<{ action_type: string; value: string }>;
   cost_per_action_type?: Array<{ action_type: string; value: string }>;
   campaign_id?: string;
@@ -44,7 +48,7 @@ const INSIGHT_FIELDS = [
   "unique_outbound_clicks", "unique_outbound_clicks_ctr", "cost_per_unique_outbound_click",
   "website_ctr",
   // המרות + actions
-  "actions", "action_values", "cost_per_action_type",
+  "actions", "conversions", "action_values", "cost_per_action_type",
   "cost_per_unique_action_type", "unique_actions",
   // מעורבות
   "inline_post_engagement", "cost_per_inline_post_engagement",
@@ -70,7 +74,7 @@ export const LEAN_INSIGHT_FIELDS = [
   "campaign_name", "campaign_id", "adset_name", "adset_id", "ad_name", "ad_id",
   "objective", "optimization_goal",
   "spend", "impressions", "clicks", "reach",
-  "actions", "action_values",
+  "actions", "conversions", "action_values",
   "date_start", "date_stop",
 ].join(",");
 

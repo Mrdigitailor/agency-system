@@ -62,6 +62,46 @@ function objectiveOf(json: string): string {
 // מקסימום מחזיר את הספירה האמיתית של האירוע.
 const maxActions = (acts: Record<string, number>, keys: string[]) => keys.reduce((m, k) => Math.max(m, acts[k] ?? 0), 0);
 
+// האם האירוע הוא המרה מותאמת-אישית (בשמה) — אלה לא ניתנות לזיהוי ע"י classifyOne
+// (שמכיר רק action_types סטנדרטיים), ולכן נספרות ישירות מהבחירה של הלקוח.
+const isCustomConv = (e: string) => e.includes(".custom.") || e.includes("fb_pixel_custom");
+
+// אגרגציה של ערכי האירועים מ-actions ומ-conversions (ההמרות המותאמות בשמן נמצאות רק
+// ב-conversions). בתוך יום בודד: max בין actions ל-conversions לאותו action_type (שניהם
+// מתארים את אותה המרה — לא לכפול); בין ימים: סכום.
+function aggActsAndConvs(rows: MetaRow[]): Record<string, number> {
+  const total: Record<string, number> = {};
+  for (const r of rows) {
+    let o: { actions?: Array<{ action_type: string; value: string }>; conversions?: Array<{ action_type: string; value: string }> } = {};
+    try { o = JSON.parse(r.actionsJson); } catch { /* skip */ }
+    const row: Record<string, number> = {};
+    for (const a of o.actions ?? []) row[a.action_type] = Math.max(row[a.action_type] ?? 0, parseFloat(a.value) || 0);
+    for (const c of o.conversions ?? []) row[c.action_type] = Math.max(row[c.action_type] ?? 0, parseFloat(c.value) || 0);
+    for (const [k, v] of Object.entries(row)) total[k] = (total[k] ?? 0) + v;
+  }
+  return total;
+}
+
+/**
+ * סיווג קמפיין תוך כיבוד בחירת-האירועים של הלקוח. ברירת המחדל = classifyOne (ללא שינוי).
+ * חריג: אם הלקוח בחר המרה מותאמת-אישית (LeadCustom וכו') — סופרים אותה ישירות מ-conversions,
+ * כי זה ה-Result של הקמפיין ב-Meta ו-classifyOne לא מכיר אותה. העדיפות ל-max כדי לא לכפול.
+ */
+function classifyCampaign(rows: MetaRow[], selectedEvents: string[]): { resultType: CampaignResultType; count: number } {
+  const cls = classifyOne(rows);
+  if (selectedEvents.length === 0) return cls;
+  const selectedTypes = selectedResultTypes(selectedEvents);
+  const filteredCount = selectedTypes.size > 0 && !selectedTypes.has(cls.resultType) ? 0 : cls.count;
+  const custom = selectedEvents.filter(isCustomConv);
+  if (custom.length > 0) {
+    const acts = aggActsAndConvs(rows);
+    const winner = custom.reduce((a, b) => ((acts[b] ?? 0) > (acts[a] ?? 0) ? b : a), custom[0]);
+    const ex = Math.round(acts[winner] ?? 0);
+    if (ex > filteredCount) return { resultType: eventToResultType(winner) ?? "conversions", count: ex };
+  }
+  return { resultType: cls.resultType, count: filteredCount };
+}
+
 /** התוצאה של קמפיין בודד — הסוג והכמות שאליהם הוא עושה אופטימיזציה */
 function classifyOne(rows: MetaRow[]): { resultType: CampaignResultType; count: number } {
   let objective = "";
@@ -117,7 +157,6 @@ export function countMetaCampaignResults(
   selectedEvents: string[] = [],
 ): { total: number; perCampaign: CampaignResult[] } {
   const excluded = new Set(excludedCampaignIds);
-  const selectedTypes = selectedResultTypes(selectedEvents);
   const groups = new Map<string, MetaRow[]>();
   for (const r of rows) {
     const key = r.externalId || r.name;
@@ -126,11 +165,8 @@ export function countMetaCampaignResults(
   const perCampaign: CampaignResult[] = [];
   let total = 0;
   for (const [id, rs] of groups) {
-    const cls = classifyOne(rs);
-    const resultType = cls.resultType;
-    // אם הלקוח בחר סוגי-המרה ספציפיים (למשל "רכישה") — תוצאה שאינה מהסוג שנבחר
-    // אינה נספרת כהמרה. כך הבחירה של הלקוח נשמרת בכל מקום.
-    const count = selectedTypes.size > 0 && !selectedTypes.has(resultType) ? 0 : cls.count;
+    // classifyCampaign מכבד את בחירת-האירועים (כולל המרות מותאמות-אישית כמו LeadCustom)
+    const { resultType, count } = classifyCampaign(rs, selectedEvents);
     const isExcluded = excluded.has(id);
     perCampaign.push({ campaignId: id, campaignName: rs[0].name || "(ללא שם)", platform: "meta", resultType, count, excluded: isExcluded });
     if (!isExcluded) total += count;
@@ -144,10 +180,7 @@ export function countMetaCampaignResults(
  * שיהיה עקבי עם הסקירה (max בקטגוריה, בלי ניפוח מסכום-אירועים, מכבד בחירת סוג).
  */
 export function campaignResultCount(rows: MetaRow[], selectedEvents: string[] = []): { resultType: CampaignResultType; count: number } {
-  const cls = classifyOne(rows);
-  const selectedTypes = selectedResultTypes(selectedEvents);
-  const count = selectedTypes.size > 0 && !selectedTypes.has(cls.resultType) ? 0 : cls.count;
-  return { resultType: cls.resultType, count };
+  return classifyCampaign(rows, selectedEvents);
 }
 
 // ==================== Google + TikTok — ספירה פר-קמפיין ====================
