@@ -11,7 +11,7 @@ import { detectClientFunnel, type CampaignFunnel } from "@/lib/agent/funnel-dete
 import { syncClientMeta, syncClientMetaSubLevels } from "@/lib/api/meta/sync";
 import { syncClientGoogleAds } from "@/lib/api/google-ads/sync";
 import { shiftYmd, todayIL } from "@/lib/utils/ildate";
-import { crmSheetForClient, fetchCrmLeads, computeCrmWeekly, buildCrmText } from "@/lib/crm/google-sheet";
+import { buildClientCrmText } from "@/lib/crm";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = process.env.REPORT_AI_MODEL ?? "claude-sonnet-4-6";
@@ -279,17 +279,8 @@ export async function generateWeeklyReportContent(
 
   const dataText = buildWeeklyDataText(data, format, products, currency, prevData, campaignFunnels, breakdowns);
 
-  // נתוני CRM (איכות לידים + סגירות) — ללקוחות שמחוברת להם טבלת CRM. לא חוסם: כשל שליפה מדלג בשקט.
-  let crmText = "";
-  const crmUrl = crmSheetForClient(clientId);
-  if (crmUrl) {
-    try {
-      const leads = await fetchCrmLeads(crmUrl);
-      crmText = buildCrmText(computeCrmWeekly(leads, weekStart, weekEnd));
-    } catch (e) {
-      console.error("[WeeklyReport] CRM fetch failed:", e instanceof Error ? e.message : e);
-    }
-  }
+  // נתוני CRM (איכות לידים + סגירות, ממומן בלבד) — ללקוחות מחוברים. לא חוסם.
+  const crmText = await buildClientCrmText(clientId, weekStart, weekEnd);
 
   const userMessage = [
     `הפק דוח שבועי לתקופה ${weekStart} עד ${weekEnd}.`,
