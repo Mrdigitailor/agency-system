@@ -155,10 +155,10 @@ export async function fetchCrmLeads(sheetUrlOrId: string, opts: SheetOptions = {
 
 // ---------- סיווג סטטוסים לקטגוריות איכות ----------
 const CLOSED = ["נסגר"];
-const ACTIVE = ["פולואפ חם", "פולואפ", "בטיפול", "פוטנציאל"];
+const ACTIVE = ["פולואפ חם", "פולואפ", "בטיפול", "פוטנציאל", "הצעת מחיר"];
 const DEAD = ["לא מתאים", "נפל", "יקר", "לא רלוונטי", "טעות", "כפול", "מספר שגוי", "לא מחובר"];
-const NO_ANSWER = ["אין מענה"];
-const AD_SOURCES = ["פייסבוק", "גוגל", "facebook", "google", "meta"];
+const NO_ANSWER = ["אין מענה", "ללא מענה"];
+const AD_SOURCES = ["פייסבוק", "גוגל", "facebook", "google", "meta", "ppc", "cpc", "paid"];
 
 function categorize(status: string): "closed" | "active" | "dead" | "noAnswer" | "other" {
   const s = status;
