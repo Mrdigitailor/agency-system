@@ -105,6 +105,11 @@ const stat = (label: string, value: string) =>
   `<td style="padding:10px 12px;border:1px solid #efede8;text-align:center;vertical-align:top"><div style="color:#b8860b;font-size:22px;font-weight:600">${value}</div><div style="color:#8c8777;font-size:12.5px;margin-top:2px">${label}</div></td>`;
 
 /** הדוח השבועי לבעל הפורטל — מה קרה במכונה בשבוע האחרון */
+/** מייל כללי לבעל הפורטל, בתבנית הקבועה של המערכת */
+export async function sendPortalEmail(portal: FunnelPortal, subject: string, title: string, innerHtml: string): Promise<boolean> {
+  return send(portal, subject, shell(title, innerHtml, portal));
+}
+
 export async function sendWeeklyReport(portal: FunnelPortal, n: WeeklyNumbers, from: string, to: string): Promise<boolean> {
   const mail = renderWeeklyReport(portal, n, from, to);
   return send(portal, mail.subject, mail.html);
