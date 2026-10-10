@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Sparkles, Loader2, RefreshCw, Send, Settings2, FileText, Mail, Copy, CheckCircle2, Pencil } from "lucide-react";
+import { Sparkles, Loader2, RefreshCw, Send, Settings2, FileText, Mail, Copy, CheckCircle2, Pencil, ChevronRight, ChevronLeft } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 
 interface ReportMessage {
@@ -104,6 +104,10 @@ export default function WeeklyReportDraft({
   const [report, setReport] = useState<DraftReport | null>(null);
   const [messages, setMessages] = useState<ReportMessage[]>([]);
   const [period, setPeriod] = useState("");
+  // ניווט שבוע: 0=שבוע אחרון שהסתיים, 1+=אחורה, -1=השבוע הנוכחי (בתהליך)
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [weekStart, setWeekStart] = useState("");
+  const [weekEnd, setWeekEnd] = useState("");
   const [generating, setGenerating] = useState(false);
   const [refining, setRefining] = useState(false);
   const [note, setNote] = useState("");
@@ -130,13 +134,16 @@ export default function WeeklyReportDraft({
   const load = useCallback(async () => {
     try {
       const [curRes, profRes] = await Promise.all([
-        fetch(`/api/clients/${clientId}/weekly-report/current`),
+        fetch(`/api/clients/${clientId}/weekly-report/current?offset=${weekOffset}`),
         fetch(`/api/clients/${clientId}/profile`),
       ]);
       const cur = await curRes.json();
       setReport(cur.report ?? null);
       setMessages(cur.messages ?? []);
       setPeriod(formatPeriod(cur.weekStart, cur.weekEnd));
+      setWeekStart(cur.weekStart ?? "");
+      setWeekEnd(cur.weekEnd ?? "");
+      setEditing(false);
       if (profRes.ok) {
         const prof = await profRes.json();
         setFormat(prof.weeklyReportFormat ?? "standard");
@@ -147,7 +154,7 @@ export default function WeeklyReportDraft({
     } finally {
       setLoading(false);
     }
-  }, [clientId]);
+  }, [clientId, weekOffset]);
 
   useEffect(() => {
     load();
@@ -159,7 +166,7 @@ export default function WeeklyReportDraft({
       const res = await fetch(`/api/clients/${clientId}/weekly-report/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force }),
+        body: JSON.stringify({ force, weekStart, weekEnd }),
       });
       if (res.ok) {
         await load();
@@ -298,9 +305,29 @@ export default function WeeklyReportDraft({
         <div className="flex items-center gap-3">
           <FileText className="h-5 w-5 text-brand-gold" />
           <div>
-            <h2 className="text-base font-semibold text-brand-dark">דוח שבועי {period && `· ${period}`}</h2>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setWeekOffset((o) => Math.min(12, o + 1))}
+                disabled={weekOffset >= 12 || generating}
+                title="שבוע קודם"
+                className="rounded p-0.5 text-brand-muted transition-colors hover:bg-brand-bg hover:text-brand-dark disabled:opacity-30"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <h2 className="whitespace-nowrap text-base font-semibold text-brand-dark">דוח שבועי {period && `· ${period}`}</h2>
+              <button
+                onClick={() => setWeekOffset((o) => Math.max(-1, o - 1))}
+                disabled={weekOffset <= -1 || generating}
+                title="שבוע הבא"
+                className="rounded p-0.5 text-brand-muted transition-colors hover:bg-brand-bg hover:text-brand-dark disabled:opacity-30"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              {weekOffset === -1 && <span className="rounded-full bg-brand-gold/15 px-2 py-0.5 text-[10px] font-medium text-brand-dark">השבוע הנוכחי (בתהליך)</span>}
+              {weekOffset > 0 && <span className="rounded-full bg-brand-bg px-2 py-0.5 text-[10px] font-medium text-brand-muted">{weekOffset} שבועות אחורה</span>}
+            </div>
             {isSent && sentInfo && (
-              <p className="text-xs text-brand-muted">נשלח ב-{formatDateHe(sentInfo.sentAt)}{sentInfo.by ? ` על ידי ${sentInfo.by}` : ""}</p>
+              <p className="mt-0.5 text-xs text-brand-muted">נשלח ב-{formatDateHe(sentInfo.sentAt)}{sentInfo.by ? ` על ידי ${sentInfo.by}` : ""}</p>
             )}
           </div>
         </div>
