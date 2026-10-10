@@ -12,14 +12,14 @@ export function crmSheetForClient(clientId: string): string {
   return CRM_SHEETS[clientId] ?? "";
 }
 
-/** בונה טקסט CRM לדוח (עברית) — איכות לידים + סגירות. מודגש על איכות ותוצאות, לא ספירת-לידים נוספת */
+/** בונה טקסט CRM לדוח (עברית) — איכות לידים + סגירות. **רק פניות ממומנות** (מפרסום) */
 export function buildCrmText(crm: CrmWeekly): string {
-  if (!crm.hasData) return "";
+  if (!crm.hasData || crm.weekLeads + crm.recentLeads === 0) return "";
   const q = crm.weekQuality;
   const parts = [
-    "נתוני CRM (מטבלת הלקוח) — איכות לידים ותוצאות עסקיות:",
-    `- איכות הלידים שנכנסו השבוע (סה"כ ${crm.weekLeads} פניות שנרשמו ב-CRM): ${q.active} בפולואפ פעיל, ${q.dead} לא התאימו/נפלו, ${q.noAnswer} ללא מענה${q.closed > 0 ? `, ${q.closed} כבר נסגרו` : ""}.`,
-    `- סגירות ב-30 הימים האחרונים: ${crm.recentClosed} עסקאות שנסגרו, בהכנסה של ₪${crm.recentRevenue.toLocaleString("he-IL")} (כולל מע"מ), מתוך ${crm.recentLeads} פניות שנכנסו בתקופה.`,
+    "נתוני CRM (מטבלת הלקוח) — איכות לידים ותוצאות עסקיות **מפרסום ממומן בלבד**:",
+    `- איכות הלידים הממומנים שנכנסו השבוע (${crm.weekLeads} פניות מפרסום): ${q.active} בפולואפ פעיל, ${q.dead} לא התאימו/נפלו, ${q.noAnswer} ללא מענה${q.closed > 0 ? `, ${q.closed} כבר נסגרו` : ""}.`,
+    `- סגירות מפרסום ממומן ב-30 הימים האחרונים: ${crm.recentClosed} עסקאות, הכנסה ₪${crm.recentRevenue.toLocaleString("he-IL")} (כולל מע"מ), מתוך ${crm.recentLeads} פניות ממומנות שנכנסו בתקופה.`,
   ];
   return parts.join("\n");
 }
@@ -158,25 +158,31 @@ export interface CrmWeekly {
 
 const inRange = (d: Date | null, a: Date, b: Date) => !!d && d >= a && d <= b;
 
-/** מחשב מדדי CRM לשבוע הדוח + סגירות ב-30 הימים האחרונים */
+const isPaid = (l: CrmLead) => AD_SOURCES.some((s) => l.source.toLowerCase().includes(s));
+
+/**
+ * מחשב מדדי CRM לשבוע הדוח + סגירות ב-30 הימים האחרונים.
+ * **רק פניות ממומנות** (מקור = פייסבוק/גוגל) — לפי בקשת סער, הדוח מתייחס רק לממומן.
+ * פניות אורגניות/פה-לאוזן/חוזרות אינן נספרות.
+ */
 export function computeCrmWeekly(leads: CrmLead[], weekStartStr: string, weekEndStr: string): CrmWeekly {
   const ws = new Date(weekStartStr + "T00:00:00");
   const we = new Date(weekEndStr + "T23:59:59");
   const since30 = new Date(we.getTime() - 30 * 86400000);
+  const paid = leads.filter(isPaid);
 
-  const week = leads.filter((l) => inRange(l.date, ws, we));
+  const week = paid.filter((l) => inRange(l.date, ws, we));
   const q = { closed: 0, active: 0, dead: 0, noAnswer: 0, other: 0 };
   for (const l of week) q[categorize(l.status)]++;
-  const weekAdLeads = week.filter((l) => AD_SOURCES.some((s) => l.source.toLowerCase().includes(s))).length;
 
-  const recentArr = leads.filter((l) => inRange(l.date, since30, we));
+  const recentArr = paid.filter((l) => inRange(l.date, since30, we));
   const recentClosedArr = recentArr.filter((l) => categorize(l.status) === "closed");
   const recentRevenue = recentClosedArr.reduce((s, l) => s + l.amount, 0);
 
   return {
     hasData: leads.length > 0,
     weekLeads: week.length,
-    weekAdLeads,
+    weekAdLeads: week.length, // כל הפניות שנספרות הן ממומנות
     weekQuality: q,
     recentClosed: recentClosedArr.length,
     recentRevenue: Math.round(recentRevenue),
